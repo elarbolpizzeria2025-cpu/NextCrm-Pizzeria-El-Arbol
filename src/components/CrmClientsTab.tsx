@@ -1,7 +1,8 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useRef } from 'react';
 import { ClientData, OrderData } from '../types';
 import { Icon } from './Icon';
 import { addDoc, collection } from 'firebase/firestore';
+import { exportClientsToCSV } from '../utils/exports';
 
 interface CrmClientsTabProps {
   allClients: ClientData[];
@@ -43,6 +44,7 @@ export const CrmClientsTab: React.FC<CrmClientsTabProps> = ({
   appId,
 }) => {
   const [filterType, setFilterType] = useState<'ALL' | 'DELIVERY' | 'PHONE'>('ALL');
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Compute stats per client from orders history
   const clientStatsMap = useMemo(() => {
@@ -129,6 +131,59 @@ export const CrmClientsTab: React.FC<CrmClientsTabProps> = ({
     }
   };
 
+  const handleImportClientsFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !db || !appId) return;
+
+    try {
+      const text = await file.text();
+      const lines = text.split(/\r?\n/).map(l => l.trim()).filter(Boolean);
+      if (lines.length <= 1) return showMessage("El archivo CSV está vacío", "error");
+
+      const existingPhones = new Set(allClients.map(c => String(c.phone || '').replace(/\D/g, '')).filter(Boolean));
+      const existingNames = new Set(allClients.map(c => String(c.name || '').trim().toLowerCase()).filter(Boolean));
+
+      let addedCount = 0;
+      for (let i = 1; i < lines.length; i++) {
+        const line = lines[i];
+        // Parse CSV line (supporting semicolon or comma, and quotes)
+        const parts = line.split(/[;,]/).map(p => p.replace(/^["']|["']$/g, '').trim());
+        if (parts.length < 1) continue;
+
+        const name = parts[0];
+        const phone = parts[1] || '';
+        const address = parts[2] || '';
+        const zone = parts[3] || '';
+
+        if (!name) continue;
+
+        const cleanPhone = phone.replace(/\D/g, '');
+        const cleanName = name.toLowerCase();
+
+        if ((cleanPhone && existingPhones.has(cleanPhone)) || existingNames.has(cleanName)) {
+          continue; // Skip duplicate
+        }
+
+        await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'clients'), {
+          name,
+          phone,
+          address,
+          zone,
+          createdAt: Date.now()
+        });
+
+        if (cleanPhone) existingPhones.add(cleanPhone);
+        existingNames.add(cleanName);
+        addedCount++;
+      }
+
+      if (fileInputRef.current) fileInputRef.current.value = '';
+      showMessage(`¡Se importaron ${addedCount} contactos sin duplicados!`, "success");
+    } catch (err: any) {
+      showMessage("Error al importar contactos: " + err.message, "error");
+    }
+  };
+
   return (
     <div className="p-6 md:p-10 h-full overflow-y-auto bg-[#060a08] text-slate-100 no-scrollbar space-y-8">
       <div className="max-w-7xl mx-auto space-y-8">
@@ -149,6 +204,29 @@ export const CrmClientsTab: React.FC<CrmClientsTabProps> = ({
           </div>
 
           <div className="flex flex-wrap items-center gap-2.5">
+            <input 
+              type="file" 
+              ref={fileInputRef} 
+              onChange={handleImportClientsFile} 
+              accept=".csv,.txt" 
+              className="hidden" 
+            />
+            <button
+              type="button"
+              onClick={() => fileInputRef.current?.click()}
+              className="px-4 py-3 bg-[#112017] border border-emerald-500/30 text-emerald-300 hover:bg-[#1a2e20] rounded-2xl font-black uppercase text-xs transition-all flex items-center gap-2"
+              title="Importar contactos desde archivo CSV sin duplicar"
+            >
+              <Icon name="upload" size={16} className="text-emerald-400" /> 📥 Importar CSV
+            </button>
+            <button
+              type="button"
+              onClick={() => exportClientsToCSV(allClients)}
+              className="px-4 py-3 bg-[#112017] border border-emerald-500/30 text-emerald-300 hover:bg-[#1a2e20] rounded-2xl font-black uppercase text-xs transition-all flex items-center gap-2"
+              title="Exportar clientes a Excel (CSV)"
+            >
+              <Icon name="download" size={16} className="text-emerald-400" /> 📊 Exportar CSV
+            </button>
             {virtualClientsCount > 0 && (
               <button
                 type="button"

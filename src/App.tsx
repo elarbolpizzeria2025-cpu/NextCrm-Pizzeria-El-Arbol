@@ -8,6 +8,7 @@ import {
   DgiConfig, CfeDocument, SupportTicket
 } from './types';
 import { DEFAULT_MENU, DEFAULT_TOPPINGS, calculateToppingsCost, WARNING_THRESHOLDS } from './data/defaultMenu';
+import { DEFAULT_SESSIONS } from './data/defaultSessions';
 import { 
   exportToCSV, 
   exportOrdersToCSV, 
@@ -63,6 +64,8 @@ export default function App() {
   const initialLoadComplete = useRef(false);
   const initialMessagesLoaded = useRef(false); 
   const prevOrdersIds = useRef<string[]>([]);
+  const importMenuInputRef = useRef<HTMLInputElement>(null);
+  const importSessionsInputRef = useRef<HTMLInputElement>(null);
 
   const [activeCategory, setActiveCategory] = useState('TODOS');
   const [orderType, setOrderType] = useState('Local');
@@ -1236,6 +1239,82 @@ export default function App() {
     }
   };
 
+  const handleResetMenu = async () => {
+    if (!confirm("¿Desea restablecer todo el menú con la carta oficial de precios y productos?")) return;
+    try {
+      await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'config', 'menu'), { data: DEFAULT_MENU });
+      showMessage("Menú restablecido con éxito a la carta oficial");
+    } catch (e: any) {
+      showMessage("Error al restablecer menú: " + e.message, "error");
+    }
+  };
+
+  const handleImportMenuCSV = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !db || !appId) return;
+
+    try {
+      const text = await file.text();
+      const lines = text.split(/\r?\n/).map(l => l.trim()).filter(Boolean);
+      if (lines.length <= 1) return showMessage("El archivo CSV está vacío", "error");
+
+      const updatedMenu = { ...menu };
+      let addedCount = 0;
+      let updatedCount = 0;
+
+      for (let i = 1; i < lines.length; i++) {
+        const line = lines[i];
+        const parts = line.split(/[;,]/).map(p => p.replace(/^["']|["']$/g, '').trim());
+        if (parts.length < 3) continue;
+
+        const category = parts[0].toLowerCase();
+        const id = parts[1] || `prod_${Date.now()}_${i}`;
+        const name = parts[2];
+        const price = parseFloat(parts[3]) || 0;
+        const desc = parts[4] || '';
+        const modality = parts[5] || '';
+        const hasToppings = (parts[6] || '').toUpperCase() === 'SÍ' || (parts[6] || '').toUpperCase() === 'SI';
+        const maxToppings = parseInt(parts[7], 10) || (hasToppings ? 4 : 0);
+
+        if (!name || !category) continue;
+
+        if (!updatedMenu[category]) updatedMenu[category] = [];
+
+        const isMeter = modality.toLowerCase().includes('metro');
+        const isPortion = modality.toLowerCase().includes('porción') || modality.toLowerCase().includes('porcion');
+
+        const existingIdx = updatedMenu[category].findIndex(
+          it => it.id === id || it.name.trim().toLowerCase() === name.trim().toLowerCase()
+        );
+
+        const newItem: MenuItem = {
+          id: existingIdx >= 0 ? updatedMenu[category][existingIdx].id : id,
+          name: name.trim(),
+          price,
+          desc: desc.trim() || undefined,
+          isPortion: isPortion || undefined,
+          isMeter: isMeter || undefined,
+          hasToppings: hasToppings || undefined,
+          maxToppings: maxToppings || undefined
+        };
+
+        if (existingIdx >= 0) {
+          updatedMenu[category][existingIdx] = newItem;
+          updatedCount++;
+        } else {
+          updatedMenu[category].push(newItem);
+          addedCount++;
+        }
+      }
+
+      await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'config', 'menu'), { data: updatedMenu });
+      if (importMenuInputRef.current) importMenuInputRef.current.value = '';
+      showMessage(`¡Menú procesado! ${addedCount} productos nuevos añadidos y ${updatedCount} actualizados sin duplicar.`, "success");
+    } catch (err: any) {
+      showMessage("Error al importar menú: " + err.message, "error");
+    }
+  };
+
   // Sales History (Finished Orders) Handlers
   const handleOpenEditSale = (order: OrderData) => {
     setEditSaleModal({
@@ -1313,6 +1392,118 @@ export default function App() {
       showMessage("Turno eliminado del historial");
     } catch (e: any) {
       showMessage("Error al eliminar turno: " + e.message, "error");
+    }
+  };
+
+  const handleSyncDefaultSessions = async () => {
+    if (!db || !appId) return;
+    try {
+      const existingSessionIds = new Set(sessions.map(s => s.sessionId).filter(Boolean));
+      let added = 0;
+
+      for (const defSession of DEFAULT_SESSIONS) {
+        if (!existingSessionIds.has(defSession.sessionId)) {
+          await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'sessions'), defSession);
+          existingSessionIds.add(defSession.sessionId);
+          added++;
+        }
+      }
+
+      if (added === 0) {
+        showMessage("Los 11 turnos oficiales ya están en el historial. No hay duplicados.");
+      } else {
+        showMessage(`¡Historial sincronizado! Se agregaron ${added} cierres oficiales sin duplicados.`);
+      }
+    } catch (e: any) {
+      showMessage("Error al sincronizar historial: " + e.message, "error");
+    }
+  };
+
+  const handleImportSessionsCSV = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !db || !appId) return;
+
+    try {
+      const text = await file.text();
+      const lines = text.split(/\r?\n/).map(l => l.trim()).filter(Boolean);
+      if (lines.length <= 1) return showMessage("El archivo CSV está vacío", "error");
+
+      const existingSessionIds = new Set(sessions.map(s => s.sessionId).filter(Boolean));
+      let added = 0;
+
+      const parseDateStr = (str: string): number => {
+        if (!str) return Date.now();
+        if (/^\d+$/.test(str)) return parseInt(str, 10);
+        const match = str.match(/(\d{1,2})\/(\d{1,2})\/(\d{4})\s*(\d{1,2}):(\d{1,2})/);
+        if (match) {
+          const [, d, m, y, h, min] = match;
+          return new Date(parseInt(y, 10), parseInt(m, 10) - 1, parseInt(d, 10), parseInt(h, 10), parseInt(min, 10)).getTime();
+        }
+        const parsed = Date.parse(str);
+        return isNaN(parsed) ? Date.now() : parsed;
+      };
+
+      for (let i = 1; i < lines.length; i++) {
+        const line = lines[i];
+        const parts = line.split(/[;,]/).map(p => p.replace(/^["']|["']$/g, '').trim());
+        if (parts.length < 6) continue;
+
+        const sessionId = parts[0] || `SESSION-${Date.now()}_${i}`;
+        if (existingSessionIds.has(sessionId)) continue;
+
+        const openedAt = parseDateStr(parts[1]);
+        const closedAt = parseDateStr(parts[2]);
+        const orderCount = parseInt(parts[3], 10) || 0;
+        const initialCash = parseFloat(parts[4]) || 0;
+        const totalSales = parseFloat(parts[5]) || 0;
+        const totalTips = parseFloat(parts[6]) || 0;
+        const finalCash = parseFloat(parts[7]) || 0;
+        const metrosPizza = parseFloat(parts[8]) || 0;
+        const fainas = parseFloat(parts[9]) || 0;
+        const pizzetas = parseFloat(parts[10]) || 0;
+        const porcionesPizza = parseFloat(parts[11]) || 0;
+        const sandwiches = parseFloat(parts[12]) || 0;
+        const efectivo = parseFloat(parts[13]) || 0;
+        const debito = parseFloat(parts[14]) || 0;
+        const credito = parseFloat(parts[15]) || 0;
+        const transferencia = parseFloat(parts[16]) || 0;
+        const mercadoPago = parseFloat(parts[17]) || 0;
+
+        const sessionData: SessionData = {
+          sessionId,
+          openedAt,
+          closedAt,
+          orderCount,
+          initialCash,
+          totalSales,
+          totalTips,
+          finalCash,
+          physicalTotals: {
+            metrosPizza,
+            fainas,
+            pizzetas,
+            porcionesPizza,
+            sandwiches
+          },
+          methodsBreakdown: {
+            'Efectivo': efectivo,
+            'Débito': debito,
+            'Crédito': credito,
+            'Transferencia': transferencia,
+            'Mercado Pago': mercadoPago
+          },
+          itemsSoldBreakdown: {}
+        };
+
+        await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'sessions'), sessionData);
+        existingSessionIds.add(sessionId);
+        added++;
+      }
+
+      if (importSessionsInputRef.current) importSessionsInputRef.current.value = '';
+      showMessage(`¡Se importaron ${added} cierres al historial sin duplicados!`, "success");
+    } catch (err: any) {
+      showMessage("Error al importar cierres: " + err.message, "error");
     }
   };
 
@@ -1905,6 +2096,20 @@ export default function App() {
                   <p className="text-slate-500 font-bold uppercase text-[10px] tracking-widest mt-1">Gestione precios, gustos y categorías • Permite editar y eliminar productos</p>
                 </div>
                 <div className="flex flex-wrap gap-2">
+                  <input 
+                    type="file" 
+                    ref={importMenuInputRef} 
+                    onChange={handleImportMenuCSV} 
+                    accept=".csv,.txt" 
+                    className="hidden" 
+                  />
+                  <button 
+                    onClick={() => importMenuInputRef.current?.click()} 
+                    className="px-5 py-3 bg-white border border-slate-300 text-slate-700 hover:bg-slate-100 rounded-[20px] font-black uppercase text-xs transition-all flex items-center gap-2 shadow-xs"
+                    title="Importar productos al menú desde archivo CSV sin duplicar"
+                  >
+                    <Icon name="upload" size={16}/> 📥 Importar CSV
+                  </button>
                   <button 
                     onClick={() => exportMenuToCSV(menu)} 
                     className="px-5 py-3 bg-white border border-slate-300 text-slate-700 hover:bg-slate-100 rounded-[20px] font-black uppercase text-xs transition-all flex items-center gap-2 shadow-xs"
@@ -1918,6 +2123,13 @@ export default function App() {
                     title="Descargar menú en PDF"
                   >
                     <Icon name="print" size={16}/> 📄 Exportar PDF
+                  </button>
+                  <button 
+                    onClick={handleResetMenu}
+                    className="px-5 py-3 bg-amber-500/10 border border-amber-500/30 text-amber-600 hover:bg-amber-500/20 rounded-[20px] font-black uppercase text-xs transition-all flex items-center gap-2 shadow-xs"
+                    title="Restablecer menú oficial de la pizzería"
+                  >
+                    <Icon name="restart_alt" size={16}/> 🔄 Restablecer Carta
                   </button>
                   <button onClick={() => setNewProductModal(true)} className="px-6 py-3 bg-slate-900 text-white rounded-[20px] font-black uppercase text-xs hover:bg-black transition-all flex items-center gap-2 shadow-md">
                     <Icon name="add" size={18}/> + Nuevo Producto
@@ -2653,15 +2865,38 @@ export default function App() {
                      Registros históricos de sesiones de caja • Permite editar, eliminar y reimprimir informes
                    </p>
                  </div>
-                 {sessions.length > 0 && (
-                   <button 
-                     onClick={() => exportSessionsToCSV(sessions)} 
-                     className="px-5 py-3 bg-white border border-slate-300 text-slate-700 hover:bg-slate-100 rounded-[20px] font-black uppercase text-xs transition-all flex items-center gap-2 shadow-xs"
-                     title="Exportar todos los cierres a Excel (CSV)"
-                   >
-                     <Icon name="download" size={16}/> 📊 Exportar Historial CSV
-                   </button>
-                 )}
+                 <div className="flex flex-wrap gap-2">
+                  <input 
+                    type="file" 
+                    ref={importSessionsInputRef} 
+                    onChange={handleImportSessionsCSV} 
+                    accept=".csv,.txt" 
+                    className="hidden" 
+                  />
+                  <button 
+                    onClick={() => importSessionsInputRef.current?.click()} 
+                    className="px-5 py-3 bg-white border border-slate-300 text-slate-700 hover:bg-slate-100 rounded-[20px] font-black uppercase text-xs transition-all flex items-center gap-2 shadow-xs"
+                    title="Importar cierres desde archivo CSV sin duplicar"
+                  >
+                    <Icon name="upload" size={16}/> 📥 Importar Cierres CSV
+                  </button>
+                  <button 
+                    onClick={handleSyncDefaultSessions} 
+                    className="px-5 py-3 bg-emerald-500/10 border border-emerald-500/30 text-emerald-700 hover:bg-emerald-500/20 rounded-[20px] font-black uppercase text-xs transition-all flex items-center gap-2 shadow-xs"
+                    title="Cargar los 11 turnos oficiales históricos sin duplicar"
+                  >
+                    <Icon name="cloud_sync" size={16}/> 🔄 Cargar Historial Oficial ({DEFAULT_SESSIONS.length} Cierres)
+                  </button>
+                  {sessions.length > 0 && (
+                    <button 
+                      onClick={() => exportSessionsToCSV(sessions)} 
+                      className="px-5 py-3 bg-white border border-slate-300 text-slate-700 hover:bg-slate-100 rounded-[20px] font-black uppercase text-xs transition-all flex items-center gap-2 shadow-xs"
+                      title="Exportar todos los cierres a Excel (CSV)"
+                    >
+                      <Icon name="download" size={16}/> 📊 Exportar Historial CSV
+                    </button>
+                  )}
+                </div>
                </div>
 
                {sessions.length === 0 ? (
