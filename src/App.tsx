@@ -25,7 +25,6 @@ import { VoiceOrderModal } from './components/VoiceOrderModal';
 import { PosWizard } from './components/PosWizard';
 import { ToppingModal } from './components/ToppingModal';
 import { CrmClientsTab } from './components/CrmClientsTab';
-import { DgiBillingTab } from './components/DgiBillingTab';
 import { SupportTab } from './components/SupportTab';
 import { OperationsManualTab } from './components/OperationsManualTab';
 import { ImportHistoryExcelModal } from './components/ImportHistoryExcelModal';
@@ -1659,38 +1658,66 @@ export default function App() {
       {/* Lock screen overlay if register closed (allow 'cash' & 'stock' tabs so user can see or open shift) */}
       {register.isLoaded && !register.isOpen && activeTab !== 'cash' && activeTab !== 'stock' && (
         <div className="fixed inset-0 z-[9995] bg-[#040108]/90 backdrop-blur-md flex items-center justify-center p-4">
-             <div className="bg-[#0c061a] p-8 sm:p-10 rounded-[45px] max-w-xl w-full shadow-2xl text-center space-y-5 border border-purple-500/30 text-slate-100">
-                 <div className="w-20 h-20 bg-purple-950/80 text-purple-300 rounded-full flex items-center justify-center mx-auto border-2 border-purple-500/50 shadow-inner">
-                   <Icon name="lock" size={44} />
+             <div className="bg-[#0c061a] p-6 sm:p-8 rounded-[40px] max-w-lg w-full shadow-2xl text-center space-y-4 border border-purple-500/30 text-slate-100 animate-in zoom-in-95">
+                 <div className="w-16 h-16 bg-purple-950/80 text-purple-300 rounded-full flex items-center justify-center mx-auto border-2 border-purple-500/50 shadow-inner">
+                   <Icon name="account_balance_wallet" size={32} />
                  </div>
                  <div>
                    <h2 className="text-2xl sm:text-3xl font-black uppercase text-white tracking-tight">Apertura de Caja</h2>
-                   <p className="text-xs sm:text-sm font-bold text-slate-400 mt-2">
-                     Inicia el turno para comenzar a registrar pedidos. Podrás ver y editar la pantalla de stock (opcional) o abrir la caja directamente con el efectivo inicial.
+                   <p className="text-xs font-bold text-slate-400 mt-1">
+                     Ingresa el monto de efectivo con el que inicias la caja para habilitar el sistema de ventas.
                    </p>
                  </div>
 
-                 <div className="bg-[#06020e] p-4 rounded-2xl border border-purple-500/20 text-left space-y-2">
-                   <div className="text-[10px] font-black uppercase text-purple-400 flex items-center gap-1.5">
-                     <Icon name="info" size={14} className="text-purple-400"/> Stock No Bloqueante
+                 {/* Input de Efectivo Inicial y Presets */}
+                 <div className="bg-[#06020e] p-4 rounded-2xl border border-purple-500/30 text-left space-y-2.5">
+                   <label className="text-[11px] font-black uppercase text-purple-300 flex items-center gap-1.5">
+                     <Icon name="monetization_on" size={15} className="text-purple-400"/> Efectivo Inicial para Cambio ($)
+                   </label>
+                   <input
+                     type="number"
+                     placeholder="0"
+                     value={initialCashInput}
+                     onChange={e => setInitialCashInput(e.target.value)}
+                     className="w-full p-3.5 bg-[#0d061c] border-2 border-purple-500/40 text-purple-200 rounded-xl text-2xl font-black text-center outline-none focus:border-purple-400 font-mono"
+                   />
+                   <div className="flex gap-1.5 flex-wrap justify-center pt-1">
+                     {[0, 1000, 2000, 3000, 5000].map(val => (
+                       <button
+                         key={val}
+                         type="button"
+                         onClick={() => setInitialCashInput(val.toString())}
+                         className={`px-3 py-1 rounded-xl text-[11px] font-black uppercase border transition-all ${
+                           (initialCashInput === val.toString()) || (val === 0 && initialCashInput === '')
+                             ? 'bg-purple-600 text-slate-950 border-purple-400 shadow-md'
+                             : 'bg-[#160829] text-purple-300 border-purple-500/30 hover:bg-[#220c40]'
+                         }`}
+                       >
+                         ${val}
+                       </button>
+                     ))}
                    </div>
-                   <p className="text-xs font-semibold text-slate-300">
-                     El conteo de stock inicial es totalmente editable pero <strong className="text-purple-400">no es obligatorio</strong> para abrir la caja.
-                   </p>
                  </div>
 
-                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2">
+                 <div className="bg-[#06020e] p-3 rounded-xl border border-purple-500/20 text-left flex items-center gap-2">
+                   <Icon name="info" size={16} className="text-purple-400 shrink-0"/>
+                   <span className="text-[11px] text-slate-300 font-medium leading-tight">
+                     El conteo de inventario/stock inicial es <strong>opcional</strong> y no bloquea la apertura de caja.
+                   </span>
+                 </div>
+
+                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
                    <button 
                      onClick={() => setActiveTab('cash')} 
-                     className="w-full py-4.5 bg-[#160829] hover:bg-[#220c40] text-purple-300 border border-purple-500/30 rounded-[22px] font-black uppercase text-xs shadow-lg transition-all flex items-center justify-center gap-2"
+                     className="w-full py-3.5 bg-[#160829] hover:bg-[#220c40] text-purple-300 border border-purple-500/30 rounded-2xl font-black uppercase text-xs shadow-lg transition-all flex items-center justify-center gap-2"
                    >
-                     <Icon name="inventory_2" size={18} className="text-purple-400"/> Ver Stock y Abrir Caja
+                     <Icon name="inventory_2" size={16} className="text-purple-400"/> Cargar Stock (Opcional)
                    </button>
                    <button 
                      onClick={() => handleOpenRegister(true)} 
-                     className="w-full py-4.5 bg-purple-600 hover:bg-purple-400 text-slate-950 rounded-[22px] font-black uppercase text-xs shadow-lg shadow-purple-500/20 transition-all flex items-center justify-center gap-2"
+                     className="w-full py-3.5 bg-purple-600 hover:bg-purple-400 text-slate-950 rounded-2xl font-black uppercase text-xs shadow-lg shadow-purple-500/20 transition-all flex items-center justify-center gap-2"
                    >
-                     <Icon name="bolt" size={18} className="text-slate-950"/> Abrir Directo ($0)
+                     <Icon name="bolt" size={16} className="text-slate-950"/> Abrir Caja (${initialCashInput || 0})
                    </button>
                  </div>
              </div>
@@ -1726,7 +1753,6 @@ export default function App() {
             {id: 'history', label: 'Historial', icon: 'history'}, 
             {id: 'cash', label: 'Arqueo', icon: 'account_balance_wallet'},
             {id: 'manual', label: 'Manual', icon: 'auto_stories'},
-            {id: 'dgi', label: 'DGI CFE', icon: 'receipt_long'},
             {id: 'support', label: 'Soporte', icon: 'support_agent', count: supportTickets.filter(t => t.status !== 'Resuelto').length, highlight: true}
           ].map(tab => {
             const isActive = activeTab === tab.id;
@@ -3074,18 +3100,6 @@ export default function App() {
           </div>
         )}
 
-        {/* DGI Electronic Billing Tab */}
-        {activeTab === 'dgi' && (
-          <DgiBillingTab
-            dgiConfig={dgiConfig}
-            onUpdateDgiConfig={handleUpdateDgiConfig}
-            cfeDocuments={cfeDocuments}
-            onEmitCfe={handleEmitCfe}
-            onCancelCfe={handleCancelCfe}
-            completedOrders={orders.filter(o => o.status === 'Finalizado' || o.isPaid)}
-            showMessage={showMessage}
-          />
-        )}
 
         {/* Support & Diagnostics Tab */}
         {activeTab === 'support' && (

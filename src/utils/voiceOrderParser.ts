@@ -615,15 +615,46 @@ export function parseVoiceOrderHeuristic(
       } else if (segment.includes('cerveza')) {
         matchedItem = allMenuItems.find(i => i.id === 'b4' || i.name.toLowerCase().includes('patricia')) || null;
       } else {
-        // Refresco
-        if (segment.includes('1.5') || segment.includes('litro y medio')) {
-          matchedItem = allMenuItems.find(i => i.id === 'b3' || (i.name.toLowerCase().includes('refresco') && i.name.toLowerCase().includes('1.5'))) || null;
-        } else if (segment.includes('1 litro') || segment.includes('1l') || segment.includes('un litro')) {
-          matchedItem = allMenuItems.find(i => i.id === 'b2' || (i.name.toLowerCase().includes('refresco') && i.name.toLowerCase().includes('1 l'))) || null;
-        } else if (segment.includes('600')) {
-          matchedItem = allMenuItems.find(i => i.id === 'b1' || (i.name.toLowerCase().includes('refresco') && i.name.toLowerCase().includes('600'))) || null;
+        // Refrescos (Coca, Sprite, Fanta, Schweppes, etc.)
+        const isZero = segment.includes('zero') || segment.includes('sin azucar') || segment.includes('sin azúcar') || segment.includes('light') || segment.includes('cero');
+        const is600 = segment.includes('600') || segment.includes('chica') || segment.includes('individual');
+        const isFanta = segment.includes('fanta') || segment.includes('naranja');
+        const isPomelo = segment.includes('pomelo') || segment.includes('schweppes pomelo');
+        const isTonica = segment.includes('tonica') || segment.includes('tónica') || segment.includes('schweppes tonica') || segment.includes('schweppes tónica');
+        const isSprite = segment.includes('sprite') || segment.includes('esprite');
+        const isCoca = segment.includes('coca') || segment.includes('cola');
+
+        if (isFanta) {
+          matchedItem = allMenuItems.find(i => i.id === 'b_fanta_15' || i.name.toLowerCase().includes('fanta')) || null;
+        } else if (isPomelo) {
+          matchedItem = allMenuItems.find(i => i.id === 'b_schweppes_pomelo_15' || i.name.toLowerCase().includes('schweppes pomelo') || i.name.toLowerCase().includes('pomelo')) || null;
+        } else if (isTonica) {
+          matchedItem = allMenuItems.find(i => i.id === 'b_schweppes_tonica_15' || i.name.toLowerCase().includes('schweppes tónica') || i.name.toLowerCase().includes('tonica')) || null;
+        } else if (isSprite) {
+          if (is600) {
+            matchedItem = isZero
+              ? (allMenuItems.find(i => i.id === 'b_sprite_600_zero' || (i.name.toLowerCase().includes('sprite') && i.name.toLowerCase().includes('600') && i.name.toLowerCase().includes('zero'))) || null)
+              : (allMenuItems.find(i => i.id === 'b_sprite_600' || (i.name.toLowerCase().includes('sprite') && i.name.toLowerCase().includes('600'))) || null);
+          } else {
+            matchedItem = allMenuItems.find(i => i.id === 'b_sprite_15' || (i.name.toLowerCase().includes('sprite') && i.name.toLowerCase().includes('1.5'))) || null;
+          }
+        } else if (isCoca) {
+          if (is600) {
+            matchedItem = isZero
+              ? (allMenuItems.find(i => i.id === 'b_coca_600_zero' || (i.name.toLowerCase().includes('coca') && i.name.toLowerCase().includes('600') && i.name.toLowerCase().includes('zero'))) || null)
+              : (allMenuItems.find(i => i.id === 'b_coca_600' || (i.name.toLowerCase().includes('coca') && i.name.toLowerCase().includes('600'))) || null);
+          } else {
+            matchedItem = isZero
+              ? (allMenuItems.find(i => i.id === 'b_coca_15_zero' || (i.name.toLowerCase().includes('coca') && i.name.toLowerCase().includes('1.5') && i.name.toLowerCase().includes('zero'))) || null)
+              : (allMenuItems.find(i => i.id === 'b_coca_15' || (i.name.toLowerCase().includes('coca') && i.name.toLowerCase().includes('1.5'))) || null);
+          }
         } else {
-          matchedItem = allMenuItems.find(i => i.id === 'b3') || null;
+          // General Refresco
+          if (is600) {
+            matchedItem = allMenuItems.find(i => i.name.toLowerCase().includes('600')) || null;
+          } else {
+            matchedItem = allMenuItems.find(i => i.name.toLowerCase().includes('1.5')) || null;
+          }
         }
       }
     }

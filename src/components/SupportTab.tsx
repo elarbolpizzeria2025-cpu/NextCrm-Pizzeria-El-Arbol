@@ -18,7 +18,7 @@ export const SupportTab: React.FC<SupportTabProps> = ({
   const [newTicketModal, setNewTicketModal] = useState(false);
   const [form, setForm] = useState({
     title: '',
-    category: 'pos_caja' as 'impresora' | 'pos_caja' | 'dgi_facturacion' | 'pedidos_voz' | 'delivery_maps' | 'otro',
+    category: 'pos_caja' as 'impresora' | 'pos_caja' | 'pedidos_voz' | 'delivery_maps' | 'otro',
     priority: 'media' as 'baja' | 'media' | 'alta' | 'urgente',
     description: '',
     contactPhone: '098356320',
@@ -34,14 +34,14 @@ export const SupportTab: React.FC<SupportTabProps> = ({
     firebase: 'ok' | 'checking' | 'error';
     speech: 'ok' | 'checking' | 'error';
     maps: 'ok' | 'checking' | 'error';
-    dgi: 'ok' | 'checking' | 'error';
+    whatsapp: 'ok' | 'checking' | 'error';
     printer: 'ok' | 'checking' | 'error';
   }>({
     internet: 'ok',
     firebase: 'ok',
     speech: 'ok',
     maps: 'ok',
-    dgi: 'ok',
+    whatsapp: 'ok',
     printer: 'ok',
   });
 
@@ -54,7 +54,7 @@ export const SupportTab: React.FC<SupportTabProps> = ({
       firebase: 'checking',
       speech: 'checking',
       maps: 'checking',
-      dgi: 'checking',
+      whatsapp: 'checking',
       printer: 'checking',
     });
 
@@ -65,7 +65,7 @@ export const SupportTab: React.FC<SupportTabProps> = ({
         firebase: 'ok',
         speech: 'ok',
         maps: 'ok',
-        dgi: 'ok',
+        whatsapp: 'ok',
         printer: 'ok',
       });
       showMessage('Diagnóstico de infraestructura completado: Todos los sistemas operativos', 'success');
@@ -90,9 +90,9 @@ export const SupportTab: React.FC<SupportTabProps> = ({
       cat: 'pos_caja'
     },
     {
-      q: '¿Cómo funciona la Facturación Electrónica con Facturando?',
-      a: 'En la pestaña DGI CFE, ve a "API Facturando & Proveedores". Solo debes ingresar tu API Key y Token provistos por Facturando. El sistema emitirá los e-Tickets y e-Facturas en tiempo real.',
-      cat: 'dgi_facturacion'
+      q: '¿Cómo abrir la caja y cargar el inventario de stock?',
+      a: 'En la pantalla de Apertura de Caja ingresa el monto inicial de efectivo (ej: $3000) y pulsa "Abrir Caja". Si deseas contar pizzas, fainás o bebidas, pulsa "Cargar Stock Inicial", el cual es completamente opcional.',
+      cat: 'pos_caja'
     },
     {
       q: '¿Cómo pegar pedidos copiados de WhatsApp?',
@@ -175,7 +175,7 @@ export const SupportTab: React.FC<SupportTabProps> = ({
               { id: 'firebase', name: 'Cloud Firestore', icon: 'cloud_done' },
               { id: 'speech', name: 'Reconocimiento Voz', icon: 'mic' },
               { id: 'maps', name: 'Google Maps GPS', icon: 'map' },
-              { id: 'dgi', name: 'Facturando API', icon: 'receipt' },
+              { id: 'whatsapp', name: 'WhatsApp API', icon: 'chat' },
               { id: 'printer', name: 'Impresora Térmica', icon: 'print' },
             ].map(item => (
               <div key={item.id} className="p-3 bg-[#070310] rounded-xl border border-purple-500/20 flex items-center gap-2">
@@ -355,7 +355,6 @@ export const SupportTab: React.FC<SupportTabProps> = ({
                     className="w-full p-3 bg-[#06030e] border border-purple-500/30 rounded-xl text-xs font-black uppercase text-white outline-none focus:border-purple-400"
                   >
                     <option value="pos_caja">Toma de Pedidos / Caja</option>
-                    <option value="dgi_facturacion">Facturando / DGI CFE</option>
                     <option value="impresora">Impresora Térmica</option>
                     <option value="delivery_maps">Delivery & GPS</option>
                     <option value="pedidos_voz">Voz AI</option>

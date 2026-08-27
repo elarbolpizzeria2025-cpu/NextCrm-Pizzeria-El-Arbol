@@ -94,7 +94,7 @@ export const OperationsManualTab: React.FC<OperationsManualTabProps> = ({
                 <span>1. Toma de Pedido</span>
               </div>
               <p className="text-xs text-slate-300 leading-relaxed font-medium print:text-gray-700">
-                Ingresa al módulo <strong className="text-purple-300 print:text-black">Toma de Pedido</strong>, selecciona tipo de entrega (Mostrador / Delivery / Mesas), carga los productos y gustos, y confirma el pago con emisión de ticket térmico o e-Ticket DGI Facturando.
+                Ingresa al módulo <strong className="text-purple-300 print:text-black">Toma de Pedido</strong>, selecciona tipo de entrega (Mostrador / Delivery / Mesas), carga los productos y gustos, y confirma el pago con cálculo de vuelto y emisión de comanda.
               </p>
             </div>
 
@@ -213,25 +213,25 @@ export const OperationsManualTab: React.FC<OperationsManualTabProps> = ({
             </div>
           </div>
 
-          {/* Chapter 4: Apertura, Cierre de Caja & Facturación DGI */}
+          {/* Chapter 4: Apertura, Cierre de Caja & Arqueo */}
           <div className="bg-[#0b0518] border border-purple-500/25 p-6 rounded-3xl space-y-4 print:border-gray-300 print:bg-transparent">
             <h3 className="text-lg font-black uppercase text-purple-400 flex items-center gap-2 print:text-black">
               <Icon name="account_balance_wallet" size={20} />
-              Capítulo 4: Apertura, Arqueo de Caja y Facturación DGI CFE
+              Capítulo 4: Apertura, Arqueo de Caja y Cierre de Turno
             </h3>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs">
               <div className="bg-[#06020e] p-4 rounded-2xl border border-purple-500/15 space-y-2 print:border-gray-300 print:bg-transparent">
-                <div className="font-black text-white uppercase print:text-black">Arqueo de Caja (X / Z)</div>
+                <div className="font-black text-white uppercase print:text-black">Apertura con Efectivo Inicial & Stock Opcional</div>
                 <p className="text-slate-300 print:text-gray-700">
-                  Al iniciar el turno se ingresa el efectivo inicial. Al finalizar la jornada, se efectúa el Cierre de Caja Z donde se desglosan los cobros por Efectivo, Tarjetas y Transferencias, imprimiendo el reporte A4 o ticket 80mm.
+                  Al iniciar el turno, el sistema solicita ingresar el monto en efectivo con el que se inicia la caja (para cambio). Opcionalmente se puede cargar o editar el inventario de stock disponible, sin ser requisito bloqueante.
                 </p>
               </div>
 
               <div className="bg-[#06020e] p-4 rounded-2xl border border-purple-500/15 space-y-2 print:border-gray-300 print:bg-transparent">
-                <div className="font-black text-white uppercase print:text-black">Facturación Electrónica DGI Facturando</div>
+                <div className="font-black text-white uppercase print:text-black">Cierre de Caja Z & Desglose de Medios de Pago</div>
                 <p className="text-slate-300 print:text-gray-700">
-                  Para e-Ticket a consumidor final o e-Factura con RUT, el sistema genera el CFE con código QR y CAE oficial de DGI a través del proveedor Facturando en la pestaña DGI Facturación o al cobrar.
+                  Al finalizar la jornada, se realiza el Cierre de Caja donde se desglosan automáticamente los ingresos por Efectivo, Débito, Crédito, Transferencia bancaria y Mercado Pago, permitiendo imprimir el reporte A4 o ticket térmico de 80mm.
                 </p>
               </div>
             </div>
