@@ -2149,6 +2149,13 @@ export default function App() {
                     </button>
                   )}
                   <button 
+                    onClick={handleRestoreDefaultMenu}
+                    className="px-4 py-3 bg-purple-600/20 hover:bg-purple-600/40 border border-purple-500/50 text-purple-200 rounded-[20px] font-black uppercase text-xs transition-all flex items-center gap-1.5 shadow-xs"
+                    title="Cargar y sincronizar la carta oficial del folleto de El Árbol"
+                  >
+                    <Icon name="refresh" size={16}/> 🔄 Carta Oficial (Folleto)
+                  </button>
+                  <button 
                     onClick={handleCleanDuplicates}
                     className="px-4 py-3 bg-purple-950/60 hover:bg-purple-900/80 border border-purple-500/40 text-purple-200 rounded-[20px] font-black uppercase text-xs transition-all flex items-center gap-1.5 shadow-xs"
                     title="Buscar y eliminar automáticamente productos duplicados del menú"
