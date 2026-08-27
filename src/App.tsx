@@ -148,10 +148,10 @@ export default function App() {
 
   const [adjustCashModal, setAdjustCashModal] = useState<{
     isOpen: boolean;
-    cashAmount: string;
+    amount: string;
   }>({
     isOpen: false,
-    cashAmount: ''
+    amount: ''
   });
 
   const [finishedFilter, setFinishedFilter] = useState({ search: '', method: 'TODOS', type: 'TODOS' });
@@ -558,13 +558,13 @@ export default function App() {
   };
 
   const updateQuantity = (cartId: string, delta: number) => { 
-    setCart(cart.map(it => { 
+    setCart(prev => prev.map(it => { 
       if (it.cartId === cartId) { 
         const newQ = (it.quantity || 1) + delta; 
-        if (newQ > 0) return { ...it, quantity: newQ }; 
+        return newQ > 0 ? { ...it, quantity: newQ } : null; 
       } 
       return it; 
-    })); 
+    }).filter(Boolean) as CartItem[]); 
   };
 
   const cartTotal = Math.round(cart.reduce((a, b) => a + ((b.finalPrice || 0) * (b.quantity || 1)), 0));
@@ -1068,6 +1068,7 @@ export default function App() {
   };
 
   const handleDeleteStockItem = async (itemId: string) => {
+    if (!window.confirm("¿Está seguro de eliminar este artículo del inventario de stock?")) return;
     try {
       await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'stockItems', itemId));
       showMessage("Artículo eliminado del stock");
@@ -1106,6 +1107,7 @@ export default function App() {
   };
 
   const handleDeleteClient = async (firestoreId: string) => {
+    if (!window.confirm("¿Está seguro de eliminar este cliente del directorio?")) return;
     try {
       await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'clients', firestoreId));
       showMessage("Cliente eliminado");
@@ -1268,6 +1270,7 @@ export default function App() {
   };
 
   const handleDeleteProduct = async (catKey: string, itemId: string) => {
+    if (!window.confirm("¿Está seguro de eliminar este producto del menú?")) return;
     const cKey = catKey.toLowerCase();
     const updatedMenu = { ...menu };
     if (!updatedMenu[cKey]) return;
@@ -1313,9 +1316,10 @@ export default function App() {
   };
 
   const handleDeleteSale = async (firestoreId: string, orderId: string) => {
+    if (!window.confirm(`¿Está seguro de eliminar la comanda #${orderId} del historial?`)) return;
     try {
       await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'orders', firestoreId));
-      showMessage(`Comanda ${orderId} eliminada del registro`);
+      showMessage(`Comanda #${orderId} eliminada del registro`);
     } catch (e: any) {
       showMessage("Error al eliminar venta: " + e.message, "error");
     }
@@ -1352,6 +1356,7 @@ export default function App() {
   };
 
   const handleDeleteSession = async (firestoreId: string) => {
+    if (!window.confirm("¿Está seguro de eliminar este registro de turno cerrado del historial?")) return;
     try {
       await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'sessions', firestoreId));
       showMessage("Turno de caja eliminado del historial");
@@ -1362,15 +1367,16 @@ export default function App() {
 
   // Cash Adjustment in Open Register
   const handleSaveAdjustCash = async () => {
-    if (!adjustCashModal.amount) return;
+    if (!adjustCashModal.amount) return showMessage("Ingrese un monto válido", "error");
     const newAmount = parseFloat(adjustCashModal.amount);
     if (isNaN(newAmount)) return showMessage("Ingrese un monto válido", "error");
     try {
       await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'config', 'register'), {
         currentCash: newAmount
       });
-      setAdjustCashModal({ isOpen: false, amount: '', note: '' });
-      showMessage(`Efectivo en caja ajustado a ${newAmount}`);
+      setRegister(prev => ({ ...prev, currentCash: newAmount }));
+      setAdjustCashModal({ isOpen: false, amount: '' });
+      showMessage(`Efectivo en caja ajustado a $${newAmount}`);
     } catch (e: any) {
       showMessage("Error al ajustar caja: " + e.message, "error");
     }
@@ -1691,20 +1697,20 @@ export default function App() {
         </div>
       )}
 
-      {/* Header - Deluxe Lila, White & Black Edition */}
-      <header className="h-13 bg-[#040108] border-b border-purple-500/20 text-white flex items-center justify-between px-2.5 shrink-0 shadow-lg z-50 gap-2">
-        <div className="flex items-center gap-2 shrink-0 pr-2 border-r border-purple-500/20">
-          <div className="w-7 h-7 rounded-lg border border-purple-500/50 bg-[#0d061c] flex items-center justify-center font-black text-xs text-purple-300 shadow-xs">
+      {/* Header - Deluxe Lila, White & Black Edition (Crisp, Perfectly Aligned) */}
+      <header className="h-14 bg-[#040108] border-b border-purple-500/20 text-white flex items-center justify-between px-3 shrink-0 shadow-lg z-50 gap-3">
+        <div className="flex items-center gap-2 shrink-0 pr-3 border-r border-purple-500/20">
+          <div className="w-8 h-8 rounded-xl border border-purple-500/50 bg-[#0d061c] flex items-center justify-center font-black text-sm text-purple-300 shadow-xs">
             🌳
           </div>
-          <div className="font-black text-xs tracking-wider uppercase flex items-center gap-1">
+          <div className="font-black text-xs tracking-wider uppercase flex items-center gap-1.5">
             <span className="text-white font-extrabold">El Árbol</span>
-            <span className="text-[8px] bg-purple-950 text-purple-300 px-1.5 py-0.5 rounded border border-purple-500/40 font-black tracking-widest">POS</span>
+            <span className="text-[8px] bg-purple-950 text-purple-300 px-1.5 py-0.5 rounded-md border border-purple-500/40 font-black tracking-widest">POS</span>
           </div>
         </div>
 
-        {/* Complete Navigation Bar - Sleek, Compact & Badges Over Word */}
-        <nav className="flex h-full gap-1 ml-auto overflow-x-auto no-scrollbar items-center py-1">
+        {/* Navigation Bar - Smooth horizontal scroll, starts left, zero misalignment */}
+        <nav className="flex-1 flex h-full gap-1 overflow-x-auto no-scrollbar items-center py-1 scroll-smooth">
           {[ 
             {id: 'kitchen', label: 'KDS Cocina', icon: 'tv', count: badges.kitchen}, 
             {id: 'pos', label: 'Toma Pedido', icon: 'point_of_sale'}, 
@@ -1728,7 +1734,7 @@ export default function App() {
               <button 
                 key={tab.id} 
                 onClick={() => setActiveTab(tab.id)} 
-                className={`relative px-2 py-1 h-10 rounded-xl flex flex-col items-center justify-center font-black text-[9px] uppercase transition-all shrink-0 min-w-[50px] ${
+                className={`relative px-2.5 py-1 h-10 rounded-xl flex flex-col items-center justify-center font-black text-[9px] uppercase transition-all shrink-0 min-w-[56px] ${
                   isActive 
                     ? tab.id === 'support' 
                       ? 'bg-purple-600 text-white shadow-md shadow-purple-600/30'
@@ -1738,7 +1744,6 @@ export default function App() {
                     : 'text-slate-400 hover:text-white hover:bg-white/5'
                 }`}
               >
-                {/* Badge / Globito positioned ABOVE the word, taking 0 horizontal space */}
                 {tab.count !== undefined && tab.count > 0 && (
                   <span className="absolute -top-1 right-1 bg-red-600 text-white text-[8px] font-black w-4 h-4 rounded-full flex items-center justify-center shadow-md animate-pulse z-10">
                     {tab.count}
@@ -1750,6 +1755,17 @@ export default function App() {
             );
           })}
         </nav>
+
+        {/* Live Status Indicator */}
+        <div className="flex items-center gap-2 shrink-0 pl-2 border-l border-purple-500/20">
+          <div 
+            className={`w-2.5 h-2.5 rounded-full transition-colors ${register.isOpen ? 'bg-emerald-400 shadow-sm shadow-emerald-400/50 animate-pulse' : 'bg-amber-500'}`} 
+            title={register.isOpen ? 'Caja Abierta' : 'Caja Cerrada'} 
+          />
+          <span className="text-[9px] font-black uppercase text-slate-300 hidden lg:inline">
+            {register.isOpen ? 'Turno Abierto' : 'Caja Cerrada'}
+          </span>
+        </div>
       </header>
 
       {/* Main Container */}
@@ -3733,7 +3749,7 @@ export default function App() {
                 Modificar Efectivo en Caja
               </h3>
               <button 
-                onClick={() => setAdjustCashModal({ isOpen: false, cashAmount: '' })} 
+                onClick={() => setAdjustCashModal({ isOpen: false, amount: '' })} 
                 className="p-1 text-slate-400 hover:text-white"
               >
                 <Icon name="close" size={22}/>
@@ -3744,8 +3760,8 @@ export default function App() {
               <input 
                 type="number" 
                 placeholder="0"
-                value={adjustCashModal.cashAmount} 
-                onChange={e => setAdjustCashModal({ ...adjustCashModal, cashAmount: e.target.value })} 
+                value={adjustCashModal.amount} 
+                onChange={e => setAdjustCashModal({ ...adjustCashModal, amount: e.target.value })} 
                 className="w-full p-4 bg-[#040108] border-2 border-purple-500/20 text-purple-400 rounded-2xl font-black text-2xl outline-none focus:border-purple-400 text-center"
               />
               <p className="text-[11px] font-bold text-slate-400 mt-2 text-center uppercase">
@@ -3754,7 +3770,7 @@ export default function App() {
             </div>
             <div className="flex gap-3">
               <button 
-                onClick={() => setAdjustCashModal({ isOpen: false, cashAmount: '' })} 
+                onClick={() => setAdjustCashModal({ isOpen: false, amount: '' })} 
                 className="flex-1 py-4 bg-[#160829] text-slate-300 hover:bg-[#220c40] rounded-2xl font-black uppercase text-xs transition-all"
               >
                 Cancelar
