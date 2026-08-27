@@ -1,0 +1,6 @@
+{
+  "name": "El Arbol POS - Pizzeria",
+  "description": "Sistema POS para Pizzería El Árbol con modo Dark Deluxe, pedidos por voz inteligentes, comandas, control de stock y cierres de caja.",
+  "requestFramePermissions": ["microphone"],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
