@@ -310,14 +310,3 @@ export const exportStockToCSV = (
   exportToCSV(filename, [headers, ...rows]);
 };
 
-export const exportClientsToCSV = (clients: any[], filename = 'Directorio_Clientes_ElArbol') => {
-  const headers = ['Nombre', 'Teléfono / WhatsApp', 'Dirección', 'Zona', 'Fecha Registro'];
-  const rows = clients.map(c => [
-    c.name || '',
-    c.phone || '',
-    c.address || '',
-    c.zone || '',
-    c.createdAt ? new Date(c.createdAt).toLocaleDateString() : ''
-  ]);
-  exportToCSV(filename, [headers, ...rows]);
-};

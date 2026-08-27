@@ -185,9 +185,9 @@ export const printOrderTicket = (order: OrderData) => {
       .page-break { page-break-after: always; break-after: page; display: block; height: 0; margin: 0; border: none; }
     </style></head>
     <body>
-      ${generateTicketHTML("VÍA COMERCIO")}
-      <div class="page-break"></div>
       ${generateTicketHTML("VÍA CLIENTE")}
+      <div class="page-break"></div>
+      ${generateTicketHTML("VÍA COMERCIO")}
       <script>window.onload = function() { setTimeout(() => { window.print(); setTimeout(window.close, 500); }, 500); }</script>
     </body></html>
   `);

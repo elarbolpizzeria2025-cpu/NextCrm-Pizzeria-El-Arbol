@@ -1,8 +1,8 @@
-import React, { useState, useMemo, useRef } from 'react';
+import React, { useState, useMemo } from 'react';
 import { ClientData, OrderData } from '../types';
 import { Icon } from './Icon';
-import { addDoc, collection } from 'firebase/firestore';
-import { exportClientsToCSV } from '../utils/exports';
+import { addDoc, collection, doc, deleteDoc } from 'firebase/firestore';
+import { ImportClientsModal } from './ImportClientsModal';
 
 interface CrmClientsTabProps {
   allClients: ClientData[];
@@ -20,6 +20,8 @@ interface CrmClientsTabProps {
   setPosStep: (step: 1 | 2 | 3) => void;
   showMessage: (msg: string, type?: 'success' | 'error') => void;
   onSaveVirtualClient?: (client: ClientData) => Promise<void>;
+  onImportClients?: (clients: Partial<ClientData>[], replaceExisting: boolean) => Promise<void>;
+  onClearAllClients?: () => Promise<void>;
   db?: any;
   appId?: string;
 }
@@ -40,11 +42,61 @@ export const CrmClientsTab: React.FC<CrmClientsTabProps> = ({
   setPosStep,
   showMessage,
   onSaveVirtualClient,
+  onImportClients,
+  onClearAllClients,
   db,
   appId,
 }) => {
   const [filterType, setFilterType] = useState<'ALL' | 'DELIVERY' | 'PHONE'>('ALL');
-  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [isImportModalOpen, setIsImportModalOpen] = useState(false);
+
+  const handleInternalImportClients = async (importedClients: Partial<ClientData>[], replaceExisting: boolean) => {
+    if (onImportClients) {
+      await onImportClients(importedClients, replaceExisting);
+      return;
+    }
+    if (!db || !appId) return;
+
+    if (replaceExisting) {
+      for (const c of clients) {
+        if (c.firestoreId) {
+          await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'clients', c.firestoreId));
+        }
+      }
+    }
+
+    const col = collection(db, 'artifacts', appId, 'public', 'data', 'clients');
+    for (const c of importedClients) {
+      await addDoc(col, {
+        name: c.name || 'Cliente',
+        phone: c.phone || '',
+        address: c.address || '',
+        zone: c.zone || '',
+        notes: c.notes || '',
+        createdAt: Date.now()
+      });
+    }
+  };
+
+  const handleInternalClearAllClients = async () => {
+    if (onClearAllClients) {
+      await onClearAllClients();
+      return;
+    }
+    if (!window.confirm("¿Está seguro de que desea eliminar todos los clientes del directorio?")) return;
+    if (!db || !appId) return;
+
+    try {
+      for (const c of clients) {
+        if (c.firestoreId) {
+          await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'clients', c.firestoreId));
+        }
+      }
+      showMessage("Directorio de clientes vaciado exitosamente");
+    } catch (e: any) {
+      showMessage("Error al vaciar clientes: " + e.message, "error");
+    }
+  };
 
   // Compute stats per client from orders history
   const clientStatsMap = useMemo(() => {
@@ -71,34 +123,38 @@ export const CrmClientsTab: React.FC<CrmClientsTabProps> = ({
   // Filter clients
   const filteredClients = useMemo(() => {
     return allClients.filter(c => {
-      // Type filter
-      if (filterType === 'DELIVERY' && !c.address) return false;
-      if (filterType === 'PHONE' && !c.phone) return false;
+      const q = clientSearch.toLowerCase().trim();
+      const matchSearch =
+        !q ||
+        (c.name && c.name.toLowerCase().includes(q)) ||
+        (c.phone && c.phone.toLowerCase().includes(q)) ||
+        (c.address && c.address.toLowerCase().includes(q)) ||
+        (c.zone && c.zone.toLowerCase().includes(q));
 
-      // Text search
-      if (!clientSearch.trim()) return true;
-      const q = clientSearch.toLowerCase();
-      return (
-        (c.name || '').toLowerCase().includes(q) ||
-        (c.phone || '').includes(q) ||
-        (c.address || '').toLowerCase().includes(q) ||
-        (c.zone || '').toLowerCase().includes(q)
-      );
+      if (!matchSearch) return false;
+
+      if (filterType === 'DELIVERY') return !!(c.address && c.address.trim());
+      if (filterType === 'PHONE') return !!(c.phone && c.phone.trim());
+      return true;
     });
   }, [allClients, clientSearch, filterType]);
 
   const virtualClientsCount = allClients.filter(c => c.isVirtual).length;
-  const clientsWithAddress = allClients.filter(c => c.address && c.address.trim() !== '').length;
-  const clientsWithPhone = allClients.filter(c => c.phone && c.phone.trim() !== '').length;
+  const clientsWithPhone = allClients.filter(c => c.phone && c.phone.trim()).length;
+  const clientsWithAddress = allClients.filter(c => c.address && c.address.trim()).length;
 
   const handleStartOrderForClient = (client: ClientData) => {
     setClientInfo({
       name: client.name || '',
       phone: client.phone || '',
       address: client.address || '',
-      zone: client.zone || ''
+      zone: client.zone || '',
     });
-    setOrderType(client.address ? 'Envío' : 'Local');
+    if (client.address && client.address.trim()) {
+      setOrderType('Envío');
+    } else {
+      setOrderType('Local');
+    }
     setPosStep(1);
     setActiveTab('pos');
     showMessage(`Cliente ${client.name} cargado en comanda`);
@@ -131,70 +187,17 @@ export const CrmClientsTab: React.FC<CrmClientsTabProps> = ({
     }
   };
 
-  const handleImportClientsFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file || !db || !appId) return;
-
-    try {
-      const text = await file.text();
-      const lines = text.split(/\r?\n/).map(l => l.trim()).filter(Boolean);
-      if (lines.length <= 1) return showMessage("El archivo CSV está vacío", "error");
-
-      const existingPhones = new Set(allClients.map(c => String(c.phone || '').replace(/\D/g, '')).filter(Boolean));
-      const existingNames = new Set(allClients.map(c => String(c.name || '').trim().toLowerCase()).filter(Boolean));
-
-      let addedCount = 0;
-      for (let i = 1; i < lines.length; i++) {
-        const line = lines[i];
-        // Parse CSV line (supporting semicolon or comma, and quotes)
-        const parts = line.split(/[;,]/).map(p => p.replace(/^["']|["']$/g, '').trim());
-        if (parts.length < 1) continue;
-
-        const name = parts[0];
-        const phone = parts[1] || '';
-        const address = parts[2] || '';
-        const zone = parts[3] || '';
-
-        if (!name) continue;
-
-        const cleanPhone = phone.replace(/\D/g, '');
-        const cleanName = name.toLowerCase();
-
-        if ((cleanPhone && existingPhones.has(cleanPhone)) || existingNames.has(cleanName)) {
-          continue; // Skip duplicate
-        }
-
-        await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'clients'), {
-          name,
-          phone,
-          address,
-          zone,
-          createdAt: Date.now()
-        });
-
-        if (cleanPhone) existingPhones.add(cleanPhone);
-        existingNames.add(cleanName);
-        addedCount++;
-      }
-
-      if (fileInputRef.current) fileInputRef.current.value = '';
-      showMessage(`¡Se importaron ${addedCount} contactos sin duplicados!`, "success");
-    } catch (err: any) {
-      showMessage("Error al importar contactos: " + err.message, "error");
-    }
-  };
-
   return (
-    <div className="p-6 md:p-10 h-full overflow-y-auto bg-[#060a08] text-slate-100 no-scrollbar space-y-8">
-      <div className="max-w-7xl mx-auto space-y-8">
+    <div className="p-4 sm:p-8 h-full overflow-y-auto bg-[#050508] text-slate-100 no-scrollbar space-y-6">
+      <div className="max-w-7xl mx-auto space-y-6">
         {/* Header and Actions */}
-        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 border-b border-emerald-500/20 pb-6">
+        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 border-b border-purple-500/20 pb-6">
           <div>
             <div className="flex items-center gap-3">
-              <h1 className="text-3xl sm:text-4xl font-black uppercase tracking-tight text-white flex items-center gap-3">
-                <Icon name="group" size={36} className="text-emerald-400" /> Directorio de Clientes & CRM
+              <h1 className="text-2xl sm:text-3xl font-black uppercase tracking-tight text-white flex items-center gap-3">
+                <Icon name="group" size={32} className="text-purple-400" /> Directorio de Clientes & CRM
               </h1>
-              <span className="text-[10px] font-black uppercase px-3 py-1 bg-emerald-950 text-emerald-300 border border-emerald-500/30 rounded-full">
+              <span className="text-[10px] font-black uppercase px-3 py-1 bg-purple-950 text-purple-300 border border-purple-500/30 rounded-full">
                 {allClients.length} Clientes
               </span>
             </div>
@@ -204,102 +207,97 @@ export const CrmClientsTab: React.FC<CrmClientsTabProps> = ({
           </div>
 
           <div className="flex flex-wrap items-center gap-2.5">
-            <input 
-              type="file" 
-              ref={fileInputRef} 
-              onChange={handleImportClientsFile} 
-              accept=".csv,.txt" 
-              className="hidden" 
-            />
             <button
               type="button"
-              onClick={() => fileInputRef.current?.click()}
-              className="px-4 py-3 bg-[#112017] border border-emerald-500/30 text-emerald-300 hover:bg-[#1a2e20] rounded-2xl font-black uppercase text-xs transition-all flex items-center gap-2"
-              title="Importar contactos desde archivo CSV sin duplicar"
+              onClick={() => setIsImportModalOpen(true)}
+              className="px-4 py-2.5 bg-[#170a2c] border border-purple-500/40 text-purple-200 hover:bg-[#251046] hover:text-white rounded-2xl font-black uppercase text-xs transition-all flex items-center gap-2 shadow-xs cursor-pointer"
+              title="Importar lista de clientes desde Excel (.xlsx, .csv) o texto"
             >
-              <Icon name="upload" size={16} className="text-emerald-400" /> 📥 Importar CSV
+              <Icon name="upload_file" size={16} className="text-purple-300" /> 📥 Importar Clientes
             </button>
-            <button
-              type="button"
-              onClick={() => exportClientsToCSV(allClients)}
-              className="px-4 py-3 bg-[#112017] border border-emerald-500/30 text-emerald-300 hover:bg-[#1a2e20] rounded-2xl font-black uppercase text-xs transition-all flex items-center gap-2"
-              title="Exportar clientes a Excel (CSV)"
-            >
-              <Icon name="download" size={16} className="text-emerald-400" /> 📊 Exportar CSV
-            </button>
+            {clients.length > 0 && (
+              <button
+                type="button"
+                onClick={handleInternalClearAllClients}
+                className="px-3.5 py-2.5 bg-red-950/40 hover:bg-red-900/60 border border-red-500/30 text-red-300 rounded-2xl font-black uppercase text-xs transition-all flex items-center gap-1.5"
+                title="Vaciar / Limpiar todos los clientes"
+              >
+                <Icon name="delete" size={15} /> Limpiar Clientes
+              </button>
+            )}
             {virtualClientsCount > 0 && (
               <button
                 type="button"
                 onClick={handleRestoreClientsFromHistory}
-                className="px-4 py-3 bg-[#112017] border border-amber-500/30 text-amber-300 hover:bg-[#1a2e20] rounded-2xl font-black uppercase text-xs transition-all flex items-center gap-2"
+                className="px-4 py-2.5 bg-[#170a2c] border border-purple-500/40 text-purple-300 hover:bg-[#251046] rounded-2xl font-black uppercase text-xs transition-all flex items-center gap-2"
                 title="Guardar todos los clientes encontrados en comandas previas"
               >
-                <Icon name="save" size={16} className="text-amber-400" /> Guardar Virtuales ({virtualClientsCount})
+                <Icon name="save" size={16} className="text-purple-400" /> Guardar Virtuales ({virtualClientsCount})
               </button>
             )}
             <button
               type="button"
               onClick={() => setNewClientModal(true)}
-              className="px-5 py-3 bg-emerald-500 hover:bg-emerald-400 text-slate-950 rounded-2xl font-black uppercase text-xs transition-all flex items-center gap-2 shadow-lg shadow-emerald-500/20"
+              className="px-5 py-2.5 bg-purple-600 hover:bg-purple-500 text-white rounded-2xl font-black uppercase text-xs transition-all flex items-center gap-2 shadow-lg shadow-purple-600/30"
             >
-              <Icon name="person_add" size={18} /> + Nuevo Cliente
+              <Icon name="person_add" size={16} /> + Nuevo Cliente
             </button>
           </div>
         </div>
 
-        {/* CRM KPI Metric Cards */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-          <div className="bg-[#0b140f] p-5 rounded-[28px] border border-emerald-500/20 shadow-xs">
+        {/* CRM KPI Metric Cards in Lila & Black */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3.5">
+          <div className="bg-[#0b0617] p-4 rounded-2xl border border-purple-500/20 shadow-xs">
             <div className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center justify-between">
               <span>Total Clientes</span>
-              <Icon name="contacts" size={16} className="text-emerald-400" />
+              <Icon name="contacts" size={16} className="text-purple-400" />
             </div>
-            <div className="text-3xl font-black text-white mt-1">{allClients.length}</div>
+            <div className="text-2xl font-black text-white mt-1">{allClients.length}</div>
             <div className="text-[10px] text-slate-400 mt-1">
               {clients.length} registrados • {virtualClientsCount} en historial
             </div>
           </div>
 
-          <div className="bg-[#0b140f] p-5 rounded-[28px] border border-emerald-500/20 shadow-xs">
-            <div className="text-[10px] font-black text-emerald-400 uppercase tracking-widest flex items-center justify-between">
-              <span>Con WhatsApp / Teléfono</span>
-              <Icon name="phone" size={16} className="text-emerald-400" />
+          <div className="bg-[#0b0617] p-4 rounded-2xl border border-purple-500/20 shadow-xs">
+            <div className="text-[10px] font-black text-purple-300 uppercase tracking-widest flex items-center justify-between">
+              <span>Con Teléfono / WhatsApp</span>
+              <Icon name="phone" size={16} className="text-purple-400" />
             </div>
-            <div className="text-3xl font-black text-emerald-400 mt-1">{clientsWithPhone}</div>
+            <div className="text-2xl font-black text-purple-300 mt-1">{clientsWithPhone}</div>
             <div className="text-[10px] text-slate-400 mt-1">Habilitados para contacto directo</div>
           </div>
 
-          <div className="bg-[#0b140f] p-5 rounded-[28px] border border-emerald-500/20 shadow-xs">
+          <div className="bg-[#0b0617] p-4 rounded-2xl border border-purple-500/20 shadow-xs">
             <div className="text-[10px] font-black text-blue-400 uppercase tracking-widest flex items-center justify-between">
               <span>Clientes Delivery</span>
               <Icon name="location_on" size={16} className="text-blue-400" />
             </div>
-            <div className="text-3xl font-black text-blue-400 mt-1">{clientsWithAddress}</div>
+            <div className="text-2xl font-black text-blue-400 mt-1">{clientsWithAddress}</div>
             <div className="text-[10px] text-slate-400 mt-1">Con dirección y zona registrada</div>
           </div>
 
-          <div className="bg-[#0b140f] p-5 rounded-[28px] border border-emerald-500/20 shadow-xs">
-            <div className="text-[10px] font-black text-amber-400 uppercase tracking-widest flex items-center justify-between">
+          <div className="bg-[#0b0617] p-4 rounded-2xl border border-purple-500/20 shadow-xs">
+            <div className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center justify-between">
               <span>Ventas Acumuladas</span>
-              <Icon name="trending_up" size={16} className="text-amber-400" />
+              <Icon name="trending_up" size={16} className="text-purple-400" />
             </div>
-            <div className="text-3xl font-black text-amber-400 mt-1">
+            <div className="text-2xl font-black text-white mt-1">
               ${orders.filter(o => o.status === 'Finalizado').reduce((s, o) => s + (o.total || 0), 0)}
             </div>
-            <div className="text-[10px] text-slate-400 mt-1">Facturación total de clientes</div>
+            <div className="text-[10px] text-purple-300 mt-1 font-bold uppercase">Facturación total histórica</div>
           </div>
         </div>
 
         {/* Search & Filter Bar */}
-        <div className="bg-[#0b140f] p-4 sm:p-5 rounded-[28px] border border-emerald-500/20 shadow-sm flex flex-col md:flex-row items-center gap-3">
+        <div className="bg-[#0b0617] p-4 rounded-2xl border border-purple-500/20 shadow-sm flex flex-col md:flex-row items-center gap-3">
           <div className="relative flex-1 w-full">
-            <Icon name="search" size={18} className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" />
+            <Icon name="search" size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
             <input
               type="text"
               placeholder="Buscar por nombre, teléfono, dirección o zona..."
               value={clientSearch}
               onChange={e => setClientSearch(e.target.value)}
-              className="w-full pl-11 pr-4 py-3.5 bg-[#070e0a] border border-emerald-500/30 text-emerald-100 placeholder-slate-500 rounded-2xl text-xs font-black uppercase outline-none focus:border-emerald-400"
+              className="w-full pl-10 pr-4 py-2.5 bg-[#06030e] border border-purple-500/30 text-white placeholder-slate-500 rounded-xl text-xs font-black uppercase outline-none focus:border-purple-400"
             />
             {clientSearch && (
               <button
@@ -307,7 +305,7 @@ export const CrmClientsTab: React.FC<CrmClientsTabProps> = ({
                 onClick={() => setClientSearch('')}
                 className="absolute right-3.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-white"
               >
-                <Icon name="close" size={16} />
+                <Icon name="close" size={14} />
               </button>
             )}
           </div>
@@ -316,10 +314,10 @@ export const CrmClientsTab: React.FC<CrmClientsTabProps> = ({
             <button
               type="button"
               onClick={() => setFilterType('ALL')}
-              className={`flex-1 md:flex-none px-4 py-3 rounded-2xl text-[11px] font-black uppercase transition-all ${
+              className={`flex-1 md:flex-none px-3.5 py-2 rounded-xl text-xs font-black uppercase transition-all ${
                 filterType === 'ALL'
-                  ? 'bg-emerald-500 text-slate-950'
-                  : 'bg-[#122218] text-slate-300 hover:bg-[#1a2f23]'
+                  ? 'bg-purple-600 text-white shadow-md shadow-purple-600/30'
+                  : 'bg-[#120826] text-slate-300 hover:bg-[#1f0e3f] border border-purple-500/20'
               }`}
             >
               Todos ({allClients.length})
@@ -327,152 +325,146 @@ export const CrmClientsTab: React.FC<CrmClientsTabProps> = ({
             <button
               type="button"
               onClick={() => setFilterType('DELIVERY')}
-              className={`flex-1 md:flex-none px-4 py-3 rounded-2xl text-[11px] font-black uppercase transition-all ${
+              className={`flex-1 md:flex-none px-3.5 py-2 rounded-xl text-xs font-black uppercase transition-all ${
                 filterType === 'DELIVERY'
-                  ? 'bg-emerald-500 text-slate-950'
-                  : 'bg-[#122218] text-slate-300 hover:bg-[#1a2f23]'
+                  ? 'bg-blue-600 text-white shadow-md shadow-blue-600/30'
+                  : 'bg-[#120826] text-slate-300 hover:bg-[#1f0e3f] border border-purple-500/20'
               }`}
             >
-              Con Dirección
+              Delivery ({clientsWithAddress})
             </button>
             <button
               type="button"
               onClick={() => setFilterType('PHONE')}
-              className={`flex-1 md:flex-none px-4 py-3 rounded-2xl text-[11px] font-black uppercase transition-all ${
+              className={`flex-1 md:flex-none px-3.5 py-2 rounded-xl text-xs font-black uppercase transition-all ${
                 filterType === 'PHONE'
-                  ? 'bg-emerald-500 text-slate-950'
-                  : 'bg-[#122218] text-slate-300 hover:bg-[#1a2f23]'
+                  ? 'bg-purple-600 text-white shadow-md shadow-purple-600/30'
+                  : 'bg-[#120826] text-slate-300 hover:bg-[#1f0e3f] border border-purple-500/20'
               }`}
             >
-              Con WhatsApp
+              WhatsApp ({clientsWithPhone})
             </button>
           </div>
         </div>
 
         {/* Clients Cards Grid */}
-        {filteredClients.length === 0 ? (
-          <div className="bg-[#0b140f] p-12 rounded-[36px] border border-emerald-500/20 text-center space-y-3">
-            <Icon name="person_search" size={48} className="mx-auto text-slate-600" />
-            <div className="font-black text-slate-300 text-base uppercase">No se encontraron clientes</div>
-            <div className="text-xs font-bold text-slate-500">Pruebe con otro término de búsqueda o agregue un cliente nuevo.</div>
-          </div>
-        ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
-            {filteredClients.map(client => {
-              const stats = getClientStats(client);
-              const hasPhone = Boolean(client.phone && client.phone.trim() !== '');
-              let waPhone = '';
-              if (hasPhone) {
-                waPhone = String(client.phone).replace(/[^0-9]/g, '');
-                if (waPhone.startsWith('09') && waPhone.length === 9) waPhone = '598' + waPhone.substring(1);
-              }
-
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3.5">
+          {filteredClients.length === 0 ? (
+            <div className="col-span-full py-16 text-center bg-[#0b0617] rounded-3xl border border-purple-500/20 space-y-2">
+              <Icon name="person_search" size={40} className="mx-auto text-slate-600" />
+              <div className="font-black text-sm uppercase text-slate-300">No se encontraron clientes</div>
+              <p className="text-xs text-slate-500">Intenta con otro término de búsqueda o agrega un nuevo cliente.</p>
+            </div>
+          ) : (
+            filteredClients.map(c => {
+              const stats = getClientStats(c);
               return (
                 <div
-                  key={client.firestoreId}
-                  className="bg-[#0b140f] p-5 rounded-[30px] border border-emerald-500/20 hover:border-emerald-500/50 transition-all flex flex-col justify-between shadow-sm group"
+                  key={c.firestoreId}
+                  className="bg-[#0b0617] p-5 rounded-2xl border border-purple-500/20 hover:border-purple-500/50 transition-all flex flex-col justify-between space-y-3"
                 >
-                  <div className="space-y-3">
-                    {/* Header */}
-                    <div className="flex justify-between items-start">
-                      <div>
-                        <div className="flex items-center gap-2">
-                          <h3 className="text-base font-black uppercase text-white tracking-tight">{client.name}</h3>
-                          {client.isVirtual && (
-                            <span className="text-[9px] font-black uppercase px-2 py-0.5 bg-amber-950 text-amber-300 border border-amber-500/30 rounded-full">
-                              Historial
-                            </span>
-                          )}
-                        </div>
-                        {stats.totalOrders > 0 && (
-                          <div className="text-[10px] font-bold text-emerald-400 mt-0.5">
-                            {stats.totalOrders} pedidos realizados • ${stats.totalSpent} acumulados
-                          </div>
+                  <div className="space-y-2">
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="min-w-0">
+                        <div className="font-black text-sm uppercase text-white truncate">{c.name}</div>
+                        {c.isVirtual && (
+                          <span className="text-[8px] font-black uppercase px-2 py-0.2 bg-purple-950 text-purple-300 border border-purple-500/30 rounded">
+                            Historial
+                          </span>
                         )}
                       </div>
-
-                      {!client.isVirtual && (
+                      <div className="flex items-center gap-1">
                         <button
                           type="button"
-                          onClick={() => handleDeleteClient(client.firestoreId)}
-                          className="text-slate-500 hover:text-red-400 p-1"
-                          title="Eliminar cliente"
+                          onClick={() => setEditingClient(c)}
+                          className="p-1.5 bg-[#170a2c] hover:bg-[#251046] text-purple-200 rounded-lg transition-colors"
+                          title="Editar cliente"
                         >
-                          <Icon name="delete" size={16} />
+                          <Icon name="edit" size={13} />
                         </button>
+                        {!c.isVirtual && (
+                          <button
+                            type="button"
+                            onClick={() => handleDeleteClient(c.firestoreId)}
+                            className="p-1.5 bg-[#170a2c] hover:bg-red-900/60 text-slate-400 hover:text-red-300 rounded-lg transition-colors"
+                            title="Eliminar cliente"
+                          >
+                            <Icon name="delete" size={13} />
+                          </button>
+                        )}
+                      </div>
+                    </div>
+
+                    <div className="space-y-1 text-xs text-slate-300">
+                      {c.phone && (
+                        <div className="flex items-center justify-between">
+                          <span className="text-[10px] font-mono text-purple-300">📞 {c.phone}</span>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              let p = c.phone!.replace(/[^0-9]/g, '');
+                              if (p.startsWith('09') && p.length === 9) p = '598' + p.substring(1);
+                              window.open(`https://wa.me/${p}`, '_blank');
+                            }}
+                            className="text-[10px] text-purple-400 hover:underline font-bold"
+                          >
+                            WhatsApp
+                          </button>
+                        </div>
+                      )}
+                      {c.address && (
+                        <div className="text-[11px] text-slate-400 truncate">
+                          📍 {c.address} {c.zone ? `(${c.zone})` : ''}
+                        </div>
                       )}
                     </div>
 
-                    {/* Contact Details */}
-                    <div className="space-y-1.5 text-xs font-bold text-slate-400">
-                      {client.phone && (
-                        <div className="flex items-center gap-2 text-slate-300">
-                          <Icon name="phone" size={14} className="text-emerald-400" />
-                          <span>{client.phone}</span>
-                        </div>
-                      )}
-                      {client.address && (
-                        <div className="flex items-center gap-2 text-slate-300">
-                          <Icon name="location_on" size={14} className="text-blue-400" />
-                          <span>{client.address}</span>
-                        </div>
-                      )}
-                      {client.zone && (
-                        <div className="flex items-center gap-2 text-slate-400">
-                          <Icon name="map" size={14} className="text-purple-400" />
-                          <span>Zona: {client.zone}</span>
-                        </div>
-                      )}
+                    {/* Stats */}
+                    <div className="pt-2 border-t border-purple-500/15 grid grid-cols-2 gap-2 text-[10px]">
+                      <div>
+                        <span className="text-slate-500 font-bold uppercase">Pedidos:</span>{' '}
+                        <strong className="text-white font-mono">{stats.totalOrders}</strong>
+                      </div>
+                      <div>
+                        <span className="text-slate-500 font-bold uppercase">Gastado:</span>{' '}
+                        <strong className="text-purple-300 font-mono">${stats.totalSpent}</strong>
+                      </div>
                     </div>
                   </div>
 
-                  {/* Actions Footer */}
-                  <div className="pt-4 mt-4 border-t border-emerald-500/10 flex flex-wrap items-center justify-between gap-2">
+                  <div className="pt-1 flex gap-2">
+                    {c.isVirtual && (
+                      <button
+                        type="button"
+                        onClick={() => handleSaveVirtual(c)}
+                        className="py-2 px-3 bg-[#170a2c] hover:bg-[#251046] text-purple-300 border border-purple-500/30 rounded-xl text-xs font-black uppercase transition-all"
+                        title="Guardar como cliente permanente"
+                      >
+                        Guardar
+                      </button>
+                    )}
                     <button
                       type="button"
-                      onClick={() => handleStartOrderForClient(client)}
-                      className="px-3.5 py-2.5 bg-emerald-500 hover:bg-emerald-400 text-slate-950 rounded-xl font-black text-xs uppercase flex items-center gap-1.5 shadow-md shadow-emerald-500/20"
+                      onClick={() => handleStartOrderForClient(c)}
+                      className="flex-1 py-2 bg-purple-600 hover:bg-purple-500 text-white rounded-xl text-xs font-black uppercase transition-all flex items-center justify-center gap-1.5 shadow-md shadow-purple-600/25"
                     >
-                      <Icon name="add_shopping_cart" size={14} /> Cargar Pedido
+                      <Icon name="point_of_sale" size={14} /> Tomar Pedido
                     </button>
-
-                    <div className="flex items-center gap-1.5">
-                      {hasPhone && (
-                        <button
-                          type="button"
-                          onClick={() => window.open(`https://wa.me/${waPhone}`, '_blank')}
-                          className="p-2.5 bg-[#122218] hover:bg-[#1a3323] text-emerald-400 border border-emerald-500/30 rounded-xl font-black text-xs uppercase transition-all"
-                          title="Enviar mensaje por WhatsApp"
-                        >
-                          <Icon name="chat" size={16} />
-                        </button>
-                      )}
-
-                      {client.isVirtual ? (
-                        <button
-                          type="button"
-                          onClick={() => handleSaveVirtual(client)}
-                          className="px-3 py-2 bg-amber-950/80 hover:bg-amber-900 text-amber-300 border border-amber-500/30 rounded-xl font-black text-xs uppercase flex items-center gap-1"
-                        >
-                          <Icon name="save" size={13} /> Guardar
-                        </button>
-                      ) : (
-                        <button
-                          type="button"
-                          onClick={() => setEditingClient(client)}
-                          className="px-3 py-2 bg-[#122218] hover:bg-[#1a2f23] text-slate-300 border border-emerald-500/20 rounded-xl font-black text-xs uppercase flex items-center gap-1"
-                        >
-                          <Icon name="edit" size={13} /> Editar
-                        </button>
-                      )}
-                    </div>
                   </div>
                 </div>
               );
-            })}
-          </div>
-        )}
+            })
+          )}
+        </div>
       </div>
+
+      {/* Import Clients Modal */}
+      <ImportClientsModal
+        isOpen={isImportModalOpen}
+        onClose={() => setIsImportModalOpen(false)}
+        onImportClients={handleInternalImportClients}
+        showMessage={showMessage}
+      />
     </div>
   );
 };

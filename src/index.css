@@ -2,35 +2,35 @@
 
 @layer base {
   body {
-    background-color: #03060a;
-    color: #f1f5f9;
+    background-color: #050508;
+    color: #f8fafc;
     font-feature-settings: "cv02", "cv03", "cv04", "cv11";
   }
 }
 
-/* Custom Black & Blue Scrollbars */
+/* Custom Black & Lila Scrollbars */
 .custom-dark-scrollbar::-webkit-scrollbar,
 ::-webkit-scrollbar {
-  width: 7px;
-  height: 7px;
+  width: 6px;
+  height: 6px;
 }
 
 .custom-dark-scrollbar::-webkit-scrollbar-track,
 ::-webkit-scrollbar-track {
-  background: #060c14;
+  background: #09090f;
   border-radius: 8px;
 }
 
 .custom-dark-scrollbar::-webkit-scrollbar-thumb,
 ::-webkit-scrollbar-thumb {
-  background: #1e3a5f;
+  background: #2e1065;
   border-radius: 8px;
-  border: 1px solid rgba(59, 130, 246, 0.3);
+  border: 1px solid rgba(168, 85, 247, 0.4);
 }
 
 .custom-dark-scrollbar::-webkit-scrollbar-thumb:hover,
 ::-webkit-scrollbar-thumb:hover {
-  background: #2563eb;
+  background: #7e22ce;
 }
 
 /* Hide scrollbar utility */
@@ -43,31 +43,39 @@
 }
 
 /* Glow effects */
-.glow-blue {
-  box-shadow: 0 0 25px -5px rgba(37, 99, 235, 0.4);
+.glow-purple {
+  box-shadow: 0 0 25px -5px rgba(168, 85, 247, 0.45);
 }
 
-.glow-blue-subtle {
-  box-shadow: 0 0 15px -3px rgba(37, 99, 235, 0.25);
+.glow-purple-subtle {
+  box-shadow: 0 0 15px -3px rgba(168, 85, 247, 0.3);
+}
+
+.glow-blue {
+  box-shadow: 0 0 25px -5px rgba(59, 130, 246, 0.4);
+}
+
+.glow-red {
+  box-shadow: 0 0 20px -3px rgba(239, 68, 68, 0.5);
 }
 
 /* Pulse radar ring */
-@keyframes blue-pulse-radar {
+@keyframes purple-pulse-radar {
   0% {
     transform: scale(0.95);
-    box-shadow: 0 0 0 0 rgba(37, 99, 235, 0.7);
+    box-shadow: 0 0 0 0 rgba(168, 85, 247, 0.7);
   }
   70% {
     transform: scale(1);
-    box-shadow: 0 0 0 16px rgba(37, 99, 235, 0);
+    box-shadow: 0 0 0 16px rgba(168, 85, 247, 0);
   }
   100% {
     transform: scale(0.95);
-    box-shadow: 0 0 0 0 rgba(37, 99, 235, 0);
+    box-shadow: 0 0 0 0 rgba(168, 85, 247, 0);
   }
 }
 
-.animate-blue-radar {
-  animation: blue-pulse-radar 2s infinite cubic-bezier(0.4, 0, 0.6, 1);
+.animate-purple-radar {
+  animation: purple-pulse-radar 2s infinite cubic-bezier(0.4, 0, 0.6, 1);
 }
 

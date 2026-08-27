@@ -8,13 +8,38 @@ export const DEFAULT_DGI_CONFIG: DgiConfig = {
   branch: '001 - Casa Central',
   branchAddress: 'Av. 18 de Julio 1420, Montevideo, Uruguay',
   environment: 'testing', // 'testing' | 'production'
-  provider: 'uruware',
-  apiKey: 'CFE_KEY_SEC_984321789_ELARBOL_UY',
-  apiEndpoint: 'https://cfe-api.efactura.gub.uy/v1',
+  provider: 'facturando', // Facturando as principal provider
+  apiKey: 'FACTURANDO_API_KEY_LIVE_984321789',
+  apiToken: 'TOKEN_BEARER_FACTURANDO_UY',
+  apiCompanyId: 'EMP_ELARBOL_01',
+  apiEndpoint: 'https://api.facturando.uy/v1',
   defaultCfeType: '101', // 101: e-Ticket
   autoEmitOnCheckout: true,
   includeQrCode: true,
   ivaRate: 22, // IVA Básico en Uruguay
+  dgiCredentials: {
+    user: '219876540012',
+    rut: '219876540012',
+    password: '',
+    regime: 'iva_minimo',
+    monthlyFixedQuota: 5390,
+    iraeRate: 25
+  },
+  bpsCredentials: {
+    user: 'elarbol_bps',
+    password: '',
+    companyNumber: '98432100',
+    numEmployees: 4,
+    ownerType: 'srl',
+    baseOwnerSalary: 45000,
+    averageEmployeeSalary: 32000
+  },
+  facturandoConfig: {
+    apiEndpoint: 'https://api.facturando.uy/v1',
+    autoSendDgi: true,
+    sendEmailPdf: true,
+    tenantId: 'pizzeria_el_arbol'
+  },
   caeETicket: {
     serie: 'A',
     from: 1,

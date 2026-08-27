@@ -27,6 +27,7 @@ export interface ClientInfo {
   phone?: string;
   address?: string;
   zone?: string;
+  notes?: string;
 }
 
 export interface ClientData extends ClientInfo {
@@ -78,13 +79,39 @@ export interface DgiConfig {
   branch: string;
   branchAddress: string;
   environment: 'testing' | 'production';
-  provider: 'uruware' | 'memory' | 'biller' | 'sicfe' | 'invoicy' | 'direct';
+  provider: 'facturando' | 'memory' | 'zetasoftware' | 'uruware' | 'biller' | 'sicfe' | 'invoicy' | 'billentis' | 'direct' | 'custom_api';
   apiKey: string;
+  apiToken?: string;
+  apiCompanyId?: string;
+  apiSecret?: string;
   apiEndpoint?: string;
   defaultCfeType: '101' | '111';
   autoEmitOnCheckout: boolean;
   includeQrCode: boolean;
   ivaRate: number; // e.g. 22
+  dgiCredentials?: {
+    user: string;
+    password?: string;
+    rut: string;
+    regime: 'iva_minimo' | 'general' | 'servicios_personales';
+    monthlyFixedQuota?: number;
+    iraeRate?: number;
+  };
+  bpsCredentials?: {
+    user: string;
+    password?: string;
+    companyNumber: string;
+    numEmployees: number;
+    ownerType: 'unipersonal' | 'srl' | 'sociedad_hecho';
+    baseOwnerSalary?: number;
+    averageEmployeeSalary?: number;
+  };
+  facturandoConfig?: {
+    apiEndpoint?: string;
+    autoSendDgi?: boolean;
+    sendEmailPdf?: boolean;
+    tenantId?: string;
+  };
   caeETicket: {
     serie: string;
     from: number;
