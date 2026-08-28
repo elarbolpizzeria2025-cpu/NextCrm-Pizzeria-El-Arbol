@@ -157,6 +157,16 @@ export function cleanSpokenTranscript(raw: string): string {
     .replace(/\b(?:600cc|600 ml|600ml|chica|personal)\b/gi, '600 ml')
     .replace(/\b(?:whiski|wisky|wiski)\b/gi, 'whisky')
     .replace(/\b(?:rose extinto|rose tinto|rosé tinto|rose o tinto)\b/gi, 'vino rosé / tinto')
+    // Promos por Monto / Precio
+    .replace(/\bpromo(?:ci[oó]n)?\s+de\s+/gi, 'promo ')
+    .replace(/\bpromo(?:ci[oó]n)?\s+setecientos\s+cincuenta\b/gi, 'promo 750')
+    .replace(/\bpromo(?:ci[oó]n)?\s+novecientos\s+veinte\b/gi, 'promo 920')
+    .replace(/\bpromo(?:ci[oó]n)?\s+novecientos\b/gi, 'promo 900')
+    .replace(/\bpromo(?:ci[oó]n)?\s+(?:un\s+)?mil\b/gi, 'promo 1000')
+    .replace(/\bpromo(?:ci[oó]n)?\s+750\s*(?:pesos|\$)?\b/gi, 'promo 750')
+    .replace(/\bpromo(?:ci[oó]n)?\s+900\s*(?:pesos|\$)?\b/gi, 'promo 900')
+    .replace(/\bpromo(?:ci[oó]n)?\s+920\s*(?:pesos|\$)?\b/gi, 'promo 920')
+    .replace(/\bpromo(?:ci[oó]n)?\s+1000\s*(?:pesos|\$)?\b/gi, 'promo 1000')
     // Postres
     .replace(/\b(?:chaja|chaya|el chaja|el chajá)\b/gi, 'chajá')
     .replace(/\b(?:flanes)\b/gi, 'flan');
@@ -451,29 +461,60 @@ export function parseVoiceOrderHeuristic(
     const isMuzza = isMozzarellaWord(segment);
 
     // ==========================================
-    // 1. PROMOS EXACT DETECTION
+    // 1. PROMOS DETECTION (By Amount/Price: 750, 900, 920, 1000 or by Description)
+    // Matches: "promo 750", "promo 900", "promo 920", "promo 1000", "promo de 750", etc.
     // ==========================================
     if (
-      segment.includes('promo 1 metro muzzarella + 2 fainás + 1 chajá') ||
-      (segment.includes('metro') && isMuzza && isFainaWord(segment) && (segment.includes('chaja') || segment.includes('chajá')))
+      segment.includes('promo') ||
+      segment.includes('promocion') ||
+      segment.includes('promoción') ||
+      segment.includes('combo') ||
+      /\b(?:750|900|920|1000)\b/.test(segment)
     ) {
-      matchedItem = allMenuItems.find(i => i.id === 'pr2' || i.name.includes('1 Chajá')) || null;
-    } else if (
-      segment.includes('promo 1 metro muzzarella + 2 fainás + 2 flanes') ||
-      (segment.includes('metro') && isMuzza && isFainaWord(segment) && (segment.includes('flan') || segment.includes('flanes')))
-    ) {
-      matchedItem = allMenuItems.find(i => i.id === 'pr3' || i.name.includes('2 Flanes')) || null;
-    } else if (
-      segment.includes('promo 1 metro muzzarella + 2 fainás + refresco 1.5l') ||
-      (segment.includes('metro') && isMuzza && isFainaWord(segment) && (segment.includes('refresco') || segment.includes('1.5') || segment.includes('coca')))
-    ) {
-      matchedItem = allMenuItems.find(i => i.id === 'pr4' || i.name.includes('Refresco')) || null;
-    } else if (
-      segment.includes('promo 1 metro muzzarella + 2 fainás') ||
-      (segment.includes('metro') && isMuzza && isFainaWord(segment)) ||
-      (segment.includes('promo') && segment.includes('fainá'))
-    ) {
-      matchedItem = allMenuItems.find(i => i.id === 'pr1') || null;
+      // 1. Check specific price mentions
+      if (segment.includes('750') || segment.includes('setecientos cincuenta')) {
+        matchedItem = allMenuItems.find(i => 
+          i.price === 750 || 
+          i.id === 'pr1' || 
+          (i.name.includes('1 Metro Muzzarella') && i.name.includes('2 Fainás') && !i.name.includes('Chajá') && !i.name.includes('Flanes') && !i.name.includes('Refresco'))
+        ) || null;
+      } else if (segment.includes('920') || segment.includes('novecientos veinte') || segment.includes('chaja') || segment.includes('chajá') || segment.includes('postre')) {
+        matchedItem = allMenuItems.find(i => 
+          i.price === 920 || 
+          i.id === 'pr2' || 
+          i.name.toLowerCase().includes('chajá') || 
+          (i.desc && i.desc.toLowerCase().includes('chajá'))
+        ) || null;
+      } else if (segment.includes('900') || segment.includes('novecientos') || segment.includes('refresco') || segment.includes('coca')) {
+        matchedItem = allMenuItems.find(i => 
+          i.price === 900 || 
+          i.id === 'pr4' || 
+          i.name.toLowerCase().includes('refresco') || 
+          (i.desc && i.desc.toLowerCase().includes('refresc'))
+        ) || null;
+      } else if (segment.includes('1000') || segment.includes('mil') || segment.includes('flan') || segment.includes('flanes')) {
+        matchedItem = allMenuItems.find(i => 
+          i.price === 1000 || 
+          i.id === 'pr3' || 
+          i.name.toLowerCase().includes('flanes') || 
+          (i.desc && i.desc.toLowerCase().includes('flanes'))
+        ) || null;
+      } else {
+        // Dynamic search in menu by price / promo description
+        const numMatch = segment.match(/\b\d{3,4}\b/);
+        if (numMatch) {
+          const targetPrice = parseInt(numMatch[0]);
+          matchedItem = allMenuItems.find(i => 
+            i.price === targetPrice && 
+            (i.category === 'promos' || i.category === 'promociones' || i.name.toLowerCase().includes('promo') || (i.desc && i.desc.toLowerCase().includes('promo')))
+          ) || allMenuItems.find(i => i.price === targetPrice) || null;
+        }
+        if (!matchedItem) {
+          if (segment.includes('metro') && isMuzza && isFainaWord(segment)) {
+            matchedItem = allMenuItems.find(i => i.id === 'pr1' || i.price === 750) || null;
+          }
+        }
+      }
     }
 
     // ==========================================

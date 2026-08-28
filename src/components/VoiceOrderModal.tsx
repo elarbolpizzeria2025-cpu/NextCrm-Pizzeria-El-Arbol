@@ -300,13 +300,13 @@ export const VoiceOrderModal: React.FC<VoiceOrderModalProps> = ({
   };
 
   const POPULAR_SUGGESTIONS = [
-    { name: 'Pizza Mozzarella', price: 280, category: 'Pizzas', icon: '🍕' },
-    { name: 'Fainá con Queso', price: 160, category: 'Fainá', icon: '🧀' },
-    { name: 'Fainá Clásico', price: 110, category: 'Fainá', icon: '🔥' },
-    { name: 'Promo 2 Fainá + Muzza', price: 420, category: 'Promos', icon: '⭐' },
-    { name: 'Sándwich Caliente', price: 220, category: 'Minutas', icon: '🥪' },
-    { name: 'Coca Cola 1.5L', price: 170, category: 'Bebidas', icon: '🥤' },
-    { name: 'Empanada Jamón y Queso', price: 95, category: 'Empanadas', icon: '🥟' },
+    { name: '1 Metro Muzzarella + 2 Fainás', price: 750, category: 'Promociones', icon: '⭐' },
+    { name: '1 Metro Muzzarella + 2 Fainás + Refresco 1.5L', price: 900, category: 'Promociones', icon: '🥤' },
+    { name: '1 Metro Muzzarella + 2 Fainás + 1 Chajá', price: 920, category: 'Promociones', icon: '🍰' },
+    { name: '1 Metro Muzzarella + 2 Fainás + 2 Flanes', price: 1000, category: 'Promociones', icon: '🍮' },
+    { name: 'Fainá con Queso', price: 160, category: 'Fainás', icon: '🧀' },
+    { name: 'Fainá Clásico', price: 110, category: 'Fainás', icon: '🔥' },
+    { name: 'Sándwich Caliente', price: 220, category: 'Sándwichs', icon: '🥪' },
   ];
 
   const handleAddPopularItem = (sugg: { name: string; price: number; category: string }) => {

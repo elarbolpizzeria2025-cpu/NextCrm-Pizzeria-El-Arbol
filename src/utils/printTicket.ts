@@ -1,9 +1,55 @@
 import { OrderData, SessionData } from '../types';
 
+export function getSpecialCelebrationGreeting(dateInput?: Date | number): string {
+  const d = dateInput ? new Date(dateInput) : new Date();
+  const day = d.getDate();
+  const month = d.getMonth() + 1; // 1-12
+  const dayOfWeek = d.getDay(); // 0 = Sunday
+
+  // Celebraciones y Feriados Especiales
+  if (month === 1 && day === 1) return '🎉 ¡FELIZ AÑO NUEVO! 🎉';
+  if (month === 1 && day === 6) return '👑 ¡FELIZ DÍA DE REYES! 👑';
+  if (month === 2 && day === 9) return '🍕 ¡FELIZ DÍA INTERNACIONAL DE LA PIZZA! 🍕';
+  if (month === 2 && day === 14) return '❤️ ¡FELIZ DÍA DE LOS ENAMORADOS / SAN VALENTÍN! ❤️';
+  if (month === 3 && day === 8) return '🌸 ¡FELIZ DÍA INTERNACIONAL DE LA MUJER! 🌸';
+  if (month === 4 && day === 19) return '🇺🇾 ¡FELIZ DÍA DEL DESEMBARCO DE LOS 33 ORIENTALES! 🇺🇾';
+  if (month === 5 && day === 1) return '🛠️ ¡FELIZ DÍA DE LOS TRABAJADORES! 🛠️';
+  if (month === 5 && day === 18) return '🇺🇾 ¡FELIZ DÍA DE LA BATALLA DE LAS PIEDRAS! 🇺🇾';
+  if (month === 6 && day === 19) return '👴 ¡FELIZ DÍA DEL ABUELO Y NATALICIO DE ARTIGAS! 👴';
+  if (month === 7 && day === 20) return '🤝 ¡FELIZ DÍA DEL AMIGO! 🤝';
+  if (month === 8 && day === 24) return '📻 ¡FELIZ NOCHE DE LA NOSTALGIA! 📻';
+  if (month === 8 && day === 25) return '🇺🇾 ¡FELIZ DÍA DE LA INDEPENDENCIA NACIONAL! 🇺🇾';
+  if (month === 9 && day === 21) return '🌻 ¡FELIZ DÍA DE LA PRIMAVERA! 🌻';
+  if (month === 10 && day === 12) return '🌎 ¡FELIZ DÍA DE LA DIVERSIDAD CULTURAL! 🌎';
+  if (month === 10 && day === 31) return '🎃 ¡FELIZ NOCHE DE BRUJAS / HALLOWEEN! 🎃';
+  if (month === 11 && day === 2) return '🕯️ ¡DÍA DE LOS DIFUNTOS! 🕯️';
+  if (month === 12 && day === 24) return '🎄 ¡FELIZ NOCHEBUENA! 🎄';
+  if (month === 12 && day === 25) return '🎅 ¡FELIZ NAVIDAD! 🎅';
+  if (month === 12 && day === 31) return '🥂 ¡FELIZ FIN DE AÑO Y PRÓSPERO AÑO NUEVO! 🥂';
+
+  // Fechas Móviles (Domingos)
+  // Día de la Madre: 2do Domingo de Mayo
+  if (month === 5 && dayOfWeek === 0 && day >= 8 && day <= 14) {
+    return '💐 ¡FELIZ DÍA DE LA MADRE! 💐';
+  }
+  // Día del Padre: 2do Domingo de Julio
+  if (month === 7 && dayOfWeek === 0 && day >= 8 && day <= 14) {
+    return '👔 ¡FELIZ DÍA DEL PADRE! 👔';
+  }
+  // Día de la Niñez: 2do o 3er Domingo de Agosto
+  if (month === 8 && dayOfWeek === 0 && day >= 8 && day <= 21) {
+    return '🧸 ¡FELIZ DÍA DE LA NIÑEZ Y DEL NIÑO! 🧸';
+  }
+
+  return '¡GRACIAS POR ELEGIRNOS!';
+}
+
 export const printOrderTicket = (order: OrderData) => {
   if (!order) return;
   const printWindow = window.open('', '_blank');
   if (!printWindow) return;
+
+  const celebrationGreeting = getSpecialCelebrationGreeting(order.createdAt);
 
   const itemsHtml = order.items.map(it => { 
       const lineTotal = Math.round((it.finalPrice || 0) * (it.quantity || 1)); 
@@ -90,6 +136,11 @@ export const printOrderTicket = (order: OrderData) => {
            
            <div class="footer">
               <div class="fake-barcode"></div>
+              ${celebrationGreeting !== '¡GRACIAS POR ELEGIRNOS!' ? `
+              <div class="celebration-banner">
+                 ${celebrationGreeting}
+              </div>
+              ` : ''}
               <div class="uru-banner">
                  <div class="stars">★★★★★</div>
                  <div class="uru-text">EL ÁRBOL PIZZERÍA</div>
@@ -170,6 +221,20 @@ export const printOrderTicket = (order: OrderData) => {
         text-transform: uppercase;
         display: block;
       } 
+
+      .celebration-banner {
+        font-size: 14px;
+        font-weight: 900;
+        text-align: center;
+        margin: 8px 0;
+        padding: 6px 4px;
+        background: #000;
+        color: #fff;
+        border: 2px solid #000;
+        letter-spacing: 0.8px;
+        text-transform: uppercase;
+        border-radius: 4px;
+      }
 
       .total-section { display: flex; justify-content: space-between; align-items: center; border-top: 3px solid #000; border-bottom: 3px solid #000; padding: 6px 2px; margin-top: 8px; background: rgba(255,255,255,0.9); } 
       .total-label { font-size: 20px; font-weight: 900; padding-left: 2px; } 
