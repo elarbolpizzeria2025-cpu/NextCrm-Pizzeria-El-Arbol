@@ -32,8 +32,84 @@ import { ImportMenuModal } from './components/ImportMenuModal';
 import { ImportStockModal } from './components/ImportStockModal';
 import { WhatsAppOrderParserModal } from './components/WhatsAppOrderParserModal';
 import { CustomerObjectionsModal } from './components/CustomerObjectionsModal';
+import { DeliveryRiderTab } from './components/DeliveryRiderTab';
 import { DEFAULT_DGI_CONFIG, createCfeDocumentFromOrder } from './utils/dgiCfe';
 import { ParsedVoiceOrder } from './utils/voiceOrderParser';
+
+export type UserRole = 'admin' | 'cajero' | 'mozo' | 'delivery';
+
+export const detectRoleFromIdentity = (input: string): { role: UserRole; displayName: string } => {
+  const normalized = input.trim().toLowerCase();
+
+  // 1. Delivery Driver / Repartidor (delivery1, delivery2, repartidor1, moto1, cadete1, etc.)
+  if (
+    normalized.includes('delivery') || 
+    normalized.includes('repartidor') || 
+    normalized.includes('moto') || 
+    normalized.includes('cadete') || 
+    normalized.includes('chofer') ||
+    normalized.startsWith('del')
+  ) {
+    const numMatch = normalized.match(/\d+/);
+    const numStr = numMatch ? ` #${numMatch[0]}` : '';
+    return {
+      role: 'delivery',
+      displayName: `🏍️ Repartidor Delivery${numStr}`
+    };
+  }
+
+  // 2. Mozo / Salón (mozo1, mozo2, moza1, salon1, camarero1, etc.)
+  if (
+    normalized.includes('mozo') || 
+    normalized.includes('moza') || 
+    normalized.includes('salon') || 
+    normalized.includes('salón') || 
+    normalized.includes('camarero') || 
+    normalized.includes('mesero')
+  ) {
+    const numMatch = normalized.match(/\d+/);
+    const numStr = numMatch ? ` #${numMatch[0]}` : '';
+    return {
+      role: 'mozo',
+      displayName: `🍽️ Mozo / Salón${numStr}`
+    };
+  }
+
+  // 3. Cajera / Cajero (cajera1, cajera2, cajera3, cajero1, caja1, etc.)
+  if (
+    normalized.includes('cajero') || 
+    normalized.includes('cajera') || 
+    normalized.includes('caja')
+  ) {
+    const numMatch = normalized.match(/\d+/);
+    const numStr = numMatch ? ` #${numMatch[0]}` : '';
+    return {
+      role: 'cajero',
+      displayName: `💵 Cajera / Cajero${numStr}`
+    };
+  }
+
+  // 4. Dueño / Administrador / Supervisor
+  if (
+    normalized.includes('admin') || 
+    normalized.includes('dueño') || 
+    normalized.includes('dueno') || 
+    normalized.includes('propietario') || 
+    normalized.includes('supervisor') || 
+    normalized.includes('gerente')
+  ) {
+    return {
+      role: 'admin',
+      displayName: '👑 Dueño / Administrador'
+    };
+  }
+
+  // Fallback default
+  return {
+    role: 'cajero',
+    displayName: `💵 Operador (${input.trim()})`
+  };
+};
 
 export default function App() {
   const [activeTab, setActiveTab] = useState('kitchen');
@@ -159,24 +235,19 @@ export default function App() {
   const [menuActiveCategory, setMenuActiveCategory] = useState<string>('TODAS');
   const [dismissedBadges, setDismissedBadges] = useState<Record<string, number>>({});
 
-  // NEXT CRM Security Layers (Role-Based Access Control)
+  // NEXT CRM Security Layers (4-Tier Role-Based Access Control)
   const [currentUser, setCurrentUser] = useState<{
     username: string;
-    role: 'admin' | 'cajero' | 'mozo';
+    role: UserRole;
     displayName: string;
   }>(() => {
     if (typeof window !== 'undefined') {
-      const savedRole = (localStorage.getItem('nextcrm_role') || 'admin') as 'admin' | 'cajero' | 'mozo';
       const savedUser = localStorage.getItem('nextcrm_user') || 'admin';
-      const titles: Record<string, string> = {
-        admin: '👑 Dueño / Administrador',
-        cajero: '💵 Cajero Principal',
-        mozo: '🍽️ Mozo / Salón'
-      };
+      const detected = detectRoleFromIdentity(savedUser);
       return {
         username: savedUser,
-        role: ['admin', 'cajero', 'mozo'].includes(savedRole) ? savedRole : 'admin',
-        displayName: titles[savedRole] || 'Operador'
+        role: detected.role,
+        displayName: detected.displayName
       };
     }
     return { username: 'admin', role: 'admin', displayName: '👑 Dueño / Administrador' };
@@ -1864,10 +1935,10 @@ export default function App() {
         </div>
       )}
 
-      {/* NEXT CRM Login Screen with 3-Tier Security Roles */}
+      {/* NEXT CRM Login Screen with 4-Tier Security Roles & Smart Auto-Detection */}
       {!isAuthenticated && (
         <div className="fixed inset-0 z-[10000] bg-[#040108] flex items-center justify-center p-4 min-h-screen">
-          <div className="relative max-w-[440px] w-full bg-[#080212] border-2 border-purple-500/40 rounded-[40px] p-7 sm:p-9 shadow-2xl shadow-purple-950/80 space-y-5 text-slate-100 text-center animate-in zoom-in-95">
+          <div className="relative max-w-[460px] w-full bg-[#080212] border-2 border-purple-500/40 rounded-[40px] p-7 sm:p-9 shadow-2xl shadow-purple-950/80 space-y-5 text-slate-100 text-center animate-in zoom-in-95">
             {/* NEXT CRM Branding - Perfectly Centered */}
             <div className="flex flex-col items-center justify-center space-y-2.5">
               <div className="flex items-center justify-center gap-3.5">
@@ -1889,19 +1960,20 @@ export default function App() {
                   </div>
                 </div>
               </div>
-              <p className="text-xs font-bold text-slate-400 text-center max-w-[300px] leading-relaxed">
-                Sistema de Seguridad Escalonado por Capas y Permisos
+              <p className="text-xs font-bold text-slate-400 text-center max-w-[320px] leading-relaxed">
+                Reconocimiento automático de permisos por correo o usuario
               </p>
             </div>
 
             {/* Quick Role Selectors */}
-            <div className="grid grid-cols-3 gap-2 pt-1">
+            <div className="grid grid-cols-4 gap-1.5 pt-1">
               {[
-                { id: 'admin', label: 'Dueño / Admin', icon: 'admin_panel_settings', badge: '👑 Total', color: 'border-purple-500/50 bg-purple-950/40 text-purple-200' },
-                { id: 'cajero', label: 'Cajero', icon: 'point_of_sale', badge: '💵 Caja', color: 'border-cyan-500/40 bg-cyan-950/30 text-cyan-200' },
-                { id: 'mozo', label: 'Mozo', icon: 'table_restaurant', badge: '🍽️ Salón', color: 'border-indigo-500/40 bg-indigo-950/30 text-indigo-200' }
+                { id: 'admin', label: 'Dueño', icon: 'admin_panel_settings', color: 'border-purple-500/50 bg-purple-950/40 text-purple-200' },
+                { id: 'cajera1', label: 'Cajera', icon: 'point_of_sale', color: 'border-cyan-500/40 bg-cyan-950/30 text-cyan-200' },
+                { id: 'mozo1', label: 'Mozo', icon: 'table_restaurant', color: 'border-indigo-500/40 bg-indigo-950/30 text-indigo-200' },
+                { id: 'delivery1', label: 'Delivery', icon: 'two_wheeler', color: 'border-amber-500/40 bg-amber-950/30 text-amber-200' }
               ].map(r => {
-                const isSelected = loginUsername.toLowerCase() === r.id;
+                const isSelected = loginUsername.toLowerCase().includes(r.id);
                 return (
                   <button
                     key={r.id}
@@ -1911,14 +1983,14 @@ export default function App() {
                       setLoginPassword('');
                       setLoginError('');
                     }}
-                    className={`p-2.5 rounded-2xl border flex flex-col items-center justify-center gap-1 transition-all cursor-pointer ${
+                    className={`p-2 rounded-2xl border flex flex-col items-center justify-center gap-1 transition-all cursor-pointer ${
                       isSelected 
                         ? 'border-purple-400 bg-purple-600 text-slate-950 font-black shadow-lg shadow-purple-600/30 scale-[1.02]' 
                         : `${r.color} hover:bg-white/5`
                     }`}
                   >
-                    <Icon name={r.icon} size={18} />
-                    <span className="text-[10px] font-black uppercase tracking-tight">{r.label}</span>
+                    <Icon name={r.icon} size={17} />
+                    <span className="text-[9px] font-black uppercase tracking-tight truncate w-full">{r.label}</span>
                   </button>
                 );
               })}
@@ -1926,44 +1998,32 @@ export default function App() {
 
             <form onSubmit={(e) => {
               e.preventDefault();
-              const u = loginUsername.trim().toLowerCase();
+              const u = loginUsername.trim();
               const p = loginPassword.trim();
 
               if (!u || !p) {
-                setLoginError('Ingrese usuario y contraseña');
+                setLoginError('Ingrese usuario/correo y contraseña');
                 return;
               }
 
-              let determinedRole: 'admin' | 'cajero' | 'mozo' = 'cajero';
-              let displayName = 'Cajero';
+              if (p.length < 3) {
+                setLoginError('Contraseña incorrecta (mínimo 3 caracteres)');
+                return;
+              }
 
-              if (u === 'admin' || u === 'dueño' || u === 'administrador') {
-                if (p !== 'admin' && p !== 'admin123' && p !== '1234' && p.length < 3) {
-                  setLoginError('Contraseña de Administrador incorrecta');
-                  return;
-                }
-                determinedRole = 'admin';
-                displayName = '👑 Dueño / Administrador';
-              } else if (u === 'mozo' || u === 'salon' || u === 'camarero') {
-                if (p !== 'mozo' && p !== 'mozo123' && p !== '1234' && p.length < 3) {
-                  setLoginError('Contraseña de Mozo incorrecta');
-                  return;
-                }
-                determinedRole = 'mozo';
-                displayName = '🍽️ Mozo / Salón';
-              } else {
-                if (p.length < 3) {
-                  setLoginError('Contraseña incorrecta');
-                  return;
-                }
-                determinedRole = 'cajero';
-                displayName = `💵 Cajero (${loginUsername.trim()})`;
+              // Automatic Role Detection from Email or Username
+              const detected = detectRoleFromIdentity(u);
+
+              // Validate admin password
+              if (detected.role === 'admin' && (p !== 'admin' && p !== 'admin123' && p !== '1234')) {
+                setLoginError('Contraseña de Administrador incorrecta');
+                return;
               }
 
               const sessionObj = {
-                username: loginUsername.trim(),
-                role: determinedRole,
-                displayName
+                username: u,
+                role: detected.role,
+                displayName: detected.displayName
               };
 
               setCurrentUser(sessionObj);
@@ -1973,13 +2033,15 @@ export default function App() {
               localStorage.setItem('nextcrm_role', sessionObj.role);
               setLoginError('');
 
-              if (determinedRole === 'mozo') {
+              if (detected.role === 'delivery') {
+                setActiveTab('delivery');
+              } else if (detected.role === 'mozo') {
                 setActiveTab('pos');
-              } else if (determinedRole === 'cajero' && ['reports', 'history', 'products', 'support'].includes(activeTab)) {
+              } else if (detected.role === 'cajero' && ['reports', 'history', 'products', 'support'].includes(activeTab)) {
                 setActiveTab('pos');
               }
 
-              showMessage(`¡Bienvenido ${displayName}!`);
+              showMessage(`¡Bienvenido ${detected.displayName}!`);
             }} className="space-y-4 pt-1">
               {loginError && (
                 <div className="p-3 bg-red-950/70 border border-red-500/50 rounded-2xl text-xs font-black text-red-200 text-center uppercase tracking-wider">
@@ -1989,15 +2051,15 @@ export default function App() {
 
               <div className="space-y-2">
                 <label className="text-[11px] font-black uppercase tracking-wider text-purple-300 flex items-center justify-center gap-1.5 text-center">
-                  <Icon name="person" size={15} className="text-purple-400" /> USUARIO
+                  <Icon name="person" size={15} className="text-purple-400" /> USUARIO O CORREO ELECTRÓNICO
                 </label>
                 <input
                   type="text"
-                  placeholder="ADMIN, CAJERO O MOZO"
+                  placeholder="ej: admin, cajera1, mozo2, delivery1"
                   value={loginUsername}
                   onChange={e => setLoginUsername(e.target.value)}
                   style={{ textAlign: 'center' }}
-                  className="w-full p-3.5 bg-[#040108] border-2 border-purple-500/30 focus:border-purple-400 rounded-2xl text-sm font-black text-center placeholder:text-center text-white outline-none uppercase tracking-widest transition-all focus:shadow-lg focus:shadow-purple-900/30"
+                  className="w-full p-3.5 bg-[#040108] border-2 border-purple-500/30 focus:border-purple-400 rounded-2xl text-sm font-black text-center placeholder:text-center text-white outline-none tracking-widest transition-all focus:shadow-lg focus:shadow-purple-900/30"
                   required
                 />
               </div>
@@ -2044,11 +2106,11 @@ export default function App() {
         {/* Navigation Bar - Filtered by Security Layer Role */}
         <nav className="flex-1 flex h-full gap-1 overflow-x-auto no-scrollbar items-center py-1 scroll-smooth">
           {[ 
+            {id: 'delivery', label: 'Ruta Delivery', icon: 'two_wheeler', count: badges.delivery, roles: ['admin', 'cajero', 'delivery']}, 
             {id: 'pos', label: 'Toma Pedido', icon: 'point_of_sale', roles: ['admin', 'cajero', 'mozo']}, 
             {id: 'counter', label: 'Mostrador', icon: 'storefront', count: badges.mostrador, roles: ['admin', 'cajero', 'mozo']}, 
             {id: 'tables', label: 'Mesas', icon: 'table_restaurant', count: badges.mesas, roles: ['admin', 'cajero', 'mozo']}, 
             {id: 'kitchen', label: 'KDS Cocina', icon: 'tv', count: badges.kitchen, roles: ['admin', 'cajero', 'mozo']}, 
-            {id: 'delivery', label: 'Delivery', icon: 'two_wheeler', count: badges.delivery, roles: ['admin', 'cajero']}, 
             {id: 'web', label: 'Web', icon: 'public', count: badges.web, roles: ['admin', 'cajero']}, 
             {id: 'finished', label: 'Finalizados', icon: 'check_circle', count: badges.finished, roles: ['admin', 'cajero']}, 
             {id: 'clients', label: 'Clientes', icon: 'people', roles: ['admin', 'cajero']}, 
@@ -2057,7 +2119,7 @@ export default function App() {
             {id: 'products', label: 'Menú', icon: 'menu_book', roles: ['admin']}, 
             {id: 'reports', label: 'Reportes', icon: 'bar_chart', roles: ['admin']}, 
             {id: 'history', label: 'Historial', icon: 'history', roles: ['admin']}, 
-            {id: 'manual', label: 'Manual', icon: 'auto_stories', roles: ['admin', 'cajero', 'mozo']},
+            {id: 'manual', label: 'Manual', icon: 'auto_stories', roles: ['admin', 'cajero', 'mozo', 'delivery']},
             {id: 'support', label: 'Soporte', icon: 'support_agent', count: supportTickets.filter(t => t.status !== 'Resuelto').length, roles: ['admin'], highlight: true}
           ].filter(tab => tab.roles.includes(currentUser.role)).map(tab => {
             const isActive = activeTab === tab.id;
@@ -2101,8 +2163,16 @@ export default function App() {
         <div className="flex items-center gap-2.5 shrink-0 pl-2 border-l border-purple-500/20">
           {/* Active User Role Badge */}
           <div className="hidden sm:flex items-center gap-1.5 px-2.5 py-1 rounded-xl bg-[#0c061a] border border-purple-500/30 text-[10px] font-black uppercase text-purple-200">
-            <span className={`w-2 h-2 rounded-full ${currentUser.role === 'admin' ? 'bg-purple-400' : currentUser.role === 'cajero' ? 'bg-cyan-400' : 'bg-indigo-400'} animate-pulse`}></span>
-            <span>{currentUser.role === 'admin' ? 'Dueño' : currentUser.role === 'cajero' ? 'Cajero' : 'Mozo'}</span>
+            <span className={`w-2 h-2 rounded-full ${
+              currentUser.role === 'admin' ? 'bg-purple-400' :
+              currentUser.role === 'cajero' ? 'bg-cyan-400' :
+              currentUser.role === 'delivery' ? 'bg-amber-400' : 'bg-indigo-400'
+            } animate-pulse`}></span>
+            <span>{
+              currentUser.role === 'admin' ? 'Dueño' :
+              currentUser.role === 'cajero' ? 'Cajera' :
+              currentUser.role === 'delivery' ? 'Delivery' : 'Mozo'
+            }</span>
           </div>
 
           <div className="flex items-center gap-1.5">
@@ -2197,15 +2267,27 @@ export default function App() {
           />
         )}
 
-        {/* Generic active orders tab (counter, tables, delivery, web) */}
-        {(['counter', 'tables', 'delivery', 'web'].includes(activeTab)) && (
+        {/* Dedicated Delivery Fleet & GPS Routing Tab */}
+        {activeTab === 'delivery' && (
+          <div className="h-full overflow-y-auto no-scrollbar bg-[#040108]">
+            <DeliveryRiderTab
+              orders={orders as any}
+              db={db}
+              appId={appId}
+              currentUser={currentUser}
+              showMessage={showMessage}
+            />
+          </div>
+        )}
+
+        {/* Generic active orders tab (counter, tables, web) */}
+        {(['counter', 'tables', 'web'].includes(activeTab)) && (
           <div className="p-8 h-full overflow-y-auto no-scrollbar bg-[#040108]">
              <div className="max-w-[1600px] mx-auto grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6 content-start">
                {orders.filter(o => !o.isArchived && o.status === 'Pendiente').filter(o => { 
                    const safeType = String(o.type || '').trim().toLowerCase();
                    if (activeTab === 'counter') return ['local', 'mostrador'].includes(safeType); 
                    if (activeTab === 'tables') return safeType === 'mesa'; 
-                   if (activeTab === 'delivery') return ['envío', 'envio', 'delivery'].includes(safeType); 
                    if (activeTab === 'web') return ['web', 'pedido web'].includes(safeType); 
                    return false; 
                }).map(o => (
