@@ -1501,7 +1501,6 @@ export default function App() {
     } catch (e: any) {
       showMessage("Producto eliminado localmente", 'info');
     }
-    }
   };
 
   // Sales History (Finished Orders) Handlers
