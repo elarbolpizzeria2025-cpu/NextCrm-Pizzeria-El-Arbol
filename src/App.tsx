@@ -2573,7 +2573,7 @@ export default function App() {
           const totalFilteredCash = filteredOrders.filter(o => o.paymentMethod === 'Efectivo').reduce((sum, o) => sum + (o.total || 0), 0);
 
           return (
-            <div className="p-8 md:p-12 h-full overflow-y-auto bg-[#040108] text-slate-100 no-scrollbar space-y-8">
+            <div className="p-3.5 sm:p-6 md:p-8 lg:p-12 h-full overflow-y-auto bg-[#040108] text-slate-100 no-scrollbar space-y-6 sm:space-y-8">
               <div className="max-w-7xl mx-auto space-y-8">
                 {/* Header & Export Actions */}
                 <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 border-b border-purple-500/20 pb-6">
@@ -2858,7 +2858,7 @@ export default function App() {
 
         {/* Products / Menu Tab */}
         {activeTab === 'products' && (
-          <div className="p-8 md:p-12 h-full overflow-y-auto bg-[#040108] text-slate-100 no-scrollbar space-y-8">
+          <div className="p-3.5 sm:p-6 md:p-8 lg:p-12 h-full overflow-y-auto bg-[#040108] text-slate-100 no-scrollbar space-y-6 sm:space-y-8">
             <div className="max-w-6xl mx-auto space-y-8">
               <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 border-b border-purple-500/20 pb-6">
                 <div>
@@ -3060,7 +3060,7 @@ export default function App() {
 
         {/* Stock Tab (Control de Inventario en Tiempo Real) */}
         {activeTab === 'stock' && (
-          <div className="p-8 md:p-12 h-full overflow-y-auto bg-[#040108] text-slate-100 no-scrollbar space-y-8">
+          <div className="p-3.5 sm:p-6 md:p-8 lg:p-12 h-full overflow-y-auto bg-[#040108] text-slate-100 no-scrollbar space-y-6 sm:space-y-8">
             <div className="max-w-7xl mx-auto space-y-8">
               {/* Header Banner */}
               <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 border-b border-purple-500/20 pb-6">
@@ -3340,7 +3340,7 @@ export default function App() {
 
         {/* Reportes Tab */}
         {activeTab === 'reports' && (
-          <div className="p-8 md:p-12 h-full overflow-y-auto bg-[#040108] text-slate-100 no-scrollbar">
+          <div className="p-3.5 sm:p-6 md:p-8 lg:p-12 h-full overflow-y-auto bg-[#040108] text-slate-100 no-scrollbar space-y-6 sm:space-y-8">
             <div className="max-w-6xl mx-auto space-y-10">
               <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 border-b border-purple-500/20 pb-6">
                 <div>
@@ -3770,7 +3770,7 @@ export default function App() {
 
         {/* Historial Tab */}
         {activeTab === 'history' && (
-          <div className="p-8 md:p-12 h-full overflow-y-auto bg-[#040108] text-slate-100 no-scrollbar space-y-8">
+          <div className="p-3.5 sm:p-6 md:p-8 lg:p-12 h-full overflow-y-auto bg-[#040108] text-slate-100 no-scrollbar space-y-6 sm:space-y-8">
              <div className="max-w-6xl mx-auto space-y-8">
                <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 border-b border-purple-500/20 pb-6">
                  <div>

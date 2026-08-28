@@ -97,6 +97,7 @@ export const PosWizard: React.FC<PosWizardProps> = ({
   const [isSearchOpen, setIsSearchOpen] = useState(false);
   const [isWhatsAppParserOpen, setIsWhatsAppParserOpen] = useState(false);
   const [isObjectionsOpen, setIsObjectionsOpen] = useState(false);
+  const [showMobileCart, setShowMobileCart] = useState(false);
 
   // Calculate live change for cash
   const cashNum = parseFloat(cashProvided) || 0;
@@ -988,8 +989,8 @@ export const PosWizard: React.FC<PosWizardProps> = ({
           )}
         </div>
 
-        {/* Right Sidebar: Dynamic Contextual Comanda Panel based on posStep */}
-        <aside className="w-[340px] md:w-[380px] lg:w-[410px] shrink-0 bg-[#080512] border-l border-purple-500/20 shadow-2xl flex flex-col relative z-20 text-slate-100">
+        {/* Right Sidebar: Dynamic Contextual Comanda Panel based on posStep (Desktop & Tablet) */}
+        <aside className="hidden md:flex w-[340px] md:w-[370px] lg:w-[410px] shrink-0 bg-[#080512] border-l border-purple-500/20 shadow-2xl flex-col relative z-20 text-slate-100">
           {/* Header */}
           <div className="p-3.5 sm:p-4 border-b border-purple-500/20 font-black uppercase text-xs flex justify-between items-center bg-[#0d071c]">
             <span className="flex items-center gap-2 text-white">
@@ -1004,7 +1005,7 @@ export const PosWizard: React.FC<PosWizardProps> = ({
                 {totalItemCount} {totalItemCount === 1 ? 'ítem' : 'ítems'}
               </span>
               {editingOrder && (
-                <button type="button" onClick={clearForm} className="text-slate-400 text-[10px] hover:text-white font-black">
+                <button type="button" onClick={clearForm} className="text-slate-400 text-[10px] hover:text-white font-black cursor-pointer">
                   Cancelar
                 </button>
               )}
@@ -1016,7 +1017,7 @@ export const PosWizard: React.FC<PosWizardProps> = ({
                     setCashProvided('');
                     setOrderNotes('');
                   }}
-                  className="text-red-400 text-[10px] hover:text-red-300 font-black"
+                  className="text-red-400 text-[10px] hover:text-red-300 font-black cursor-pointer"
                 >
                   Limpiar
                 </button>
@@ -1035,7 +1036,7 @@ export const PosWizard: React.FC<PosWizardProps> = ({
                   <button
                     type="button"
                     onClick={() => setOrderNotes('')}
-                    className="text-[9px] text-red-400 hover:text-red-300 font-bold uppercase"
+                    className="text-[9px] text-red-400 hover:text-red-300 font-bold uppercase cursor-pointer"
                   >
                     Borrar
                   </button>
@@ -1057,7 +1058,7 @@ export const PosWizard: React.FC<PosWizardProps> = ({
                     key={chip}
                     type="button"
                     onClick={() => handleAddNoteChip(chip)}
-                    className="px-2 py-0.5 bg-[#170c30] hover:bg-[#25144d] text-purple-200 border border-purple-500/30 rounded-lg text-[9px] font-black uppercase transition-all"
+                    className="px-2 py-0.5 bg-[#170c30] hover:bg-[#25144d] text-purple-200 border border-purple-500/30 rounded-lg text-[9px] font-black uppercase transition-all cursor-pointer"
                   >
                     +{chip}
                   </button>
@@ -1100,7 +1101,7 @@ export const PosWizard: React.FC<PosWizardProps> = ({
                       <button
                         type="button"
                         onClick={() => updateQuantity(item.cartId, -1)}
-                        className="w-6 h-6 rounded bg-[#170c30] hover:bg-[#25144d] text-white flex items-center justify-center text-xs font-black"
+                        className="w-6 h-6 rounded bg-[#170c30] hover:bg-[#25144d] text-white flex items-center justify-center text-xs font-black cursor-pointer"
                       >
                         -
                       </button>
@@ -1110,7 +1111,7 @@ export const PosWizard: React.FC<PosWizardProps> = ({
                       <button
                         type="button"
                         onClick={() => updateQuantity(item.cartId, 1)}
-                        className="w-6 h-6 rounded bg-purple-600 hover:bg-purple-500 text-white flex items-center justify-center text-xs font-black"
+                        className="w-6 h-6 rounded bg-purple-600 hover:bg-purple-500 text-white flex items-center justify-center text-xs font-black cursor-pointer"
                       >
                         +
                       </button>
@@ -1133,7 +1134,7 @@ export const PosWizard: React.FC<PosWizardProps> = ({
                 type="button"
                 onClick={() => setPosStep((posStep + 1) as 2 | 3)}
                 disabled={cart.length === 0}
-                className={`w-full py-3 rounded-xl font-black uppercase text-xs transition-all flex items-center justify-center gap-2 ${
+                className={`w-full py-3 rounded-xl font-black uppercase text-xs transition-all flex items-center justify-center gap-2 cursor-pointer ${
                   cart.length === 0
                     ? 'bg-slate-800 text-slate-500 cursor-not-allowed'
                     : 'bg-purple-600 hover:bg-purple-500 text-white shadow-lg shadow-purple-600/30'
@@ -1147,7 +1148,7 @@ export const PosWizard: React.FC<PosWizardProps> = ({
                 type="button"
                 onClick={() => handleCheckout(false)}
                 disabled={cart.length === 0 || isSubmitting}
-                className={`w-full py-3 rounded-xl font-black uppercase text-xs transition-all flex items-center justify-center gap-2 ${
+                className={`w-full py-3 rounded-xl font-black uppercase text-xs transition-all flex items-center justify-center gap-2 cursor-pointer ${
                   cart.length === 0 || isSubmitting
                     ? 'bg-slate-800 text-slate-500 cursor-not-allowed'
                     : 'bg-purple-600 hover:bg-purple-500 text-white shadow-lg shadow-purple-600/30'
@@ -1168,6 +1169,198 @@ export const PosWizard: React.FC<PosWizardProps> = ({
             )}
           </div>
         </aside>
+      </div>
+
+      {/* Floating Mobile Cart Summary Pill for Phones & Small Tablets */}
+      {posStep === 1 && cart.length > 0 && (
+        <div className="md:hidden fixed bottom-3 left-3 right-3 z-40 pointer-events-auto">
+          <button
+            type="button"
+            onClick={() => setShowMobileCart(true)}
+            className="w-full py-3 px-4 bg-purple-600 hover:bg-purple-500 text-white rounded-2xl font-black text-xs uppercase flex items-center justify-between shadow-2xl shadow-purple-600/60 border border-purple-400 cursor-pointer animate-in slide-in-from-bottom-2"
+          >
+            <div className="flex items-center gap-2">
+              <Icon name="shopping_cart" size={17} />
+              <span>Ver Comanda ({totalItemCount} {totalItemCount === 1 ? 'ítem' : 'ítems'})</span>
+            </div>
+            <div className="flex items-center gap-2 font-mono text-sm font-bold bg-purple-950/80 px-2.5 py-1 rounded-xl border border-purple-400/40">
+              <span>${cartTotal}</span>
+              <Icon name="chevron_right" size={14} />
+            </div>
+          </button>
+        </div>
+      )}
+
+      {/* Mobile Comanda Modal / Slide-up Drawer */}
+      {showMobileCart && (
+        <div className="md:hidden fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-end justify-center p-0 animate-in fade-in">
+          <div className="w-full max-h-[85vh] bg-[#080512] rounded-t-[32px] border-t border-purple-500/30 flex flex-col shadow-2xl overflow-hidden animate-in slide-in-from-bottom-4">
+            {/* Header */}
+            <div className="p-4 border-b border-purple-500/20 font-black uppercase text-xs flex justify-between items-center bg-[#0d071c]">
+              <span className="flex items-center gap-2 text-white">
+                <Icon name="receipt_long" size={16} className="text-purple-400" />
+                <span>Comanda del Pedido</span>
+              </span>
+              <div className="flex items-center gap-2">
+                <span className="px-2 py-0.5 rounded-full bg-[#180c33] text-purple-300 font-mono text-[10px] border border-purple-500/30">
+                  {totalItemCount} {totalItemCount === 1 ? 'ítem' : 'ítems'}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setShowMobileCart(false)}
+                  className="w-8 h-8 rounded-xl bg-[#170c30] text-slate-300 hover:text-white flex items-center justify-center cursor-pointer"
+                >
+                  <Icon name="close" size={16} />
+                </button>
+              </div>
+            </div>
+
+            <div className="flex-1 overflow-y-auto p-4 space-y-3 custom-dark-scrollbar bg-[#080512]">
+              {/* Observaciones Box */}
+              <div className="bg-[#0e071e] p-3 rounded-2xl border border-purple-500/30 space-y-1.5 shadow-sm">
+                <div className="flex items-center justify-between">
+                  <label className="text-[10px] font-black uppercase text-purple-300 flex items-center gap-1">
+                    <Icon name="edit_note" size={14} className="text-purple-400" /> Observaciones
+                  </label>
+                  {orderNotes && (
+                    <button
+                      type="button"
+                      onClick={() => setOrderNotes('')}
+                      className="text-[9px] text-red-400 hover:text-red-300 font-bold uppercase cursor-pointer"
+                    >
+                      Borrar
+                    </button>
+                  )}
+                </div>
+
+                <textarea
+                  rows={2}
+                  placeholder="Ej: Masa fina, bien dorada, sin orégano..."
+                  value={orderNotes}
+                  onChange={e => setOrderNotes(e.target.value)}
+                  className="w-full p-2.5 bg-[#06030e] border border-purple-500/30 rounded-xl text-xs font-semibold text-white placeholder-slate-500 outline-none focus:border-purple-400 resize-none"
+                />
+
+                {/* Quick Chips */}
+                <div className="flex flex-wrap gap-1 pt-1">
+                  {COMMON_NOTE_CHIPS.map(chip => (
+                    <button
+                      key={chip}
+                      type="button"
+                      onClick={() => handleAddNoteChip(chip)}
+                      className="px-2 py-0.5 bg-[#170c30] hover:bg-[#25144d] text-purple-200 border border-purple-500/30 rounded-lg text-[9px] font-black uppercase transition-all cursor-pointer"
+                    >
+                      +{chip}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Cart Items List */}
+              <div className="space-y-2">
+                {cart.length === 0 ? (
+                  <div className="py-8 text-center bg-[#0d071b] rounded-2xl border border-purple-500/20 space-y-1">
+                    <Icon name="shopping_cart" size={28} className="mx-auto text-slate-600" />
+                    <p className="text-xs font-black uppercase text-slate-400">Comanda vacía</p>
+                  </div>
+                ) : (
+                  cart.map(item => (
+                    <div
+                      key={item.cartId}
+                      className="bg-[#0e071e] p-2.5 rounded-xl border border-purple-500/25 flex items-center justify-between gap-2"
+                    >
+                      <div className="flex-1 min-w-0">
+                        <div className="font-black text-xs uppercase text-white truncate">{item.name}</div>
+                        {item.selectedToppings && item.selectedToppings.length > 0 && (
+                          <div className="text-[9px] text-purple-300 font-bold uppercase truncate">
+                            +{item.selectedToppings.map(t => t.name).join(', ')}
+                          </div>
+                        )}
+                        <div className="text-[10px] font-black text-purple-300 font-mono">
+                          ${Math.round((item.finalPrice || item.price) * (item.quantity || 1))}
+                        </div>
+                      </div>
+
+                      <div className="flex items-center gap-1 shrink-0 bg-[#06030e] p-1 rounded-lg border border-purple-500/20">
+                        <button
+                          type="button"
+                          onClick={() => updateQuantity(item.cartId, -1)}
+                          className="w-6 h-6 rounded bg-[#170c30] hover:bg-[#25144d] text-white flex items-center justify-center text-xs font-black cursor-pointer"
+                        >
+                          -
+                        </button>
+                        <span className="w-6 text-center font-black text-xs text-white font-mono">
+                          {item.quantity || 1}
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => updateQuantity(item.cartId, 1)}
+                          className="w-6 h-6 rounded bg-purple-600 hover:bg-purple-500 text-white flex items-center justify-center text-xs font-black cursor-pointer"
+                        >
+                          +
+                        </button>
+                      </div>
+                    </div>
+                  ))
+                )}
+              </div>
+            </div>
+
+            {/* Cart Footer */}
+            <div className="p-4 bg-[#0d071c] border-t border-purple-500/25 space-y-2 shrink-0">
+              <div className="flex justify-between items-center text-xs">
+                <span className="font-black uppercase text-slate-400">Total a Pagar:</span>
+                <span className="text-2xl font-black text-white font-mono">${cartTotal}</span>
+              </div>
+
+              {posStep < 3 ? (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setPosStep((posStep + 1) as 2 | 3);
+                    setShowMobileCart(false);
+                  }}
+                  disabled={cart.length === 0}
+                  className={`w-full py-3 rounded-xl font-black uppercase text-xs transition-all flex items-center justify-center gap-2 cursor-pointer ${
+                    cart.length === 0
+                      ? 'bg-slate-800 text-slate-500 cursor-not-allowed'
+                      : 'bg-purple-600 hover:bg-purple-500 text-white shadow-lg shadow-purple-600/30'
+                  }`}
+                >
+                  <span>Avanzar al Paso {posStep + 1}</span>
+                  <Icon name="arrow_forward" size={14} />
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => {
+                    handleCheckout(false);
+                    setShowMobileCart(false);
+                  }}
+                  disabled={cart.length === 0 || isSubmitting}
+                  className={`w-full py-3 rounded-xl font-black uppercase text-xs transition-all flex items-center justify-center gap-2 cursor-pointer ${
+                    cart.length === 0 || isSubmitting
+                      ? 'bg-slate-800 text-slate-500 cursor-not-allowed'
+                      : 'bg-purple-600 hover:bg-purple-500 text-white shadow-lg shadow-purple-600/30'
+                  }`}
+                >
+                  {isSubmitting ? (
+                    <>
+                      <Icon name="restart_alt" className="animate-spin" size={14} />
+                      <span>Procesando...</span>
+                    </>
+                  ) : (
+                    <>
+                      <Icon name="rocket_launch" size={14} />
+                      <span>🚀 Confirmar y Enviar a Cocina</span>
+                    </>
+                  )}
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
       </div>
 
       {/* WhatsApp Order Parser Modal */}
