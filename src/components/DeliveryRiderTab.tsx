@@ -57,13 +57,21 @@ export const DeliveryRiderTab: React.FC<DeliveryRiderTabProps> = ({
   currentUser,
   showMessage
 }) => {
+  const isDriverUser = currentUser.role === 'delivery';
+
+  // Determine the delivery driver's specific display name / id
+  const myDriverName = useMemo(() => {
+    const u = (currentUser.username || '').toLowerCase();
+    const d = (currentUser.displayName || '').toLowerCase();
+    if (u.includes('fefo') || d.includes('fefo') || u === 'delivery1') return 'Fefo';
+    if (u.includes('caetano') || d.includes('caetano') || u === 'delivery2') return 'Caetano';
+    if (u.includes('samuel') || d.includes('samuel') || u === 'delivery3') return 'Samuel';
+    return currentUser.displayName.replace(/[^a-zA-Z0-9 áéíóúÁÉÍÓÚ]/g, '').trim() || currentUser.username;
+  }, [currentUser]);
+
   const [filterState, setFilterState] = useState<'all' | 'ready' | 'on_way' | 'delivered'>('ready');
   const [driverFilter, setDriverFilter] = useState<string>(() => {
-    // If the logged in user is one of the 3 delivery drivers, filter by their name by default
-    const u = (currentUser.username || '').toLowerCase();
-    if (u.includes('fefo') || u === 'delivery1') return 'Fefo';
-    if (u.includes('caetano') || u === 'delivery2') return 'Caetano';
-    if (u.includes('samuel') || u === 'delivery3') return 'Samuel';
+    if (isDriverUser) return myDriverName;
     return 'ALL';
   });
 
@@ -89,19 +97,26 @@ export const DeliveryRiderTab: React.FC<DeliveryRiderTabProps> = ({
 
   const filteredOrders = useMemo(() => {
     return deliveryOrders.filter(o => {
+      // STRICT DELIVERY ISOLATION: A delivery driver ONLY sees their own assigned orders or unassigned ready orders
+      if (isDriverUser) {
+        const isAssignedToMe = (o.assignedDriver || '').toLowerCase() === myDriverName.toLowerCase();
+        const isUnassignedReady = !o.assignedDriver && (o.status === 'Listo' || o.status === 'Preparando' || o.status === 'Pendiente');
+        if (!isAssignedToMe && !isUnassignedReady) return false;
+      } else {
+        // Admin / Cajero: apply driverFilter selector
+        if (driverFilter !== 'ALL') {
+          if (driverFilter === 'UNASSIGNED') {
+            if (o.assignedDriver) return false;
+          } else {
+            if ((o.assignedDriver || '').toLowerCase() !== driverFilter.toLowerCase()) return false;
+          }
+        }
+      }
+
       // Status filter
       if (filterState === 'ready' && (o.status !== 'Pendiente' && o.status !== 'Preparando' && o.status !== 'Listo')) return false;
       if (filterState === 'on_way' && o.status !== 'En Camino') return false;
       if (filterState === 'delivered' && o.status !== 'Finalizado') return false;
-
-      // Driver filter
-      if (driverFilter !== 'ALL') {
-        if (driverFilter === 'UNASSIGNED') {
-          if (o.assignedDriver) return false;
-        } else {
-          if ((o.assignedDriver || '').toLowerCase() !== driverFilter.toLowerCase()) return false;
-        }
-      }
 
       // Search filter (address, name, phone, id)
       if (searchQuery.trim()) {
@@ -116,19 +131,23 @@ export const DeliveryRiderTab: React.FC<DeliveryRiderTabProps> = ({
 
       return true;
     });
-  }, [deliveryOrders, filterState, driverFilter, searchQuery]);
+  }, [deliveryOrders, filterState, driverFilter, searchQuery, isDriverUser, myDriverName]);
 
   const counts = useMemo(() => {
+    const baseList = isDriverUser 
+      ? deliveryOrders.filter(o => (o.assignedDriver || '').toLowerCase() === myDriverName.toLowerCase() || (!o.assignedDriver && (o.status === 'Listo' || o.status === 'Preparando' || o.status === 'Pendiente')))
+      : deliveryOrders;
+
     return {
-      all: deliveryOrders.length,
-      ready: deliveryOrders.filter(o => o.status === 'Pendiente' || o.status === 'Preparando' || o.status === 'Listo').length,
-      on_way: deliveryOrders.filter(o => o.status === 'En Camino').length,
-      delivered: deliveryOrders.filter(o => o.status === 'Finalizado').length,
+      all: baseList.length,
+      ready: baseList.filter(o => o.status === 'Pendiente' || o.status === 'Preparando' || o.status === 'Listo').length,
+      on_way: baseList.filter(o => o.status === 'En Camino').length,
+      delivered: baseList.filter(o => o.status === 'Finalizado').length,
       fefo: deliveryOrders.filter(o => (o.assignedDriver || '').toLowerCase() === 'fefo' && o.status !== 'Finalizado').length,
       caetano: deliveryOrders.filter(o => (o.assignedDriver || '').toLowerCase() === 'caetano' && o.status !== 'Finalizado').length,
       samuel: deliveryOrders.filter(o => (o.assignedDriver || '').toLowerCase() === 'samuel' && o.status !== 'Finalizado').length,
     };
-  }, [deliveryOrders]);
+  }, [deliveryOrders, isDriverUser, myDriverName]);
 
   // Status transitions & driver assignment
   const handleAssignDriverAndSend = async (order: DeliveryOrder, driverName: string, driverId: string) => {
@@ -213,58 +232,84 @@ export const DeliveryRiderTab: React.FC<DeliveryRiderTabProps> = ({
         </div>
       </div>
 
-      {/* Driver Filter Badges: FEFO, CAETANO, SAMUEL */}
-      <div className="bg-[#090314] border border-purple-500/20 rounded-3xl p-4 flex flex-wrap items-center justify-between gap-3">
-        <div className="flex items-center gap-2 text-xs font-black uppercase text-slate-300">
-          <Icon name="two_wheeler" size={16} className="text-purple-400" />
-          <span>Filtrar por Repartidor:</span>
-        </div>
-
-        <div className="flex flex-wrap gap-2">
-          <button
-            onClick={() => setDriverFilter('ALL')}
-            className={`px-3.5 py-1.5 rounded-xl font-black text-xs uppercase transition-all cursor-pointer border ${
-              driverFilter === 'ALL'
-                ? 'bg-purple-600 text-slate-950 border-purple-400 shadow-md'
-                : 'bg-[#040108] text-slate-400 border-purple-500/20 hover:text-white'
-            }`}
-          >
-            Todos los Repartidores
-          </button>
-
-          {DELIVERY_DRIVERS.map(driver => {
-            const isSelected = driverFilter.toLowerCase() === driver.name.toLowerCase();
-            const count = counts[driver.name.toLowerCase() as keyof typeof counts] || 0;
-            return (
-              <button
-                key={driver.id}
-                onClick={() => setDriverFilter(driver.name)}
-                className={`px-3.5 py-1.5 rounded-xl font-black text-xs uppercase flex items-center gap-2 transition-all cursor-pointer border ${
-                  isSelected
-                    ? 'bg-purple-600 text-slate-950 border-purple-400 shadow-md'
-                    : 'bg-[#040108] text-slate-300 border-purple-500/20 hover:border-purple-400 hover:text-white'
-                }`}
-              >
-                <span>🏍️ #{driver.number} {driver.name}</span>
-                <span className={`px-1.5 py-0.2 rounded-md text-[10px] font-black ${isSelected ? 'bg-slate-950/30 text-white' : 'bg-purple-950 text-purple-300 border border-purple-500/30'}`}>
-                  {count}
+      {/* Driver Filter Badges: FEFO, CAETANO, SAMUEL (Only for Admin / Cajero) or Driver Private Badge */}
+      {isDriverUser ? (
+        <div className="bg-[#090314] border border-cyan-500/40 rounded-3xl p-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 shadow-lg shadow-cyan-950/30">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-2xl bg-cyan-950 text-cyan-300 border border-cyan-500/40 flex items-center justify-center font-black text-base shrink-0">
+              🛵
+            </div>
+            <div>
+              <div className="font-black text-xs uppercase text-white flex items-center gap-2">
+                <span>Mi Hoja de Ruta Privada • {myDriverName}</span>
+                <span className="px-2 py-0.5 rounded-md bg-cyan-950 text-cyan-300 border border-cyan-500/40 text-[9px] font-mono">
+                  SOLO MIS PEDIDOS
                 </span>
-              </button>
-            );
-          })}
-
-          <button
-            onClick={() => setDriverFilter('UNASSIGNED')}
-            className={`px-3.5 py-1.5 rounded-xl font-black text-xs uppercase transition-all cursor-pointer border ${
-              driverFilter === 'UNASSIGNED'
-                ? 'bg-amber-500 text-slate-950 border-amber-400 shadow-md'
-                : 'bg-[#040108] text-amber-300/80 border-amber-500/20 hover:text-amber-200'
-            }`}
-          >
-            ⚠️ Sin Asignar
-          </button>
+              </div>
+              <p className="text-[11px] text-slate-400 font-medium">
+                Tus pedidos asignados. Al llegar a la dirección del cliente, pulsa "Marcar como Entregado" para reportarlo al sistema.
+              </p>
+            </div>
+          </div>
+          <div className="flex items-center gap-2 shrink-0">
+            <span className="px-3 py-1.5 rounded-xl bg-cyan-950/80 text-cyan-300 border border-cyan-500/30 font-mono text-xs font-black">
+              {counts.on_way} en camino • {counts.delivered} entregados
+            </span>
+          </div>
         </div>
-      </div>
+      ) : (
+        <div className="bg-[#090314] border border-purple-500/20 rounded-3xl p-4 flex flex-wrap items-center justify-between gap-3">
+          <div className="flex items-center gap-2 text-xs font-black uppercase text-slate-300">
+            <Icon name="two_wheeler" size={16} className="text-purple-400" />
+            <span>Control de Flota Repartidores (Admin):</span>
+          </div>
+
+          <div className="flex flex-wrap gap-2">
+            <button
+              onClick={() => setDriverFilter('ALL')}
+              className={`px-3.5 py-1.5 rounded-xl font-black text-xs uppercase transition-all cursor-pointer border ${
+                driverFilter === 'ALL'
+                  ? 'bg-purple-600 text-slate-950 border-purple-400 shadow-md'
+                  : 'bg-[#040108] text-slate-400 border-purple-500/20 hover:text-white'
+              }`}
+            >
+              Todos los Repartidores
+            </button>
+
+            {DELIVERY_DRIVERS.map(driver => {
+              const isSelected = driverFilter.toLowerCase() === driver.name.toLowerCase();
+              const count = counts[driver.name.toLowerCase() as keyof typeof counts] || 0;
+              return (
+                <button
+                  key={driver.id}
+                  onClick={() => setDriverFilter(driver.name)}
+                  className={`px-3.5 py-1.5 rounded-xl font-black text-xs uppercase flex items-center gap-2 transition-all cursor-pointer border ${
+                    isSelected
+                      ? 'bg-purple-600 text-slate-950 border-purple-400 shadow-md'
+                      : 'bg-[#040108] text-slate-300 border-purple-500/20 hover:border-purple-400 hover:text-white'
+                  }`}
+                >
+                  <span>🏍️ #{driver.number} {driver.name}</span>
+                  <span className={`px-1.5 py-0.2 rounded-md text-[10px] font-black ${isSelected ? 'bg-slate-950/30 text-white' : 'bg-purple-950 text-purple-300 border border-purple-500/30'}`}>
+                    {count}
+                  </span>
+                </button>
+              );
+            })}
+
+            <button
+              onClick={() => setDriverFilter('UNASSIGNED')}
+              className={`px-3.5 py-1.5 rounded-xl font-black text-xs uppercase transition-all cursor-pointer border ${
+                driverFilter === 'UNASSIGNED'
+                  ? 'bg-amber-500 text-slate-950 border-amber-400 shadow-md'
+                  : 'bg-[#040108] text-amber-300/80 border-amber-500/20 hover:text-amber-200'
+              }`}
+            >
+              ⚠️ Sin Asignar
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Filter Tabs Pills (Status) */}
       <div className="flex flex-wrap gap-2.5">
@@ -476,14 +521,25 @@ export const DeliveryRiderTab: React.FC<DeliveryRiderTabProps> = ({
                 {/* Delivery Driver Action Progression Buttons */}
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 pt-2">
                   {order.status !== 'En Camino' && order.status !== 'Finalizado' && (
-                    <button
-                      type="button"
-                      onClick={() => setAssignModal({ isOpen: true, order })}
-                      className="w-full py-3.5 bg-gradient-to-r from-purple-600 via-indigo-600 to-cyan-600 hover:from-purple-500 hover:to-cyan-500 text-white rounded-2xl font-black uppercase text-xs shadow-lg shadow-purple-600/30 transition-all flex items-center justify-center gap-2 cursor-pointer col-span-1 sm:col-span-2"
-                    >
-                      <Icon name="two_wheeler" size={18} />
-                      <span>{order.assignedDriver ? `Reasignar Repartidor (${order.assignedDriver})` : '🛵 Elegir Repartidor y Enviar'}</span>
-                    </button>
+                    isDriverUser ? (
+                      <button
+                        type="button"
+                        onClick={() => handleAssignDriverAndSend(order, myDriverName, currentUser.username)}
+                        className="w-full py-3.5 bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-500 hover:to-blue-500 text-white rounded-2xl font-black uppercase text-xs shadow-lg shadow-cyan-600/30 transition-all flex items-center justify-center gap-2 cursor-pointer col-span-1 sm:col-span-2"
+                      >
+                        <Icon name="two_wheeler" size={18} />
+                        <span>🛵 Tomar este Pedido y Salir en Ruta</span>
+                      </button>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() => setAssignModal({ isOpen: true, order })}
+                        className="w-full py-3.5 bg-gradient-to-r from-purple-600 via-indigo-600 to-cyan-600 hover:from-purple-500 hover:to-cyan-500 text-white rounded-2xl font-black uppercase text-xs shadow-lg shadow-purple-600/30 transition-all flex items-center justify-center gap-2 cursor-pointer col-span-1 sm:col-span-2"
+                      >
+                        <Icon name="two_wheeler" size={18} />
+                        <span>{order.assignedDriver ? `Reasignar Repartidor (${order.assignedDriver})` : '🛵 Elegir Repartidor y Enviar'}</span>
+                      </button>
+                    )
                   )}
 
                   {order.status === 'En Camino' && (
@@ -499,10 +555,10 @@ export const DeliveryRiderTab: React.FC<DeliveryRiderTabProps> = ({
                       <button
                         type="button"
                         onClick={() => handleMarkDelivered(order)}
-                        className="py-3.5 bg-gradient-to-r from-emerald-600 to-green-600 hover:from-emerald-500 hover:to-green-500 text-slate-950 font-black rounded-2xl uppercase text-xs shadow-lg shadow-emerald-600/30 transition-all flex items-center justify-center gap-2 cursor-pointer"
+                        className="py-3.5 bg-gradient-to-r from-emerald-500 to-green-600 hover:from-emerald-400 hover:to-green-500 text-slate-950 font-black rounded-2xl uppercase text-xs shadow-xl shadow-emerald-600/40 transition-all flex items-center justify-center gap-2 cursor-pointer border border-emerald-400"
                       >
                         <Icon name="check_circle" size={18} />
-                        <span>Entregado y Cobrado</span>
+                        <span>✅ Marcar como Entregado (${order.total})</span>
                       </button>
                     </>
                   )}
@@ -510,7 +566,7 @@ export const DeliveryRiderTab: React.FC<DeliveryRiderTabProps> = ({
                   {order.status === 'Finalizado' && (
                     <div className="col-span-1 sm:col-span-2 py-3 bg-emerald-950/40 border border-emerald-500/30 rounded-2xl text-center text-xs font-black uppercase text-emerald-300 flex items-center justify-center gap-2">
                       <Icon name="check_circle" size={16} />
-                      <span>Pedido Entregado con Éxito</span>
+                      <span>Pedido Entregado y Reportado al Sistema</span>
                     </div>
                   )}
                 </div>
