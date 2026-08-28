@@ -725,8 +725,12 @@ export default function App() {
   const cartTotal = Math.round(cart.reduce((a, b) => a + ((b.finalPrice || 0) * (b.quantity || 1)), 0));
 
   const handleOpenRegister = async (skipStock = false) => {
-    const amount = initialCashInput !== '' ? parseFloat(initialCashInput) : 0;
-    if (isNaN(amount) || amount < 0) return showMessage("Ingrese un monto de efectivo inicial válido (ej: 0 o más)", "error");
+    const rawVal = String(initialCashInput).trim();
+    const amount = rawVal !== '' ? (parseFloat(rawVal) || 0) : 0;
+    if (isNaN(amount) || amount < 0) {
+      showMessage("Ingrese un monto de efectivo inicial válido (ej: 0 o más)", "error");
+      return;
+    }
     
     // Convert inputs into numeric record
     const parsedStock: Record<string, number> = {}; 
@@ -739,21 +743,36 @@ export default function App() {
       }
     });
 
+    const newRegisterState: RegisterConfig = {
+      isOpen: true,
+      initialCash: amount,
+      currentCash: amount,
+      initialStock: parsedStock,
+      currentStock: parsedStock,
+      openedAt: Date.now(),
+      sessionId: `SESSION-${Date.now()}`,
+      isLoaded: true
+    };
+
+    // 1. Immediately update local state so the UI unlocks without delay
+    setRegister(newRegisterState);
+    setInitialCashInput(''); 
+    setInitialStockInput({});
+    setActiveTab('pos');
+    showMessage(skipStock ? `✅ Caja abierta con $${amount} (Stock iniciado en 0)` : `✅ Caja abierta con $${amount} e inventario cargado`, 'success');
+
+    // 2. Persist to localStorage & Firestore
     try {
-        await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'config', 'register'), { 
-          isOpen: true, 
-          initialCash: amount, 
-          currentCash: amount, 
-          initialStock: parsedStock, 
-          currentStock: parsedStock, 
-          openedAt: Date.now(), 
-          sessionId: `SESSION-${Date.now()}` 
-        });
-        setInitialCashInput(''); 
-        setInitialStockInput({}); 
-        showMessage(skipStock ? "Caja abierta correctamente (Stock iniciado en 0)" : "Caja e inventario abiertos correctamente");
-        setActiveTab('pos');
-    } catch (e: any) { showMessage("Error al abrir caja: " + e.message, "error"); }
+      localStorage.setItem('nextcrm_register', JSON.stringify(newRegisterState));
+    } catch (_) {}
+
+    try {
+      if (db) {
+        await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'config', 'register'), newRegisterState);
+      }
+    } catch (e: any) {
+      console.error("Error al sincronizar apertura de caja:", e);
+    }
   };
 
   const handlePrintClosureReport = (overrideSession?: SessionData, mode: 'full' | 'thermal' = 'full') => {
@@ -1339,25 +1358,28 @@ export default function App() {
 
   const handleCreateProduct = async () => {
     const trimmedName = newProductForm.name.trim();
-    if (!trimmedName || !newProductForm.price) return showMessage("Complete nombre y precio", "error");
-    const catKey = newProductForm.category.toLowerCase();
+    if (!trimmedName) return showMessage("Ingrese el nombre del producto", "error");
+    const priceNum = parseFloat(newProductForm.price);
+    if (isNaN(priceNum) || priceNum < 0) return showMessage("Ingrese un precio válido (número positivo)", "error");
     
-    // Check if name already exists in the menu (prevent duplicates)
-    const existsAnywhere = allMenuItems.some(
+    const catKey = (newProductForm.category || 'pizzas').trim().toLowerCase() || 'pizzas';
+    
+    // Check if name already exists in the same category
+    const existsInCat = (menu[catKey] || []).some(
       (it: MenuItem) => it.name.trim().toLowerCase() === trimmedName.toLowerCase()
     );
-    if (existsAnywhere) {
-      return showMessage(`Ya existe un producto con el nombre "${trimmedName}" en el menú. No se permiten duplicados.`, "error");
+    if (existsInCat) {
+      return showMessage(`Ya existe un producto llamado "${trimmedName}" en la categoría ${catKey}.`, "error");
     }
 
     const newItem: MenuItem = {
-      id: `prod-${Date.now()}`,
+      id: `prod-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
       name: trimmedName,
       desc: newProductForm.desc.trim(),
-      price: parseFloat(newProductForm.price) || 0,
-      isPortion: newProductForm.isPortion,
-      isMeter: newProductForm.isMeter,
-      hasToppings: newProductForm.hasToppings,
+      price: priceNum,
+      isPortion: !!newProductForm.isPortion,
+      isMeter: !!newProductForm.isMeter,
+      hasToppings: !!newProductForm.hasToppings,
       maxToppings: newProductForm.maxToppings || 4
     };
 
@@ -1365,12 +1387,24 @@ export default function App() {
     if (!updatedMenu[catKey]) updatedMenu[catKey] = [];
     updatedMenu[catKey] = [...updatedMenu[catKey], newItem];
 
+    // Update local state immediately!
+    setMenu(updatedMenu);
     try {
-      await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'config', 'menu'), { data: updatedMenu });
+      localStorage.setItem('nextcrm_menu', JSON.stringify(updatedMenu));
+    } catch (_) {}
+
+    try {
+      if (db) {
+        await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'config', 'menu'), { data: updatedMenu });
+      }
       setNewProductForm({ category: 'pizzas', name: '', desc: '', price: '', isPortion: false, isMeter: false, hasToppings: false, maxToppings: 0 });
       setNewProductModal(false);
-      showMessage("Producto agregado al menú exitosamente");
-    } catch (e: any) { showMessage("Error al agregar producto: " + e.message, "error"); }
+      showMessage(`¡Producto "${trimmedName}" agregado al menú con éxito!`, 'success');
+    } catch (e: any) { 
+      setNewProductForm({ category: 'pizzas', name: '', desc: '', price: '', isPortion: false, isMeter: false, hasToppings: false, maxToppings: 0 });
+      setNewProductModal(false);
+      showMessage(`¡Producto "${trimmedName}" guardado localmente!`, 'success');
+    }
   };
 
   // Product Edit & Delete Handlers
@@ -1427,12 +1461,21 @@ export default function App() {
     if (!updatedMenu[newCat]) updatedMenu[newCat] = [];
     updatedMenu[newCat].push(updatedItem);
 
+    // Update local state immediately!
+    setMenu(updatedMenu);
     try {
-      await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'config', 'menu'), { data: updatedMenu });
+      localStorage.setItem('nextcrm_menu', JSON.stringify(updatedMenu));
+    } catch (_) {}
+
+    try {
+      if (db) {
+        await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'config', 'menu'), { data: updatedMenu });
+      }
       setEditProductModal({ isOpen: false, category: '', item: null, name: '', desc: '', price: '', isPortion: false, isMeter: false, hasToppings: false, maxToppings: 4 });
-      showMessage("Producto actualizado en el menú");
+      showMessage(`¡Producto "${trimmedName}" actualizado en el menú!`, 'success');
     } catch (e: any) {
-      showMessage("Error al actualizar producto: " + e.message, "error");
+      setEditProductModal({ isOpen: false, category: '', item: null, name: '', desc: '', price: '', isPortion: false, isMeter: false, hasToppings: false, maxToppings: 4 });
+      showMessage(`¡Producto "${trimmedName}" guardado localmente!`, 'success');
     }
   };
 
@@ -1443,12 +1486,21 @@ export default function App() {
     if (!updatedMenu[cKey]) return;
     updatedMenu[cKey] = updatedMenu[cKey].filter(it => it.id !== itemId);
 
+    // Update local state immediately!
+    setMenu(updatedMenu);
     try {
-      await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'config', 'menu'), { data: updatedMenu });
+      localStorage.setItem('nextcrm_menu', JSON.stringify(updatedMenu));
+    } catch (_) {}
+
+    try {
+      if (db) {
+        await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'config', 'menu'), { data: updatedMenu });
+      }
       setEditProductModal({ isOpen: false, category: '', item: null, name: '', desc: '', price: '', isPortion: false, isMeter: false, hasToppings: false, maxToppings: 4 });
-      showMessage("Producto eliminado del menú correctamente");
+      showMessage("Producto eliminado del menú correctamente", 'info');
     } catch (e: any) {
-      showMessage("Error al eliminar producto: " + e.message, "error");
+      showMessage("Producto eliminado localmente", 'info');
+    }
     }
   };
 
@@ -4033,20 +4085,141 @@ export default function App() {
       {/* New Product Modal */}
       {newProductModal && (
         <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-[1100] p-4">
-          <div className="bg-[#0b0518] border border-purple-500/30 rounded-[40px] p-8 max-w-md w-full shadow-2xl space-y-6 text-slate-100">
-            <h3 className="text-2xl font-black uppercase text-white">Nuevo Producto</h3>
-            <div className="space-y-3">
-              <select value={newProductForm.category} onChange={e => setNewProductForm({ ...newProductForm, category: e.target.value })} className="w-full p-4 bg-[#040108] border-2 border-purple-500/20 text-white rounded-2xl font-black text-sm uppercase outline-none focus:border-purple-400">
-                {Object.keys(menu).map(cat => <option key={cat} value={cat} className="bg-[#0b0518] text-white">{cat}</option>)}
-              </select>
-              <input type="text" placeholder="Nombre del producto" value={newProductForm.name} onChange={e => setNewProductForm({ ...newProductForm, name: e.target.value })} className="w-full p-4 bg-[#040108] border-2 border-purple-500/20 text-white rounded-2xl font-black text-sm uppercase outline-none focus:border-purple-400"/>
-              <input type="text" placeholder="Descripción breve" value={newProductForm.desc} onChange={e => setNewProductForm({ ...newProductForm, desc: e.target.value })} className="w-full p-4 bg-[#040108] border-2 border-purple-500/20 text-white rounded-2xl font-black text-sm outline-none focus:border-purple-400"/>
-              <input type="number" placeholder="Precio ($)" value={newProductForm.price} onChange={e => setNewProductForm({ ...newProductForm, price: e.target.value })} className="w-full p-4 bg-[#040108] border-2 border-purple-500/20 text-white rounded-2xl font-black text-sm outline-none focus:border-purple-400"/>
+          <div className="bg-[#0b0518] border-2 border-purple-500/40 rounded-[36px] p-6 sm:p-8 max-w-lg w-full shadow-2xl space-y-5 text-slate-100 animate-in zoom-in-95">
+            <div className="flex items-center justify-between border-b border-purple-500/20 pb-3">
+              <h3 className="text-xl sm:text-2xl font-black uppercase text-white flex items-center gap-2">
+                <Icon name="add_circle" size={24} className="text-purple-400" /> Nuevo Producto
+              </h3>
+              <button 
+                onClick={() => setNewProductModal(false)}
+                className="p-1.5 text-slate-400 hover:text-white rounded-xl hover:bg-white/5 cursor-pointer"
+              >
+                <Icon name="close" size={20} />
+              </button>
             </div>
-            <div className="flex gap-3">
-              <button onClick={() => setNewProductModal(false)} className="flex-1 py-4 bg-[#160829] text-slate-300 hover:bg-[#220c40] rounded-2xl font-black uppercase text-xs">Cancelar</button>
-              <button onClick={handleCreateProduct} className="flex-1 py-4 bg-purple-600 text-slate-950 rounded-2xl font-black uppercase text-xs hover:bg-purple-400 shadow-md shadow-purple-500/20">Agregar al Menú</button>
-            </div>
+
+            <form onSubmit={(e) => { e.preventDefault(); handleCreateProduct(); }} className="space-y-4 text-left">
+              {/* Category Selector */}
+              <div className="space-y-1.5">
+                <label className="text-[10px] font-black uppercase text-purple-300 flex items-center gap-1">
+                  <Icon name="category" size={14} className="text-purple-400" /> Categoría del Producto *
+                </label>
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-1.5 max-h-36 overflow-y-auto p-1 bg-[#040108] rounded-xl border border-purple-500/20">
+                  {Array.from(new Set([
+                    'pizzas', 'pizzetas', 'fainas', 'calzones', 'sandwiches', 'empanadas', 'bebidas', 'postres', 'promociones', 'otros',
+                    ...Object.keys(menu)
+                  ])).map(cat => (
+                    <button
+                      key={cat}
+                      type="button"
+                      onClick={() => setNewProductForm({ ...newProductForm, category: cat })}
+                      className={`p-2 rounded-lg text-xs font-black uppercase transition-all cursor-pointer border text-center ${
+                        newProductForm.category.toLowerCase() === cat.toLowerCase()
+                          ? 'bg-purple-600 text-slate-950 border-purple-400 shadow-sm'
+                          : 'bg-[#0b0518] text-slate-300 border-purple-500/15 hover:border-purple-400 hover:text-white'
+                      }`}
+                    >
+                      {cat}
+                    </button>
+                  ))}
+                </div>
+                <input 
+                  type="text" 
+                  placeholder="O escribir otra categoría personalizada..." 
+                  value={newProductForm.category} 
+                  onChange={e => setNewProductForm({ ...newProductForm, category: e.target.value })} 
+                  className="w-full p-2.5 bg-[#040108] border border-purple-500/30 text-purple-200 rounded-xl text-xs font-black uppercase outline-none focus:border-purple-400"
+                />
+              </div>
+
+              {/* Name */}
+              <div className="space-y-1">
+                <label className="text-[10px] font-black uppercase text-purple-300">Nombre del Producto *</label>
+                <input 
+                  type="text" 
+                  placeholder="Ej: Pizza Muzzarella con Panceta, Coca-Cola 1.5L..." 
+                  value={newProductForm.name} 
+                  onChange={e => setNewProductForm({ ...newProductForm, name: e.target.value })} 
+                  className="w-full p-3 bg-[#040108] border border-purple-500/30 text-white rounded-xl text-sm font-black uppercase outline-none focus:border-purple-400"
+                  required
+                />
+              </div>
+
+              {/* Description */}
+              <div className="space-y-1">
+                <label className="text-[10px] font-black uppercase text-slate-400">Descripción o Ingredientes (Opcional)</label>
+                <input 
+                  type="text" 
+                  placeholder="Ej: Salsa de tomate artesanal, muzzarella y orégano" 
+                  value={newProductForm.desc} 
+                  onChange={e => setNewProductForm({ ...newProductForm, desc: e.target.value })} 
+                  className="w-full p-3 bg-[#040108] border border-purple-500/30 text-white rounded-xl text-xs outline-none focus:border-purple-400"
+                />
+              </div>
+
+              {/* Price */}
+              <div className="space-y-1">
+                <label className="text-[10px] font-black uppercase text-emerald-400">Precio en Pesos ($) *</label>
+                <input 
+                  type="number" 
+                  placeholder="Ej: 450" 
+                  value={newProductForm.price} 
+                  onChange={e => setNewProductForm({ ...newProductForm, price: e.target.value })} 
+                  className="w-full p-3 bg-[#040108] border border-emerald-500/40 text-emerald-300 rounded-xl text-lg font-black font-mono outline-none focus:border-emerald-400"
+                  required
+                  min="0"
+                  step="1"
+                />
+              </div>
+
+              {/* Product Type Options */}
+              <div className="grid grid-cols-3 gap-2 pt-1">
+                <label className="flex items-center gap-1.5 p-2 bg-[#040108] border border-purple-500/20 rounded-xl cursor-pointer select-none">
+                  <input
+                    type="checkbox"
+                    checked={newProductForm.isMeter}
+                    onChange={e => setNewProductForm({ ...newProductForm, isMeter: e.target.checked, isPortion: false })}
+                    className="accent-purple-600 rounded cursor-pointer"
+                  />
+                  <span className="text-[10px] font-black uppercase text-slate-300">Por Metro</span>
+                </label>
+                <label className="flex items-center gap-1.5 p-2 bg-[#040108] border border-purple-500/20 rounded-xl cursor-pointer select-none">
+                  <input
+                    type="checkbox"
+                    checked={newProductForm.isPortion}
+                    onChange={e => setNewProductForm({ ...newProductForm, isPortion: e.target.checked, isMeter: false })}
+                    className="accent-purple-600 rounded cursor-pointer"
+                  />
+                  <span className="text-[10px] font-black uppercase text-slate-300">Por Porción</span>
+                </label>
+                <label className="flex items-center gap-1.5 p-2 bg-[#040108] border border-purple-500/20 rounded-xl cursor-pointer select-none">
+                  <input
+                    type="checkbox"
+                    checked={newProductForm.hasToppings}
+                    onChange={e => setNewProductForm({ ...newProductForm, hasToppings: e.target.checked })}
+                    className="accent-purple-600 rounded cursor-pointer"
+                  />
+                  <span className="text-[10px] font-black uppercase text-purple-300">Gustos</span>
+                </label>
+              </div>
+
+              {/* Actions */}
+              <div className="flex gap-3 pt-3">
+                <button 
+                  type="button"
+                  onClick={() => setNewProductModal(false)} 
+                  className="flex-1 py-3.5 bg-[#160829] text-slate-300 hover:bg-[#220c40] rounded-2xl font-black uppercase text-xs cursor-pointer border border-purple-500/30"
+                >
+                  Cancelar
+                </button>
+                <button 
+                  type="submit"
+                  className="flex-1 py-3.5 bg-purple-600 hover:bg-purple-400 text-slate-950 rounded-2xl font-black uppercase text-xs shadow-lg shadow-purple-500/25 transition-all flex items-center justify-center gap-1.5 cursor-pointer"
+                >
+                  <Icon name="check" size={16} /> Agregar al Menú
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}
