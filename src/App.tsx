@@ -154,6 +154,21 @@ export default function App() {
   });
 
   const [finishedFilter, setFinishedFilter] = useState({ search: '', method: 'TODOS', type: 'TODOS' });
+  const [selectedFinishedOrders, setSelectedFinishedOrders] = useState<string[]>([]);
+  const [selectedSessionIds, setSelectedSessionIds] = useState<string[]>([]);
+  const [menuActiveCategory, setMenuActiveCategory] = useState<string>('TODAS');
+  const [dismissedBadges, setDismissedBadges] = useState<Record<string, number>>({});
+
+  // NEXT CRM Authentication
+  const [isAuthenticated, setIsAuthenticated] = useState<boolean>(() => {
+    if (typeof window !== 'undefined') {
+      return localStorage.getItem('nextcrm_auth') === 'true';
+    }
+    return false;
+  });
+  const [loginUsername, setLoginUsername] = useState('admin');
+  const [loginPassword, setLoginPassword] = useState('');
+  const [loginError, setLoginError] = useState('');
 
   // Stock Modals
   const [importExcelModalOpen, setImportExcelModalOpen] = useState(false);
@@ -1532,6 +1547,41 @@ export default function App() {
     }
   };
 
+  const handleClearAllFinishedOrders = async () => {
+    const finished = orders.filter(o => o.status === 'Finalizado');
+    if (finished.length === 0) return showMessage("No hay pedidos finalizados para eliminar", "info");
+    if (!window.confirm(`¿Está seguro de eliminar TODOS los ${finished.length} pedidos finalizados?`)) return;
+    if (!db) return;
+    try {
+      for (const ord of finished) {
+        if (ord.firestoreId) {
+          await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'orders', ord.firestoreId));
+        }
+      }
+      setOrders(prev => prev.filter(o => o.status !== 'Finalizado'));
+      setSelectedFinishedOrders([]);
+      showMessage(`Se eliminaron ${finished.length} pedidos finalizados`);
+    } catch (e: any) {
+      showMessage(`Error al eliminar pedidos: ${e.message}`, 'error');
+    }
+  };
+
+  const handleDeleteSelectedFinishedOrders = async () => {
+    if (selectedFinishedOrders.length === 0) return showMessage("Seleccione al menos una comanda para eliminar", "info");
+    if (!window.confirm(`¿Está seguro de eliminar las ${selectedFinishedOrders.length} comandas seleccionadas?`)) return;
+    if (!db) return;
+    try {
+      for (const id of selectedFinishedOrders) {
+        await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'orders', id));
+      }
+      setOrders(prev => prev.filter(o => !selectedFinishedOrders.includes(o.firestoreId)));
+      setSelectedFinishedOrders([]);
+      showMessage(`Se eliminaron ${selectedFinishedOrders.length} comandas`);
+    } catch (e: any) {
+      showMessage(`Error al eliminar: ${e.message}`, 'error');
+    }
+  };
+
   const handleClearAllHistory = async () => {
     if (!window.confirm("¿Está seguro de que desea vaciar todo el historial de turnos de caja cerrados?")) return;
     if (!db) return;
@@ -1542,9 +1592,26 @@ export default function App() {
         }
       }
       setSessions([]);
+      setSelectedSessionIds([]);
       showMessage("Historial de turnos vaciado por completo");
     } catch (err: any) {
       showMessage(`Error al vaciar historial: ${err.message}`, 'error');
+    }
+  };
+
+  const handleDeleteSelectedSessions = async () => {
+    if (selectedSessionIds.length === 0) return showMessage("Seleccione al menos un turno para eliminar", "info");
+    if (!window.confirm(`¿Está seguro de eliminar los ${selectedSessionIds.length} turnos seleccionados del historial?`)) return;
+    if (!db) return;
+    try {
+      for (const id of selectedSessionIds) {
+        await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'sessions', id));
+      }
+      setSessions(prev => prev.filter(s => !selectedSessionIds.includes(s.firestoreId)));
+      setSelectedSessionIds([]);
+      showMessage(`Se eliminaron ${selectedSessionIds.length} turnos de caja`);
+    } catch (e: any) {
+      showMessage(`Error al eliminar: ${e.message}`, 'error');
     }
   };
 
@@ -1724,8 +1791,96 @@ export default function App() {
         </div>
       )}
 
+      {/* NEXT CRM Login Screen */}
+      {!isAuthenticated && (
+        <div className="fixed inset-0 z-[10000] bg-[#040108]/95 backdrop-blur-md flex items-center justify-center p-4">
+          <div className="relative max-w-md w-full bg-[#090314] border border-purple-500/30 rounded-[36px] p-8 sm:p-10 shadow-2xl shadow-purple-950/60 space-y-6 text-slate-100 animate-in zoom-in-95">
+            {/* NEXT CRM Branding */}
+            <div className="text-center space-y-3">
+              <div className="inline-flex items-center justify-center gap-3">
+                <div className="w-14 h-14 rounded-2xl bg-gradient-to-tr from-purple-600 via-indigo-600 to-cyan-400 p-[2px] shadow-lg shadow-purple-600/30">
+                  <div className="w-full h-full bg-[#090314] rounded-[14px] flex items-center justify-center">
+                    <svg className="w-7 h-7 text-purple-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M12 2L2 7l10 5 10-5-10-5z" />
+                      <path d="M2 17l10 5 10-5" />
+                      <path d="M2 12l10 5 10-5" />
+                    </svg>
+                  </div>
+                </div>
+                <div className="text-left">
+                  <div className="text-2xl font-black tracking-widest text-transparent bg-clip-text bg-gradient-to-r from-purple-300 via-white to-cyan-300 uppercase">
+                    NEXT CRM
+                  </div>
+                  <div className="text-[10px] font-black uppercase text-purple-400 tracking-wider">
+                    Punto de Venta • El Árbol
+                  </div>
+                </div>
+              </div>
+              <p className="text-xs font-bold text-slate-400">
+                Inicia sesión con tu usuario y contraseña de operador para comenzar
+              </p>
+            </div>
+
+            <form onSubmit={(e) => {
+              e.preventDefault();
+              if (!loginUsername.trim() || !loginPassword.trim()) {
+                setLoginError('Ingrese usuario y contraseña');
+                return;
+              }
+              setIsAuthenticated(true);
+              localStorage.setItem('nextcrm_auth', 'true');
+              localStorage.setItem('nextcrm_user', loginUsername);
+              setLoginError('');
+              showMessage(`¡Bienvenido a NEXT CRM, ${loginUsername}!`);
+            }} className="space-y-4">
+              {loginError && (
+                <div className="p-3 bg-red-950/60 border border-red-500/40 rounded-xl text-xs font-black text-red-300 text-center uppercase">
+                  {loginError}
+                </div>
+              )}
+
+              <div className="space-y-1.5 text-left">
+                <label className="text-[10px] font-black uppercase text-purple-300 flex items-center gap-1.5">
+                  <Icon name="person" size={14} className="text-purple-400" /> Usuario
+                </label>
+                <input
+                  type="text"
+                  placeholder="admin"
+                  value={loginUsername}
+                  onChange={e => setLoginUsername(e.target.value)}
+                  className="w-full p-3.5 bg-[#040108] border-2 border-purple-500/30 rounded-2xl text-sm font-black text-white outline-none focus:border-purple-400 uppercase"
+                  required
+                />
+              </div>
+
+              <div className="space-y-1.5 text-left">
+                <label className="text-[10px] font-black uppercase text-purple-300 flex items-center gap-1.5">
+                  <Icon name="lock" size={14} className="text-purple-400" /> Contraseña
+                </label>
+                <input
+                  type="password"
+                  placeholder="••••••••"
+                  value={loginPassword}
+                  onChange={e => setLoginPassword(e.target.value)}
+                  className="w-full p-3.5 bg-[#040108] border-2 border-purple-500/30 rounded-2xl text-sm font-black text-white outline-none focus:border-purple-400"
+                  required
+                />
+              </div>
+
+              <button
+                type="submit"
+                className="w-full py-4 bg-gradient-to-r from-purple-600 via-indigo-600 to-purple-600 hover:opacity-90 text-white rounded-2xl font-black uppercase text-xs shadow-lg shadow-purple-600/30 transition-all flex items-center justify-center gap-2 cursor-pointer mt-2"
+              >
+                <Icon name="login" size={16} />
+                <span>Ingresar a NEXT CRM</span>
+              </button>
+            </form>
+          </div>
+        </div>
+      )}
+
       {/* Header - Deluxe Lila, White & Black Edition (Crisp, Perfectly Aligned) */}
-      <header className="h-14 bg-[#040108] border-b border-purple-500/20 text-white flex items-center justify-between px-3 shrink-0 shadow-lg z-50 gap-3">
+      <header className="h-15 bg-[#040108] border-b border-purple-500/20 text-white flex items-center justify-between px-3 shrink-0 shadow-lg z-50 gap-3">
         <div className="flex items-center gap-2 shrink-0 pr-3 border-r border-purple-500/20">
           <div className="w-8 h-8 rounded-xl border border-purple-500/50 bg-[#0d061c] flex items-center justify-center font-black text-sm text-purple-300 shadow-xs">
             🌳
@@ -1756,11 +1911,21 @@ export default function App() {
             {id: 'support', label: 'Soporte', icon: 'support_agent', count: supportTickets.filter(t => t.status !== 'Resuelto').length, highlight: true}
           ].map(tab => {
             const isActive = activeTab === tab.id;
+            const rawCount = tab.count !== undefined ? tab.count : 0;
+            const dismissed = dismissedBadges[tab.id] || 0;
+            const activeCount = Math.max(0, rawCount - dismissed);
+
             return (
               <button 
                 key={tab.id} 
-                onClick={() => setActiveTab(tab.id)} 
-                className={`relative px-2.5 py-1 h-10 rounded-xl flex flex-col items-center justify-center font-black text-[9px] uppercase transition-all shrink-0 min-w-[56px] ${
+                onClick={() => {
+                  setActiveTab(tab.id);
+                  setDismissedBadges(prev => ({
+                    ...prev,
+                    [tab.id]: tab.count || 0
+                  }));
+                }} 
+                className={`relative px-2.5 py-1 h-11 rounded-xl flex flex-col items-center justify-center font-black text-[9px] uppercase transition-all shrink-0 min-w-[58px] ${
                   isActive 
                     ? tab.id === 'support' 
                       ? 'bg-purple-600 text-white shadow-md shadow-purple-600/30'
@@ -1770,27 +1935,47 @@ export default function App() {
                     : 'text-slate-400 hover:text-white hover:bg-white/5'
                 }`}
               >
-                {tab.count !== undefined && tab.count > 0 && (
+                {activeCount > 0 && (
                   <span className="absolute -top-1 right-1 bg-red-600 text-white text-[8px] font-black w-4 h-4 rounded-full flex items-center justify-center shadow-md animate-pulse z-10">
-                    {tab.count}
+                    {activeCount}
                   </span>
                 )}
-                <Icon name={tab.icon} size={14} className={isActive ? 'text-purple-300' : 'text-slate-400'}/>
+                <Icon name={tab.icon} size={18} className={isActive ? 'text-purple-300' : 'text-slate-400'}/>
                 <span className="leading-tight tracking-tight mt-0.5 whitespace-nowrap">{tab.label}</span>
               </button>
             );
           })}
         </nav>
 
-        {/* Live Status Indicator */}
-        <div className="flex items-center gap-2 shrink-0 pl-2 border-l border-purple-500/20">
-          <div 
-            className={`w-2.5 h-2.5 rounded-full transition-colors ${register.isOpen ? 'bg-emerald-400 shadow-sm shadow-emerald-400/50 animate-pulse' : 'bg-amber-500'}`} 
-            title={register.isOpen ? 'Caja Abierta' : 'Caja Cerrada'} 
-          />
-          <span className="text-[9px] font-black uppercase text-slate-300 hidden lg:inline">
-            {register.isOpen ? 'Turno Abierto' : 'Caja Cerrada'}
-          </span>
+        {/* Live Status Indicator & Logout */}
+        <div className="flex items-center gap-2.5 shrink-0 pl-2 border-l border-purple-500/20">
+          <div className="flex items-center gap-1.5">
+            <div 
+              className={`w-2.5 h-2.5 rounded-full transition-colors ${register.isOpen ? 'bg-emerald-400 shadow-sm shadow-emerald-400/50 animate-pulse' : 'bg-amber-500'}`} 
+              title={register.isOpen ? 'Caja Abierta' : 'Caja Cerrada'} 
+            />
+            <span className="text-[9px] font-black uppercase text-slate-300 hidden lg:inline">
+              {register.isOpen ? 'Turno Abierto' : 'Caja Cerrada'}
+            </span>
+          </div>
+
+          {isAuthenticated && (
+            <button
+              type="button"
+              onClick={() => {
+                if (window.confirm("¿Desea cerrar la sesión de NEXT CRM?")) {
+                  setIsAuthenticated(false);
+                  localStorage.removeItem('nextcrm_auth');
+                  showMessage("Sesión cerrada");
+                }
+              }}
+              className="p-2 hover:bg-red-950/50 text-slate-400 hover:text-red-300 rounded-xl transition-all border border-transparent hover:border-red-500/30 flex items-center gap-1 text-[9px] font-black uppercase"
+              title="Cerrar sesión NEXT CRM"
+            >
+              <Icon name="logout" size={15} />
+              <span className="hidden xl:inline">Salir</span>
+            </button>
+          )}
         </div>
       </header>
 
@@ -1912,6 +2097,15 @@ export default function App() {
                     </p>
                   </div>
                   <div className="flex flex-wrap gap-2">
+                    {finishedOrders.length > 0 && (
+                      <button 
+                        onClick={handleClearAllFinishedOrders}
+                        className="px-4 py-3 bg-red-950/50 hover:bg-red-900/70 border border-red-500/40 text-red-200 rounded-[20px] font-black uppercase text-xs transition-all flex items-center gap-2 shadow-xs cursor-pointer"
+                        title="Eliminar todas las comandas finalizadas"
+                      >
+                        <Icon name="delete_sweep" size={16}/> 🗑️ Vaciar Finalizados
+                      </button>
+                    )}
                     <button 
                       onClick={() => setImportExcelModalOpen(true)} 
                       className="px-5 py-3 bg-[#130826] border border-purple-500/40 text-purple-200 hover:text-white rounded-[20px] font-black uppercase text-xs transition-all flex items-center gap-2 shadow-xs cursor-pointer"
@@ -1935,6 +2129,41 @@ export default function App() {
                     </button>
                   </div>
                 </div>
+
+                {/* Multiselect Toolbar */}
+                {filteredOrders.length > 0 && (
+                  <div className="bg-[#0b0518] p-4 rounded-2xl border border-purple-500/20 flex flex-wrap items-center justify-between gap-3">
+                    <label className="flex items-center gap-2.5 text-xs font-black uppercase text-purple-200 cursor-pointer select-none">
+                      <input
+                        type="checkbox"
+                        checked={filteredOrders.length > 0 && filteredOrders.every(o => selectedFinishedOrders.includes(o.firestoreId))}
+                        onChange={(e) => {
+                          if (e.target.checked) {
+                            setSelectedFinishedOrders(filteredOrders.map(o => o.firestoreId));
+                          } else {
+                            setSelectedFinishedOrders([]);
+                          }
+                        }}
+                        className="w-4 h-4 accent-purple-600 rounded cursor-pointer"
+                      />
+                      <span>Seleccionar Todos ({filteredOrders.length})</span>
+                    </label>
+
+                    {selectedFinishedOrders.length > 0 && (
+                      <div className="flex items-center gap-3">
+                        <span className="text-xs font-black text-slate-400 uppercase">
+                          {selectedFinishedOrders.length} seleccionados
+                        </span>
+                        <button
+                          onClick={handleDeleteSelectedFinishedOrders}
+                          className="px-4 py-2 bg-red-600 hover:bg-red-500 text-white rounded-xl font-black text-xs uppercase flex items-center gap-1.5 transition-all shadow-md shadow-red-600/30 cursor-pointer"
+                        >
+                          <Icon name="delete" size={14}/> Eliminar Seleccionados ({selectedFinishedOrders.length})
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                )}
 
                 {/* Filters & Search */}
                 <div className="bg-[#0b0518] p-6 rounded-[30px] border border-purple-500/20 shadow-sm grid grid-cols-1 sm:grid-cols-3 gap-4">
@@ -2007,19 +2236,37 @@ export default function App() {
                   </div>
                 ) : (
                   <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                    {filteredOrders.map(order => (
-                      <div key={order.firestoreId} className="bg-[#0b0518] rounded-[32px] p-6 border border-purple-500/20 shadow-sm flex flex-col justify-between hover:border-purple-500/40 transition-all">
+                    {filteredOrders.map(order => {
+                      const isSelected = selectedFinishedOrders.includes(order.firestoreId);
+                      return (
+                      <div key={order.firestoreId} className={`bg-[#0b0518] rounded-[32px] p-6 border shadow-sm flex flex-col justify-between transition-all ${
+                        isSelected ? 'border-purple-500 bg-[#120726]' : 'border-purple-500/20 hover:border-purple-500/40'
+                      }`}>
                         <div className="space-y-4">
-                          {/* Order Header */}
+                          {/* Order Header with Selection Checkbox */}
                           <div className="flex justify-between items-start border-b border-purple-500/10 pb-3">
-                            <div>
-                              <div className="flex items-center gap-2">
-                                <span className="font-black text-sm bg-purple-600 text-slate-950 px-2.5 py-1 rounded-xl shadow-xs font-mono">{order.id}</span>
-                                <span className="font-black text-xs text-slate-400 uppercase">{new Date(order.createdAt).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'})}</span>
+                            <div className="flex items-start gap-2.5">
+                              <input
+                                type="checkbox"
+                                checked={isSelected}
+                                onChange={(e) => {
+                                  if (e.target.checked) {
+                                    setSelectedFinishedOrders(prev => [...prev, order.firestoreId]);
+                                  } else {
+                                    setSelectedFinishedOrders(prev => prev.filter(id => id !== order.firestoreId));
+                                  }
+                                }}
+                                className="mt-1 w-4 h-4 accent-purple-600 rounded cursor-pointer shrink-0"
+                              />
+                              <div>
+                                <div className="flex items-center gap-2">
+                                  <span className="font-black text-sm bg-purple-600 text-slate-950 px-2.5 py-1 rounded-xl shadow-xs font-mono">{order.id}</span>
+                                  <span className="font-black text-xs text-slate-400 uppercase">{new Date(order.createdAt).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'})}</span>
+                                </div>
+                                <div className="font-black text-sm uppercase text-white mt-2">{order.client?.name || 'CLIENTE GENERAL'}</div>
+                                {order.client?.phone && <div className="text-[11px] font-bold text-purple-400">{order.client.phone}</div>}
+                                {order.client?.address && <div className="text-[10px] font-bold text-slate-400 uppercase mt-0.5">{order.client.address} {order.client.zone ? `(${order.client.zone})` : ''}</div>}
                               </div>
-                              <div className="font-black text-sm uppercase text-white mt-2">{order.client?.name || 'CLIENTE GENERAL'}</div>
-                              {order.client?.phone && <div className="text-[11px] font-bold text-purple-400">{order.client.phone}</div>}
-                              {order.client?.address && <div className="text-[10px] font-bold text-slate-400 uppercase mt-0.5">{order.client.address} {order.client.zone ? `(${order.client.zone})` : ''}</div>}
                             </div>
                             <div className="flex flex-col items-end gap-1">
                               <span className="text-[10px] font-black uppercase px-2.5 py-1 rounded-lg bg-purple-950 text-purple-300 border border-purple-500/30">
@@ -2212,7 +2459,52 @@ export default function App() {
                 </div>
               ) : null}
 
-              {Object.keys(menu).map(catKey => {
+              {/* Category Filter Pills (Sub-Header) */}
+              <div className="bg-[#0b0518] p-3 rounded-2xl border border-purple-500/20 flex items-center gap-2 overflow-x-auto no-scrollbar scroll-smooth">
+                {[
+                  { id: 'TODAS', label: 'Todas las Categorías', icon: 'apps' },
+                  { id: 'pizzas', label: 'Pizzas', icon: 'local_pizza' },
+                  { id: 'fainas', label: 'Fainás', icon: 'bakery_dining' },
+                  { id: 'figazas', label: 'Figazzas', icon: 'breakfast_dining' },
+                  { id: 'pizzetas', label: 'Pizzetas', icon: 'local_pizza' },
+                  { id: 'sandwiches', label: 'Sándwichs', icon: 'lunch_dining' },
+                  { id: 'bebidas', label: 'Bebidas', icon: 'local_bar' },
+                  { id: 'postres', label: 'Postres', icon: 'icecream' },
+                  { id: 'promos', label: 'Promos', icon: 'stars' },
+                  { id: 'gustos', label: 'Gustos & Toppings', icon: 'tune' },
+                  { id: 'extras', label: 'Extras', icon: 'add_circle' },
+                ].map(cat => {
+                  const isSelected = menuActiveCategory.toLowerCase() === cat.id.toLowerCase();
+                  const count = cat.id === 'TODAS' 
+                    ? Object.values(menu).reduce((acc, arr) => acc + (arr?.length || 0), 0)
+                    : (menu[cat.id]?.length || 0);
+
+                  return (
+                    <button
+                      key={cat.id}
+                      type="button"
+                      onClick={() => setMenuActiveCategory(cat.id)}
+                      className={`px-4 py-2.5 rounded-xl font-black text-xs uppercase transition-all shrink-0 flex items-center gap-2 border cursor-pointer ${
+                        isSelected
+                          ? 'bg-purple-600 text-slate-950 border-purple-400 shadow-md shadow-purple-500/25'
+                          : 'bg-[#06020e] text-slate-300 border-purple-500/20 hover:border-purple-500/50 hover:text-white'
+                      }`}
+                    >
+                      <Icon name={cat.icon} size={15} />
+                      <span>{cat.label}</span>
+                      <span className={`text-[10px] px-1.5 py-0.5 rounded-md font-mono font-black ${
+                        isSelected ? 'bg-slate-950 text-purple-300' : 'bg-purple-950/80 text-purple-400 border border-purple-500/30'
+                      }`}>
+                        {count}
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+
+              {Object.keys(menu)
+                .filter(catKey => menuActiveCategory === 'TODAS' || catKey.toLowerCase() === menuActiveCategory.toLowerCase())
+                .map(catKey => {
                 const itemsInCat = menu[catKey] || [];
                 if (itemsInCat.length === 0) return null;
                 return (
@@ -3001,6 +3293,15 @@ export default function App() {
                    </p>
                  </div>
                  <div className="flex flex-wrap gap-2">
+                   {sessions.length > 0 && (
+                     <button 
+                       onClick={handleClearAllHistory} 
+                       className="px-4 py-3 bg-red-950/40 hover:bg-red-900/60 border border-red-500/30 text-red-300 rounded-[20px] font-black uppercase text-xs transition-all flex items-center gap-1.5 shadow-xs cursor-pointer"
+                       title="Eliminar todos los turnos del historial"
+                     >
+                       <Icon name="delete_sweep" size={15}/> 🗑️ Vaciar Historial
+                     </button>
+                   )}
                    <button 
                      onClick={() => setImportExcelModalOpen(true)} 
                      className="px-5 py-3 bg-[#130826] border border-purple-500/40 text-purple-200 hover:text-white rounded-[20px] font-black uppercase text-xs transition-all flex items-center gap-2 shadow-xs cursor-pointer"
@@ -3008,15 +3309,6 @@ export default function App() {
                    >
                      <Icon name="upload_file" size={16} className="text-purple-300"/> 📥 Importar Excel
                    </button>
-                   {sessions.length > 0 && (
-                     <button 
-                       onClick={handleClearAllHistory} 
-                       className="px-4 py-3 bg-red-950/40 hover:bg-red-900/60 border border-red-500/30 text-red-300 rounded-[20px] font-black uppercase text-xs transition-all flex items-center gap-1.5 shadow-xs"
-                       title="Eliminar todos los turnos del historial"
-                     >
-                       <Icon name="delete" size={15}/> Limpiar Historial
-                     </button>
-                   )}
                    {sessions.length > 0 && (
                      <button 
                        onClick={() => exportSessionsToCSV(sessions)} 
@@ -3029,6 +3321,41 @@ export default function App() {
                  </div>
                </div>
 
+                {/* Multiselect Toolbar */}
+                {sessions.length > 0 && (
+                  <div className="bg-[#0b0518] p-4 rounded-2xl border border-purple-500/20 flex flex-wrap items-center justify-between gap-3">
+                    <label className="flex items-center gap-2.5 text-xs font-black uppercase text-purple-200 cursor-pointer select-none">
+                      <input
+                        type="checkbox"
+                        checked={sessions.length > 0 && sessions.every(s => selectedSessionIds.includes(s.firestoreId))}
+                        onChange={(e) => {
+                          if (e.target.checked) {
+                            setSelectedSessionIds(sessions.map(s => s.firestoreId));
+                          } else {
+                            setSelectedSessionIds([]);
+                          }
+                        }}
+                        className="w-4 h-4 accent-purple-600 rounded cursor-pointer"
+                      />
+                      <span>Seleccionar Todos los Turnos ({sessions.length})</span>
+                    </label>
+
+                    {selectedSessionIds.length > 0 && (
+                      <div className="flex items-center gap-3">
+                        <span className="text-xs font-black text-slate-400 uppercase">
+                          {selectedSessionIds.length} seleccionados
+                        </span>
+                        <button
+                          onClick={handleDeleteSelectedSessions}
+                          className="px-4 py-2 bg-red-600 hover:bg-red-500 text-white rounded-xl font-black text-xs uppercase flex items-center gap-1.5 transition-all shadow-md shadow-red-600/30 cursor-pointer"
+                        >
+                          <Icon name="delete" size={14}/> Eliminar Seleccionados ({selectedSessionIds.length})
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                )}
+
                {sessions.length === 0 ? (
                  <div className="bg-[#0b0518] p-12 rounded-[40px] border border-purple-500/20 text-center space-y-3">
                    <Icon name="history_toggle_off" size={48} className="mx-auto text-slate-500"/>
@@ -3037,13 +3364,31 @@ export default function App() {
                  </div>
                ) : (
                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                   {sessions.map(session => (
-                      <div key={session.firestoreId} className="bg-[#0b0518] p-8 rounded-[40px] border border-purple-500/20 shadow-sm flex flex-col justify-between hover:border-purple-500/40 transition-all">
+                   {sessions.map(session => {
+                      const isSelected = selectedSessionIds.includes(session.firestoreId);
+                      return (
+                       <div key={session.firestoreId} className={`bg-[#0b0518] p-8 rounded-[40px] border shadow-sm flex flex-col justify-between transition-all ${
+                         isSelected ? 'border-purple-500 bg-[#120726]' : 'border-purple-500/20 hover:border-purple-500/40'
+                       }`}>
                         <div className="space-y-4">
                           <div className="flex justify-between items-start border-b border-purple-500/20 pb-4">
-                            <div>
-                              <div className="text-lg font-black text-white">{new Date(session.closedAt).toLocaleDateString()} {new Date(session.closedAt).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</div>
-                              <div className="text-[10px] font-bold text-slate-400 uppercase mt-0.5">Turno Archivado</div>
+                            <div className="flex items-start gap-2.5">
+                               <input
+                                 type="checkbox"
+                                 checked={isSelected}
+                                 onChange={(e) => {
+                                   if (e.target.checked) {
+                                     setSelectedSessionIds(prev => [...prev, session.firestoreId]);
+                                   } else {
+                                     setSelectedSessionIds(prev => prev.filter(id => id !== session.firestoreId));
+                                   }
+                                 }}
+                                 className="mt-1 w-4 h-4 accent-purple-600 rounded cursor-pointer shrink-0"
+                               />
+                               <div>
+                                 <div className="text-lg font-black text-white">{new Date(session.closedAt).toLocaleDateString()} {new Date(session.closedAt).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</div>
+                                 <div className="text-[10px] font-bold text-slate-400 uppercase mt-0.5">Turno Archivado</div>
+                               </div>
                             </div>
                             <div className="flex items-center gap-2">
                               <button 

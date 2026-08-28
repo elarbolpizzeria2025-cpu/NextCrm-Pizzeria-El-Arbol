@@ -29,8 +29,8 @@ export const OperationsManualTab: React.FC<OperationsManualTabProps> = ({
       <div className="max-w-6xl mx-auto space-y-8 print:max-w-none print:space-y-4">
         {/* Header Bar - Centered Title & Right-Aligned Buttons */}
         <div className="bg-[#0d061c] border border-purple-500/30 p-6 sm:p-8 rounded-3xl shadow-xl shadow-purple-950/20 space-y-5 print:border-none print:bg-transparent print:p-0">
-          {/* Top Actions: Aligned to the Right */}
-          <div className="flex justify-end items-center gap-3 print:hidden">
+          {/* Top Actions: Centered */}
+          <div className="flex justify-center items-center gap-3 print:hidden flex-wrap">
             <button
               type="button"
               onClick={handlePrintManual}
