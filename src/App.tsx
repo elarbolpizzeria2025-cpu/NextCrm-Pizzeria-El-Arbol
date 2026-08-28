@@ -2338,6 +2338,7 @@ export default function App() {
               {id: 'delivery', label: 'Delivery', icon: 'two_wheeler', count: badges.delivery, roles: ['admin', 'cajero', 'delivery']}, 
               {id: 'kitchen', label: 'KDS', icon: 'tv', count: badges.kitchen, roles: ['admin', 'cajero', 'mozo']}, 
               {id: 'pos', label: 'Toma de Pedido', icon: 'point_of_sale', roles: ['admin', 'cajero', 'mozo']}, 
+              {id: 'products', label: 'Menú', icon: 'menu_book', roles: ['admin']}, 
               {id: 'web', label: 'Web', icon: 'public', count: badges.web, roles: ['admin', 'cajero']}, 
               {id: 'counter', label: 'Mostrador', icon: 'storefront', count: badges.mostrador, roles: ['admin', 'cajero', 'mozo']}, 
               {id: 'tables', label: 'Mesas', icon: 'table_restaurant', count: badges.mesas, roles: ['admin', 'cajero', 'mozo']}, 
@@ -2345,8 +2346,7 @@ export default function App() {
               {id: 'staff', label: 'Propinas', icon: 'payments', roles: ['admin', 'cajero', 'mozo', 'delivery']},
               {id: 'clients', label: 'Clientes', icon: 'people', roles: ['admin', 'cajero']}, 
               {id: 'stock', label: 'Stock', icon: 'inventory_2', count: badges.stock, roles: ['admin', 'cajero']}, 
-              {id: 'cash', label: 'Arqueo', icon: 'account_balance_wallet', roles: ['admin', 'cajero']},
-              {id: 'products', label: 'Menú', icon: 'menu_book', roles: ['admin']}, 
+              {id: 'cash', label: 'Arqueo', icon: 'account_balance_wallet', roles: ['admin', 'cajero']}, 
               {id: 'reports', label: 'Reportes', icon: 'bar_chart', roles: ['admin']}, 
               {id: 'history', label: 'Historial', icon: 'history', roles: ['admin']}, 
               {id: 'manual', label: 'Manual', icon: 'auto_stories', roles: ['admin', 'cajero', 'mozo', 'delivery']},
@@ -2952,6 +2952,7 @@ export default function App() {
               <div className="bg-[#0b0518] p-3 rounded-2xl border border-purple-500/20 flex items-center gap-2 overflow-x-auto no-scrollbar scroll-smooth">
                 {[
                   { id: 'TODAS', label: 'Todas las Categorías', icon: 'apps' },
+                  { id: 'promos', label: 'Promos', icon: 'stars' },
                   { id: 'pizzas', label: 'Pizzas', icon: 'local_pizza' },
                   { id: 'fainas', label: 'Fainás', icon: 'bakery_dining' },
                   { id: 'figazas', label: 'Figazzas', icon: 'breakfast_dining' },
@@ -2959,7 +2960,6 @@ export default function App() {
                   { id: 'sandwiches', label: 'Sándwichs', icon: 'lunch_dining' },
                   { id: 'bebidas', label: 'Bebidas', icon: 'local_bar' },
                   { id: 'postres', label: 'Postres', icon: 'icecream' },
-                  { id: 'promos', label: 'Promos', icon: 'stars' },
                   { id: 'gustos', label: 'Gustos & Toppings', icon: 'tune' },
                   { id: 'extras', label: 'Extras', icon: 'add_circle' },
                 ].map(cat => {
