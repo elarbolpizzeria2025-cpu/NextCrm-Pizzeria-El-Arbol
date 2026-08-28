@@ -1793,14 +1793,14 @@ export default function App() {
 
       {/* NEXT CRM Login Screen */}
       {!isAuthenticated && (
-        <div className="fixed inset-0 z-[10000] bg-[#040108]/95 backdrop-blur-md flex items-center justify-center p-4">
-          <div className="relative max-w-md w-full bg-[#090314] border border-purple-500/30 rounded-[36px] p-8 sm:p-10 shadow-2xl shadow-purple-950/60 space-y-6 text-slate-100 animate-in zoom-in-95">
-            {/* NEXT CRM Branding */}
-            <div className="text-center space-y-3">
-              <div className="inline-flex items-center justify-center gap-3">
-                <div className="w-14 h-14 rounded-2xl bg-gradient-to-tr from-purple-600 via-indigo-600 to-cyan-400 p-[2px] shadow-lg shadow-purple-600/30">
-                  <div className="w-full h-full bg-[#090314] rounded-[14px] flex items-center justify-center">
-                    <svg className="w-7 h-7 text-purple-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+        <div className="fixed inset-0 z-[10000] bg-[#040108] flex items-center justify-center p-4 min-h-screen">
+          <div className="relative max-w-[420px] w-full bg-[#080212] border-2 border-purple-500/40 rounded-[40px] p-8 sm:p-10 shadow-2xl shadow-purple-950/80 space-y-6 text-slate-100 text-center animate-in zoom-in-95">
+            {/* NEXT CRM Branding - Perfectly Centered */}
+            <div className="flex flex-col items-center justify-center space-y-3">
+              <div className="flex items-center justify-center gap-3.5">
+                <div className="w-14 h-14 rounded-2xl bg-gradient-to-tr from-purple-600 via-indigo-600 to-cyan-400 p-[2px] shadow-lg shadow-purple-600/40 shrink-0">
+                  <div className="w-full h-full bg-[#080212] rounded-[14px] flex items-center justify-center">
+                    <svg className="w-7 h-7 text-purple-300" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
                       <path d="M12 2L2 7l10 5 10-5-10-5z" />
                       <path d="M2 17l10 5 10-5" />
                       <path d="M2 12l10 5 10-5" />
@@ -1812,11 +1812,11 @@ export default function App() {
                     NEXT CRM
                   </div>
                   <div className="text-[10px] font-black uppercase text-purple-400 tracking-wider">
-                    Punto de Venta • El Árbol
+                    PUNTO DE VENTA • EL ÁRBOL
                   </div>
                 </div>
               </div>
-              <p className="text-xs font-bold text-slate-400">
+              <p className="text-xs font-bold text-slate-400 text-center max-w-[280px] leading-relaxed">
                 Inicia sesión con tu usuario y contraseña de operador para comenzar
               </p>
             </div>
@@ -1832,47 +1832,47 @@ export default function App() {
               localStorage.setItem('nextcrm_user', loginUsername);
               setLoginError('');
               showMessage(`¡Bienvenido a NEXT CRM, ${loginUsername}!`);
-            }} className="space-y-4">
+            }} className="space-y-4 pt-1">
               {loginError && (
-                <div className="p-3 bg-red-950/60 border border-red-500/40 rounded-xl text-xs font-black text-red-300 text-center uppercase">
+                <div className="p-3 bg-red-950/70 border border-red-500/50 rounded-2xl text-xs font-black text-red-200 text-center uppercase tracking-wider">
                   {loginError}
                 </div>
               )}
 
-              <div className="space-y-1.5 text-left">
-                <label className="text-[10px] font-black uppercase text-purple-300 flex items-center gap-1.5">
-                  <Icon name="person" size={14} className="text-purple-400" /> Usuario
+              <div className="space-y-2">
+                <label className="text-[11px] font-black uppercase tracking-wider text-purple-300 flex items-center justify-center gap-1.5 text-center">
+                  <Icon name="person" size={15} className="text-purple-400" /> USUARIO
                 </label>
                 <input
                   type="text"
-                  placeholder="admin"
+                  placeholder="ADMIN"
                   value={loginUsername}
                   onChange={e => setLoginUsername(e.target.value)}
-                  className="w-full p-3.5 bg-[#040108] border-2 border-purple-500/30 rounded-2xl text-sm font-black text-white outline-none focus:border-purple-400 uppercase"
+                  className="w-full p-4 bg-[#040108] border-2 border-purple-500/30 focus:border-purple-400 rounded-2xl text-sm font-black text-center text-white outline-none uppercase tracking-widest transition-all focus:shadow-lg focus:shadow-purple-900/30"
                   required
                 />
               </div>
 
-              <div className="space-y-1.5 text-left">
-                <label className="text-[10px] font-black uppercase text-purple-300 flex items-center gap-1.5">
-                  <Icon name="lock" size={14} className="text-purple-400" /> Contraseña
+              <div className="space-y-2">
+                <label className="text-[11px] font-black uppercase tracking-wider text-purple-300 flex items-center justify-center gap-1.5 text-center">
+                  <Icon name="lock" size={15} className="text-purple-400" /> CONTRASEÑA
                 </label>
                 <input
                   type="password"
                   placeholder="••••••••"
                   value={loginPassword}
                   onChange={e => setLoginPassword(e.target.value)}
-                  className="w-full p-3.5 bg-[#040108] border-2 border-purple-500/30 rounded-2xl text-sm font-black text-white outline-none focus:border-purple-400"
+                  className="w-full p-4 bg-[#040108] border-2 border-purple-500/30 focus:border-purple-400 rounded-2xl text-sm font-black text-center text-white outline-none tracking-widest transition-all focus:shadow-lg focus:shadow-purple-900/30"
                   required
                 />
               </div>
 
               <button
                 type="submit"
-                className="w-full py-4 bg-gradient-to-r from-purple-600 via-indigo-600 to-purple-600 hover:opacity-90 text-white rounded-2xl font-black uppercase text-xs shadow-lg shadow-purple-600/30 transition-all flex items-center justify-center gap-2 cursor-pointer mt-2"
+                className="w-full py-4 bg-gradient-to-r from-purple-600 via-indigo-600 to-purple-600 hover:from-purple-500 hover:to-indigo-500 text-white rounded-2xl font-black uppercase text-xs tracking-wider shadow-lg shadow-purple-600/40 transition-all flex items-center justify-center gap-2 cursor-pointer mt-3 hover:scale-[1.02] active:scale-98"
               >
                 <Icon name="login" size={16} />
-                <span>Ingresar a NEXT CRM</span>
+                <span>INGRESAR A NEXT CRM</span>
               </button>
             </form>
           </div>
