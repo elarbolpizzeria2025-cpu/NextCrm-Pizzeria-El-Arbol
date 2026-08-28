@@ -2300,14 +2300,14 @@ export default function App() {
       )}
 
       {/* Header - Deluxe Lila, White & Black Edition with RBAC Role Indicator */}
-      <header className="h-15 bg-[#040108] border-b border-purple-500/20 text-white flex items-center justify-between px-3 shrink-0 shadow-lg z-50 gap-2">
-        <div className="flex items-center gap-2 shrink-0 pr-2 sm:pr-3 border-r border-purple-500/20">
-          <div className="w-8 h-8 rounded-xl border border-purple-500/50 bg-[#0d061c] flex items-center justify-center font-black text-sm text-purple-300 shadow-xs">
+      <header className="h-13 bg-[#040108] border-b border-purple-500/20 text-white flex items-center justify-between px-2.5 shrink-0 shadow-lg z-50 gap-2">
+        <div className="flex items-center gap-1.5 shrink-0 pr-2 border-r border-purple-500/20">
+          <div className="w-7 h-7 rounded-lg border border-purple-500/50 bg-[#0d061c] flex items-center justify-center font-black text-xs text-purple-300 shadow-xs">
             🌳
           </div>
-          <div className="font-black text-xs tracking-wider uppercase flex items-center gap-1.5">
+          <div className="font-black text-[11px] tracking-wider uppercase flex items-center gap-1">
             <span className="text-white font-extrabold hidden sm:inline">El Árbol</span>
-            <span className="text-[8px] bg-purple-950 text-purple-300 px-1.5 py-0.5 rounded-md border border-purple-500/40 font-black tracking-widest">POS</span>
+            <span className="text-[7.5px] bg-purple-950 text-purple-300 px-1 py-0.2 rounded font-black tracking-widest border border-purple-500/40">POS</span>
           </div>
         </div>
 
@@ -2319,10 +2319,10 @@ export default function App() {
             onClick={() => {
               if (navRef.current) navRef.current.scrollBy({ left: -220, behavior: 'smooth' });
             }}
-            className="w-6 h-9 rounded-lg bg-[#0d061c]/90 hover:bg-purple-950 text-purple-400 hover:text-white flex items-center justify-center transition-all border border-purple-500/20 shrink-0 mr-1 z-10 cursor-pointer shadow-sm"
+            className="w-5 h-7 rounded-md bg-[#0d061c]/90 hover:bg-purple-950 text-purple-400 hover:text-white flex items-center justify-center transition-all border border-purple-500/20 shrink-0 mr-1 z-10 cursor-pointer shadow-sm"
             title="Desplazar menú a la izquierda"
           >
-            <Icon name="chevron_left" size={16} />
+            <Icon name="chevron_left" size={13} />
           </button>
 
           <nav 
@@ -2332,15 +2332,15 @@ export default function App() {
                 navRef.current.scrollLeft += e.deltaY;
               }
             }}
-            className="flex-1 flex h-full gap-1 overflow-x-auto no-scrollbar items-center py-1 scroll-smooth"
+            className="flex-1 flex h-full gap-0.5 overflow-x-auto no-scrollbar items-center py-0.5 scroll-smooth"
           >
             {[ 
-              {id: 'delivery', label: 'Ruta Delivery', icon: 'two_wheeler', count: badges.delivery, roles: ['admin', 'cajero', 'delivery']}, 
-              {id: 'pos', label: 'Toma Pedido', icon: 'point_of_sale', roles: ['admin', 'cajero', 'mozo']}, 
+              {id: 'delivery', label: 'Delivery', icon: 'two_wheeler', count: badges.delivery, roles: ['admin', 'cajero', 'delivery']}, 
+              {id: 'kitchen', label: 'KDS', icon: 'tv', count: badges.kitchen, roles: ['admin', 'cajero', 'mozo']}, 
+              {id: 'pos', label: 'Toma de Pedido', icon: 'point_of_sale', roles: ['admin', 'cajero', 'mozo']}, 
+              {id: 'web', label: 'Web', icon: 'public', count: badges.web, roles: ['admin', 'cajero']}, 
               {id: 'counter', label: 'Mostrador', icon: 'storefront', count: badges.mostrador, roles: ['admin', 'cajero', 'mozo']}, 
               {id: 'tables', label: 'Mesas', icon: 'table_restaurant', count: badges.mesas, roles: ['admin', 'cajero', 'mozo']}, 
-              {id: 'kitchen', label: 'KDS Cocina', icon: 'tv', count: badges.kitchen, roles: ['admin', 'cajero', 'mozo']}, 
-              {id: 'web', label: 'Web', icon: 'public', count: badges.web, roles: ['admin', 'cajero']}, 
               {id: 'finished', label: 'Finalizados', icon: 'check_circle', count: badges.finished, roles: ['admin', 'cajero']}, 
               {id: 'staff', label: 'Propinas', icon: 'payments', roles: ['admin', 'cajero', 'mozo', 'delivery']},
               {id: 'clients', label: 'Clientes', icon: 'people', roles: ['admin', 'cajero']}, 
@@ -2364,22 +2364,22 @@ export default function App() {
                     setActiveTab(tab.id);
                     markTabBadgeDismissed(tab.id, rawCount);
                   }} 
-                  className={`relative px-2.5 py-1.5 h-10 rounded-xl flex items-center gap-1.5 font-black text-[10px] uppercase transition-all shrink-0 min-w-fit cursor-pointer ${
+                  className={`relative px-2 py-1 h-8 rounded-lg flex items-center gap-1 font-black text-[9px] uppercase transition-all shrink-0 min-w-fit cursor-pointer ${
                     isActive 
                       ? tab.id === 'support' 
                         ? 'bg-purple-600 text-white shadow-md shadow-purple-600/30'
-                        : 'bg-[#180930] text-purple-200 border-2 border-purple-400 shadow-md shadow-purple-900/30' 
+                        : 'bg-[#180930] text-purple-200 border border-purple-400 shadow-sm shadow-purple-900/30 ring-1 ring-purple-400/40' 
                       : tab.id === 'support'
                       ? 'text-purple-300 bg-purple-950/40 border border-purple-500/30 hover:bg-purple-900/50'
                       : 'text-slate-300 hover:text-white hover:bg-white/5 border border-transparent hover:border-purple-500/20'
                   }`}
                 >
                   {activeCount > 0 && (
-                    <span className="absolute -top-1 right-1 bg-red-600 text-white text-[8px] font-black w-4 h-4 rounded-full flex items-center justify-center shadow-md animate-pulse z-10">
+                    <span className="absolute -top-1 right-0.5 bg-red-600 text-white text-[7.5px] font-black w-3.5 h-3.5 rounded-full flex items-center justify-center shadow-md animate-pulse z-10">
                       {activeCount}
                     </span>
                   )}
-                  <Icon name={tab.icon} size={16} className={isActive ? 'text-purple-300' : 'text-slate-400'}/>
+                  <Icon name={tab.icon} size={13} className={isActive ? 'text-purple-300' : 'text-slate-400'}/>
                   <span className="leading-tight tracking-tight whitespace-nowrap">{tab.label}</span>
                 </button>
               );
@@ -2392,10 +2392,10 @@ export default function App() {
             onClick={() => {
               if (navRef.current) navRef.current.scrollBy({ left: 220, behavior: 'smooth' });
             }}
-            className="w-6 h-9 rounded-lg bg-[#0d061c]/90 hover:bg-purple-950 text-purple-400 hover:text-white flex items-center justify-center transition-all border border-purple-500/20 shrink-0 ml-1 z-10 cursor-pointer shadow-sm"
+            className="w-5 h-7 rounded-md bg-[#0d061c]/90 hover:bg-purple-950 text-purple-400 hover:text-white flex items-center justify-center transition-all border border-purple-500/20 shrink-0 ml-1 z-10 cursor-pointer shadow-sm"
             title="Desplazar menú a la derecha"
           >
-            <Icon name="chevron_right" size={16} />
+            <Icon name="chevron_right" size={13} />
           </button>
         </div>
 
