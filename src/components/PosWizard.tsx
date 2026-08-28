@@ -538,15 +538,93 @@ export const PosWizard: React.FC<PosWizardProps> = ({
                   </div>
 
                   {orderType === 'Mesa' ? (
-                    <div className="space-y-1.5">
-                      <label className="text-[10px] font-black text-slate-400 uppercase">Número o Nombre de Mesa</label>
-                      <input
-                        type="text"
-                        placeholder="Ej: Mesa 1, Mesa Terraza, Juan"
-                        value={clientInfo.name}
-                        onChange={e => setClientInfo({ ...clientInfo, name: e.target.value.toUpperCase() })}
-                        className="w-full p-3 bg-[#060410] border border-purple-500/30 text-white rounded-xl text-sm font-black uppercase outline-none focus:border-blue-400"
-                      />
+                    <div className="space-y-4">
+                      {/* Interactive 15-Table Selector Grid */}
+                      <div className="space-y-1.5">
+                        <div className="flex items-center justify-between">
+                          <label className="text-[10px] font-black text-blue-400 uppercase tracking-wider flex items-center gap-1">
+                            <Icon name="table_restaurant" size={14} /> Seleccionar Mesa (Máximo 15 Mesas)
+                          </label>
+                          <span className="text-[10px] font-black uppercase text-purple-300">
+                            {clientInfo.tableNumber ? `Mesa #${clientInfo.tableNumber} Seleccionada` : 'Selecciona una mesa'}
+                          </span>
+                        </div>
+
+                        <div className="grid grid-cols-5 sm:grid-cols-8 md:grid-cols-5 lg:grid-cols-5 xl:grid-cols-5 gap-2 pt-1">
+                          {Array.from({ length: 15 }, (_, i) => i + 1).map(num => {
+                            const isSelected = clientInfo.tableNumber === num || clientInfo.tableNumber === String(num);
+                            return (
+                              <button
+                                key={num}
+                                type="button"
+                                onClick={() => {
+                                  setClientInfo({
+                                    ...clientInfo,
+                                    tableNumber: num,
+                                    name: clientInfo.name && !clientInfo.name.startsWith('MESA ') ? clientInfo.name : ''
+                                  });
+                                }}
+                                className={`py-2.5 px-2 rounded-xl font-black text-xs uppercase flex flex-col items-center justify-center gap-0.5 transition-all cursor-pointer border ${
+                                  isSelected
+                                    ? 'bg-blue-600 text-white border-blue-400 shadow-lg shadow-blue-600/40 scale-105 ring-2 ring-blue-400/50'
+                                    : 'bg-[#060410] text-slate-300 border-purple-500/20 hover:border-blue-400 hover:bg-blue-950/30'
+                                }`}
+                              >
+                                <span className="text-[9px] text-slate-400 font-bold">MESA</span>
+                                <span className="text-sm font-black font-mono">#{num}</span>
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </div>
+
+                      {/* Required Customer Name in Table */}
+                      <div className="space-y-1.5">
+                        <label className="text-[10px] font-black text-slate-300 uppercase flex items-center justify-between">
+                          <span>Nombre del Cliente / Referencia en Mesa *</span>
+                          <span className="text-[9px] text-amber-400 font-bold lowercase">requerido para historial</span>
+                        </label>
+                        <input
+                          type="text"
+                          placeholder="Ej: Juan, Familia Gómez, Pareja Terraza..."
+                          value={clientInfo.name}
+                          onChange={e => setClientInfo({ ...clientInfo, name: e.target.value.toUpperCase() })}
+                          className="w-full p-3 bg-[#060410] border border-purple-500/30 text-white rounded-xl text-xs font-black uppercase outline-none focus:border-blue-400 placeholder:text-slate-600"
+                        />
+                      </div>
+
+                      {/* Waiter / Moza Assigner */}
+                      <div className="space-y-1.5">
+                        <label className="text-[10px] font-black text-slate-300 uppercase flex items-center gap-1">
+                          <Icon name="person" size={13} className="text-purple-400" /> Moza / Mozo que Atiende la Mesa
+                        </label>
+                        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                          {['Moza 1', 'Moza 2', 'Mozo 1', 'Mozo 2'].map(w => {
+                            const isWSelected = clientInfo.assignedWaiter === w;
+                            return (
+                              <button
+                                key={w}
+                                type="button"
+                                onClick={() => setClientInfo({ ...clientInfo, assignedWaiter: w })}
+                                className={`p-2 rounded-xl border text-xs font-black uppercase transition-all cursor-pointer ${
+                                  isWSelected
+                                    ? 'bg-purple-600 text-white border-purple-400 shadow-md'
+                                    : 'bg-[#060410] text-slate-400 border-purple-500/20 hover:text-white'
+                                }`}
+                              >
+                                {w}
+                              </button>
+                            );
+                          })}
+                        </div>
+                        <input
+                          type="text"
+                          placeholder="O escribe nombre personalizado de Moza / Mozo..."
+                          value={clientInfo.assignedWaiter || ''}
+                          onChange={e => setClientInfo({ ...clientInfo, assignedWaiter: e.target.value })}
+                          className="w-full p-2.5 bg-[#060410] border border-purple-500/20 text-purple-200 rounded-xl text-xs font-bold uppercase outline-none focus:border-purple-400 placeholder:text-slate-600"
+                        />
+                      </div>
                     </div>
                   ) : (
                     <div className="space-y-2.5 relative">

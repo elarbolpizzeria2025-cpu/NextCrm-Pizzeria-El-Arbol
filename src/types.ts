@@ -28,6 +28,8 @@ export interface ClientInfo {
   address?: string;
   zone?: string;
   notes?: string;
+  tableNumber?: number | string | null;
+  assignedWaiter?: string | null;
 }
 
 export interface ClientData extends ClientInfo {
@@ -58,7 +60,7 @@ export interface OrderData {
   cashProvided?: number;
   cashReceived?: number;
   tip?: number;
-  status: 'Preparando' | 'Pendiente' | 'Finalizado';
+  status: 'Preparando' | 'Pendiente' | 'Listo' | 'En Camino' | 'Finalizado' | 'Cancelado';
   createdAt: number;
   time: string;
   isScheduled?: boolean;
@@ -66,7 +68,10 @@ export interface OrderData {
   isPaid?: boolean;
   isArchived?: boolean;
   notes?: string;
+  tableNumber?: number | string | null;
+  assignedWaiter?: string | null;
   assignedDriver?: string | null;
+  assignedDriverId?: string | null;
   sessionId?: string | null;
   cfeDoc?: CfeDocument | null;
 }

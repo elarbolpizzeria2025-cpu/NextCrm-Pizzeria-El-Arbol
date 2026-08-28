@@ -33,6 +33,7 @@ import { ImportStockModal } from './components/ImportStockModal';
 import { WhatsAppOrderParserModal } from './components/WhatsAppOrderParserModal';
 import { CustomerObjectionsModal } from './components/CustomerObjectionsModal';
 import { DeliveryRiderTab } from './components/DeliveryRiderTab';
+import { StaffPerformanceTab } from './components/StaffPerformanceTab';
 import { DEFAULT_DGI_CONFIG, createCfeDocumentFromOrder } from './utils/dgiCfe';
 import { ParsedVoiceOrder } from './utils/voiceOrderParser';
 
@@ -953,16 +954,27 @@ export default function App() {
           d.setHours(parseInt(hours), parseInt(minutes), 0, 0); 
           scheduledTimestamp = d.getTime(); 
         }
+        const tableNum = isMesa ? (clientInfo.tableNumber || 1) : null;
+        const waiterName = isMesa 
+          ? (clientInfo.assignedWaiter || (currentUser.role === 'mozo' ? currentUser.displayName : 'Moza 1'))
+          : null;
+
         const orderData: any = {
           id: editingOrder ? editingOrder.id : `#${String(orders.length + 1).padStart(4, '0')}`, 
           type: orderType || 'Local', 
-          reference: orderType === 'Envío' ? 'ENVÍO' : (orderType === 'Web' ? 'PEDIDO WEB' : (orderType === 'Mesa' ? `MESA ${clientInfo.name || 'S/N'}` : 'LOCAL')), 
+          reference: orderType === 'Envío' ? 'ENVÍO' : (orderType === 'Web' ? 'PEDIDO WEB' : (orderType === 'Mesa' ? `MESA #${tableNum}` : 'LOCAL')), 
           client: { 
-            name: isMesa ? `MESA ${clientInfo.name || 'S/N'}` : (clientInfo.name || 'Sin Nombre'), 
+            name: isMesa 
+              ? (clientInfo.name ? `${clientInfo.name} (Mesa #${tableNum})` : `Mesa #${tableNum}`) 
+              : (clientInfo.name || 'Sin Nombre'), 
             phone: isMesa ? 'N/A' : (clientInfo.phone || 'N/A'), 
             address: isMesa ? 'N/A' : (clientInfo.address || 'N/A'), 
-            zone: isMesa ? 'N/A' : (clientInfo.zone || 'N/A') 
+            zone: isMesa ? 'N/A' : (clientInfo.zone || 'N/A'),
+            tableNumber: tableNum,
+            assignedWaiter: waiterName
           }, 
+          tableNumber: tableNum,
+          assignedWaiter: waiterName,
           items: cart.map(it => ({ 
             id: it.id || 'N/A', name: it.name || 'Item', price: it.price || 0, finalPrice: it.finalPrice || 0, quantity: it.quantity || 1, selectedToppings: it.selectedToppings || [], isPortion: it.isPortion || false 
           })), 
@@ -978,6 +990,7 @@ export default function App() {
           isArchived: editingOrder ? editingOrder.isArchived : false, 
           notes: orderNotes, 
           assignedDriver: editingOrder ? editingOrder.assignedDriver : null, 
+          assignedDriverId: editingOrder ? editingOrder.assignedDriverId : null,
           sessionId: register.sessionId || null 
         };
         if (editingOrder) { 
@@ -2133,6 +2146,7 @@ export default function App() {
             {id: 'kitchen', label: 'KDS Cocina', icon: 'tv', count: badges.kitchen, roles: ['admin', 'cajero', 'mozo']}, 
             {id: 'web', label: 'Web', icon: 'public', count: badges.web, roles: ['admin', 'cajero']}, 
             {id: 'finished', label: 'Finalizados', icon: 'check_circle', count: badges.finished, roles: ['admin', 'cajero']}, 
+            {id: 'staff', label: 'Propinas', icon: 'payments', roles: ['admin', 'cajero', 'mozo', 'delivery']},
             {id: 'clients', label: 'Clientes', icon: 'people', roles: ['admin', 'cajero']}, 
             {id: 'stock', label: 'Stock', icon: 'inventory_2', count: badges.stock, roles: ['admin', 'cajero']}, 
             {id: 'cash', label: 'Arqueo', icon: 'account_balance_wallet', roles: ['admin', 'cajero']},
@@ -2318,6 +2332,17 @@ export default function App() {
                   />
                ))}
              </div>
+          </div>
+        )}
+
+        {/* Dedicated Staff & Tips Liquidation Tab */}
+        {activeTab === 'staff' && (
+          <div className="h-full overflow-y-auto no-scrollbar bg-[#040108]">
+            <StaffPerformanceTab
+              orders={orders}
+              currentUser={currentUser}
+              showMessage={showMessage}
+            />
           </div>
         )}
 
