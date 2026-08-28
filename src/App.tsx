@@ -159,7 +159,29 @@ export default function App() {
   const [menuActiveCategory, setMenuActiveCategory] = useState<string>('TODAS');
   const [dismissedBadges, setDismissedBadges] = useState<Record<string, number>>({});
 
-  // NEXT CRM Authentication
+  // NEXT CRM Security Layers (Role-Based Access Control)
+  const [currentUser, setCurrentUser] = useState<{
+    username: string;
+    role: 'admin' | 'cajero' | 'mozo';
+    displayName: string;
+  }>(() => {
+    if (typeof window !== 'undefined') {
+      const savedRole = (localStorage.getItem('nextcrm_role') || 'admin') as 'admin' | 'cajero' | 'mozo';
+      const savedUser = localStorage.getItem('nextcrm_user') || 'admin';
+      const titles: Record<string, string> = {
+        admin: '👑 Dueño / Administrador',
+        cajero: '💵 Cajero Principal',
+        mozo: '🍽️ Mozo / Salón'
+      };
+      return {
+        username: savedUser,
+        role: ['admin', 'cajero', 'mozo'].includes(savedRole) ? savedRole : 'admin',
+        displayName: titles[savedRole] || 'Operador'
+      };
+    }
+    return { username: 'admin', role: 'admin', displayName: '👑 Dueño / Administrador' };
+  });
+
   const [isAuthenticated, setIsAuthenticated] = useState<boolean>(() => {
     if (typeof window !== 'undefined') {
       return localStorage.getItem('nextcrm_auth') === 'true';
@@ -169,6 +191,33 @@ export default function App() {
   const [loginUsername, setLoginUsername] = useState('admin');
   const [loginPassword, setLoginPassword] = useState('');
   const [loginError, setLoginError] = useState('');
+
+  // Admin Security Authorization Modal for Restricted Actions
+  const [adminAuthModal, setAdminAuthModal] = useState<{
+    isOpen: boolean;
+    actionName: string;
+    onSuccess: (() => void) | null;
+  }>({
+    isOpen: false,
+    actionName: '',
+    onSuccess: null
+  });
+  const [adminAuthPassword, setAdminAuthPassword] = useState('');
+  const [adminAuthError, setAdminAuthError] = useState('');
+
+  const requireAdminAuth = (actionName: string, callback: () => void) => {
+    if (currentUser.role === 'admin') {
+      callback();
+    } else {
+      setAdminAuthModal({
+        isOpen: true,
+        actionName,
+        onSuccess: callback
+      });
+      setAdminAuthPassword('');
+      setAdminAuthError('');
+    }
+  };
 
   // Stock Modals
   const [importExcelModalOpen, setImportExcelModalOpen] = useState(false);
@@ -1330,13 +1379,15 @@ export default function App() {
   };
 
   const handleDeleteSale = async (firestoreId: string, orderId: string) => {
-    if (!window.confirm(`¿Está seguro de eliminar la comanda #${orderId} del historial?`)) return;
-    try {
-      await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'orders', firestoreId));
-      showMessage(`Comanda #${orderId} eliminada del registro`);
-    } catch (e: any) {
-      showMessage("Error al eliminar venta: " + e.message, "error");
-    }
+    requireAdminAuth(`Eliminar Comanda #${orderId}`, async () => {
+      if (!window.confirm(`¿Está seguro de eliminar la comanda #${orderId} del historial?`)) return;
+      try {
+        await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'orders', firestoreId));
+        showMessage(`Comanda #${orderId} eliminada del registro`);
+      } catch (e: any) {
+        showMessage("Error al eliminar venta: " + e.message, "error");
+      }
+    });
   };
 
   // Closed Session History Handlers
@@ -1370,13 +1421,15 @@ export default function App() {
   };
 
   const handleDeleteSession = async (firestoreId: string) => {
-    if (!window.confirm("¿Está seguro de eliminar este registro de turno cerrado del historial?")) return;
-    try {
-      await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'sessions', firestoreId));
-      showMessage("Turno de caja eliminado del historial");
-    } catch (e: any) {
-      showMessage("Error al eliminar turno: " + e.message, "error");
-    }
+    requireAdminAuth("Eliminar Turno Archivado", async () => {
+      if (!window.confirm("¿Está seguro de eliminar este registro de turno cerrado del historial?")) return;
+      try {
+        await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'sessions', firestoreId));
+        showMessage("Turno de caja eliminado del historial");
+      } catch (e: any) {
+        showMessage("Error al eliminar turno: " + e.message, "error");
+      }
+    });
   };
 
   // Cash Adjustment in Open Register
@@ -1467,27 +1520,31 @@ export default function App() {
   };
 
   const handleClearAllMenu = async () => {
-    if (!window.confirm("¿Está seguro de que desea vaciar todo el menú?")) return;
-    if (!db) return;
-    try {
-      await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'config', 'menu'), { data: {} });
-      setMenu({});
-      showMessage("El menú ha sido vaciado por completo");
-    } catch (err: any) {
-      showMessage(`Error al vaciar menú: ${err.message}`, 'error');
-    }
+    requireAdminAuth("Vaciar Menú Completo", async () => {
+      if (!window.confirm("¿Está seguro de que desea vaciar todo el menú?")) return;
+      if (!db) return;
+      try {
+        await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'config', 'menu'), { data: {} });
+        setMenu({});
+        showMessage("El menú ha sido vaciado por completo");
+      } catch (err: any) {
+        showMessage(`Error al vaciar menú: ${err.message}`, 'error');
+      }
+    });
   };
 
   const handleRestoreDefaultMenu = async () => {
-    if (!window.confirm("¿Desea restaurar el menú con los productos clásicos de muestra?")) return;
-    if (!db) return;
-    try {
-      await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'config', 'menu'), { data: DEFAULT_MENU });
-      setMenu(DEFAULT_MENU);
-      showMessage("Menú sugerido restaurado exitosamente");
-    } catch (err: any) {
-      showMessage(`Error al restaurar menú: ${err.message}`, 'error');
-    }
+    requireAdminAuth("Restaurar Menú Sugerido", async () => {
+      if (!window.confirm("¿Desea restaurar el menú con los productos clásicos de muestra?")) return;
+      if (!db) return;
+      try {
+        await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'config', 'menu'), { data: DEFAULT_MENU });
+        setMenu(DEFAULT_MENU);
+        showMessage("Menú sugerido restaurado exitosamente");
+      } catch (err: any) {
+        showMessage(`Error al restaurar menú: ${err.message}`, 'error');
+      }
+    });
   };
 
   const handleBatchImportStock = async (importedItems: Partial<StockItem>[], replaceExisting: boolean) => {
@@ -1516,135 +1573,150 @@ export default function App() {
   };
 
   const handleClearAllStock = async () => {
-    if (!window.confirm("¿Está seguro de que desea eliminar todos los artículos de inventario / stock?")) return;
-    if (!db) return;
-    try {
-      for (const item of stockItems) {
-        if (item.firestoreId) {
-          await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'stockItems', item.firestoreId));
+    requireAdminAuth("Vaciar Inventario / Stock", async () => {
+      if (!window.confirm("¿Está seguro de que desea eliminar todos los artículos de inventario / stock?")) return;
+      if (!db) return;
+      try {
+        for (const item of stockItems) {
+          if (item.firestoreId) {
+            await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'stockItems', item.firestoreId));
+          }
         }
+        setStockItems([]);
+        showMessage("Inventario de stock vaciado por completo");
+      } catch (err: any) {
+        showMessage(`Error al vaciar stock: ${err.message}`, 'error');
       }
-      setStockItems([]);
-      showMessage("Inventario de stock vaciado por completo");
-    } catch (err: any) {
-      showMessage(`Error al vaciar stock: ${err.message}`, 'error');
-    }
+    });
   };
 
   const handleClearAllOrders = async () => {
-    if (!window.confirm("¿Está seguro de que desea vaciar todos los pedidos activos y finalizados (KDS, Comandas, Reportes)?")) return;
-    if (!db) return;
-    try {
-      for (const ord of orders) {
-        if (ord.firestoreId) {
-          await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'orders', ord.firestoreId));
+    requireAdminAuth("Vaciar Todos los Pedidos / Comandas", async () => {
+      if (!window.confirm("¿Está seguro de que desea vaciar todos los pedidos activos y finalizados (KDS, Comandas, Reportes)?")) return;
+      if (!db) return;
+      try {
+        for (const ord of orders) {
+          if (ord.firestoreId) {
+            await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'orders', ord.firestoreId));
+          }
         }
+        setOrders([]);
+        showMessage("Todos los pedidos y reportes de comandas han sido vaciados");
+      } catch (err: any) {
+        showMessage(`Error al vaciar pedidos: ${err.message}`, 'error');
       }
-      setOrders([]);
-      showMessage("Todos los pedidos y reportes de comandas han sido vaciados");
-    } catch (err: any) {
-      showMessage(`Error al vaciar pedidos: ${err.message}`, 'error');
-    }
+    });
   };
 
   const handleClearAllFinishedOrders = async () => {
-    const finished = orders.filter(o => o.status === 'Finalizado');
-    if (finished.length === 0) return showMessage("No hay pedidos finalizados para eliminar", "info");
-    if (!window.confirm(`¿Está seguro de eliminar TODOS los ${finished.length} pedidos finalizados?`)) return;
-    if (!db) return;
-    try {
-      for (const ord of finished) {
-        if (ord.firestoreId) {
-          await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'orders', ord.firestoreId));
+    requireAdminAuth("Vaciar Comandas Finalizadas", async () => {
+      const finished = orders.filter(o => o.status === 'Finalizado');
+      if (finished.length === 0) return showMessage("No hay pedidos finalizados para eliminar", "info");
+      if (!window.confirm(`¿Está seguro de eliminar TODOS los ${finished.length} pedidos finalizados?`)) return;
+      if (!db) return;
+      try {
+        for (const ord of finished) {
+          if (ord.firestoreId) {
+            await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'orders', ord.firestoreId));
+          }
         }
+        setOrders(prev => prev.filter(o => o.status !== 'Finalizado'));
+        setSelectedFinishedOrders([]);
+        showMessage(`Se eliminaron ${finished.length} pedidos finalizados`);
+      } catch (e: any) {
+        showMessage(`Error al eliminar pedidos: ${e.message}`, 'error');
       }
-      setOrders(prev => prev.filter(o => o.status !== 'Finalizado'));
-      setSelectedFinishedOrders([]);
-      showMessage(`Se eliminaron ${finished.length} pedidos finalizados`);
-    } catch (e: any) {
-      showMessage(`Error al eliminar pedidos: ${e.message}`, 'error');
-    }
+    });
   };
 
   const handleDeleteSelectedFinishedOrders = async () => {
-    if (selectedFinishedOrders.length === 0) return showMessage("Seleccione al menos una comanda para eliminar", "info");
-    if (!window.confirm(`¿Está seguro de eliminar las ${selectedFinishedOrders.length} comandas seleccionadas?`)) return;
-    if (!db) return;
-    try {
-      for (const id of selectedFinishedOrders) {
-        await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'orders', id));
+    requireAdminAuth("Eliminar Comandas Seleccionadas", async () => {
+      if (selectedFinishedOrders.length === 0) return showMessage("Seleccione al menos una comanda para eliminar", "info");
+      if (!window.confirm(`¿Está seguro de eliminar las ${selectedFinishedOrders.length} comandas seleccionadas?`)) return;
+      if (!db) return;
+      try {
+        for (const id of selectedFinishedOrders) {
+          await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'orders', id));
+        }
+        setOrders(prev => prev.filter(o => !selectedFinishedOrders.includes(o.firestoreId)));
+        setSelectedFinishedOrders([]);
+        showMessage(`Se eliminaron ${selectedFinishedOrders.length} comandas`);
+      } catch (e: any) {
+        showMessage(`Error al eliminar: ${e.message}`, 'error');
       }
-      setOrders(prev => prev.filter(o => !selectedFinishedOrders.includes(o.firestoreId)));
-      setSelectedFinishedOrders([]);
-      showMessage(`Se eliminaron ${selectedFinishedOrders.length} comandas`);
-    } catch (e: any) {
-      showMessage(`Error al eliminar: ${e.message}`, 'error');
-    }
+    });
   };
 
   const handleClearAllHistory = async () => {
-    if (!window.confirm("¿Está seguro de que desea vaciar todo el historial de turnos de caja cerrados?")) return;
-    if (!db) return;
-    try {
-      for (const sess of sessions) {
-        if (sess.firestoreId) {
-          await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'sessions', sess.firestoreId));
+    requireAdminAuth("Vaciar Historial de Turnos", async () => {
+      if (!window.confirm("¿Está seguro de que desea vaciar todo el historial de turnos de caja cerrados?")) return;
+      if (!db) return;
+      try {
+        for (const sess of sessions) {
+          if (sess.firestoreId) {
+            await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'sessions', sess.firestoreId));
+          }
         }
+        setSessions([]);
+        setSelectedSessionIds([]);
+        showMessage("Historial de turnos vaciado por completo");
+      } catch (err: any) {
+        showMessage(`Error al vaciar historial: ${err.message}`, 'error');
       }
-      setSessions([]);
-      setSelectedSessionIds([]);
-      showMessage("Historial de turnos vaciado por completo");
-    } catch (err: any) {
-      showMessage(`Error al vaciar historial: ${err.message}`, 'error');
-    }
+    });
   };
 
   const handleDeleteSelectedSessions = async () => {
-    if (selectedSessionIds.length === 0) return showMessage("Seleccione al menos un turno para eliminar", "info");
-    if (!window.confirm(`¿Está seguro de eliminar los ${selectedSessionIds.length} turnos seleccionados del historial?`)) return;
-    if (!db) return;
-    try {
-      for (const id of selectedSessionIds) {
-        await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'sessions', id));
+    requireAdminAuth("Eliminar Turnos de Caja Seleccionados", async () => {
+      if (selectedSessionIds.length === 0) return showMessage("Seleccione al menos un turno para eliminar", "info");
+      if (!window.confirm(`¿Está seguro de eliminar los ${selectedSessionIds.length} turnos seleccionados del historial?`)) return;
+      if (!db) return;
+      try {
+        for (const id of selectedSessionIds) {
+          await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'sessions', id));
+        }
+        setSessions(prev => prev.filter(s => !selectedSessionIds.includes(s.firestoreId)));
+        setSelectedSessionIds([]);
+        showMessage(`Se eliminaron ${selectedSessionIds.length} turnos de caja`);
+      } catch (e: any) {
+        showMessage(`Error al eliminar: ${e.message}`, 'error');
       }
-      setSessions(prev => prev.filter(s => !selectedSessionIds.includes(s.firestoreId)));
-      setSelectedSessionIds([]);
-      showMessage(`Se eliminaron ${selectedSessionIds.length} turnos de caja`);
-    } catch (e: any) {
-      showMessage(`Error al eliminar: ${e.message}`, 'error');
-    }
+    });
   };
 
   const handleClearRegister = async () => {
-    if (!window.confirm("¿Desea restablecer el arqueo a caja cerrada en $0?")) return;
-    if (!db) return;
-    try {
-      await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'config', 'register'), {
-        isOpen: false,
-        initialCash: 0,
-        currentCash: 0,
-        sessionId: null,
-        currentStock: {},
-        initialStock: {}
-      });
-      setRegister({
-        isOpen: false,
-        initialCash: 0,
-        currentCash: 0,
-        sessionId: null,
-        isLoaded: true,
-        currentStock: {},
-        initialStock: {}
-      });
-      showMessage("Arqueo restablecido a caja cerrada en $0");
-    } catch (err: any) {
-      showMessage(`Error al restablecer arqueo: ${err.message}`, 'error');
-    }
+    requireAdminAuth("Restablecer Arqueo de Caja", async () => {
+      if (!window.confirm("¿Desea restablecer el arqueo a caja cerrada en $0?")) return;
+      if (!db) return;
+      try {
+        await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'config', 'register'), {
+          isOpen: false,
+          initialCash: 0,
+          currentCash: 0,
+          sessionId: null,
+          currentStock: {},
+          initialStock: {}
+        });
+        setRegister({
+          isOpen: false,
+          initialCash: 0,
+          currentCash: 0,
+          sessionId: null,
+          isLoaded: true,
+          currentStock: {},
+          initialStock: {}
+        });
+        showMessage("Arqueo restablecido a caja cerrada en $0");
+      } catch (err: any) {
+        showMessage(`Error al restablecer arqueo: ${err.message}`, 'error');
+      }
+    });
   };
 
   const handleFullSystemReset = async () => {
-    if (!window.confirm("⚠️ ¿ESTÁ SEGURO DE REINICIAR TODO EL SISTEMA DE CERO?\n\nEsta acción vaciará:\n- KDS y comandas\n- Pedidos finalizados y reportes\n- Menú y productos\n- Artículos de stock\n- Directorio de clientes\n- Historial de turnos\n- Arqueo de caja\n\nTodo quedará en blanco listo para importar desde cero.")) return;
-    if (!db) return;
+    requireAdminAuth("REINICIO TOTAL DEL SISTEMA", async () => {
+      if (!window.confirm("⚠️ ¿ESTÁ SEGURO DE REINICIAR TODO EL SISTEMA DE CERO?\n\nEsta acción vaciará:\n- KDS y comandas\n- Pedidos finalizados y reportes\n- Menú y productos\n- Artículos de stock\n- Directorio de clientes\n- Historial de turnos\n- Arqueo de caja\n\nTodo quedará en blanco listo para importar desde cero.")) return;
+      if (!db) return;
 
     try {
       // 1. Clear orders
@@ -1706,7 +1778,8 @@ export default function App() {
     } catch (err: any) {
       showMessage(`Error en reinicio: ${err.message}`, 'error');
     }
-  };
+  });
+};
 
   const kitchenOrders = orders.filter(o => o.status === 'Preparando' && !o.isArchived);
   const scheduledOrders = kitchenOrders.filter(o => o.isScheduled && o.scheduledTime && o.scheduledTime > Date.now());
@@ -1791,12 +1864,12 @@ export default function App() {
         </div>
       )}
 
-      {/* NEXT CRM Login Screen */}
+      {/* NEXT CRM Login Screen with 3-Tier Security Roles */}
       {!isAuthenticated && (
         <div className="fixed inset-0 z-[10000] bg-[#040108] flex items-center justify-center p-4 min-h-screen">
-          <div className="relative max-w-[420px] w-full bg-[#080212] border-2 border-purple-500/40 rounded-[40px] p-8 sm:p-10 shadow-2xl shadow-purple-950/80 space-y-6 text-slate-100 text-center animate-in zoom-in-95">
+          <div className="relative max-w-[440px] w-full bg-[#080212] border-2 border-purple-500/40 rounded-[40px] p-7 sm:p-9 shadow-2xl shadow-purple-950/80 space-y-5 text-slate-100 text-center animate-in zoom-in-95">
             {/* NEXT CRM Branding - Perfectly Centered */}
-            <div className="flex flex-col items-center justify-center space-y-3">
+            <div className="flex flex-col items-center justify-center space-y-2.5">
               <div className="flex items-center justify-center gap-3.5">
                 <div className="w-14 h-14 rounded-2xl bg-gradient-to-tr from-purple-600 via-indigo-600 to-cyan-400 p-[2px] shadow-lg shadow-purple-600/40 shrink-0">
                   <div className="w-full h-full bg-[#080212] rounded-[14px] flex items-center justify-center">
@@ -1816,22 +1889,97 @@ export default function App() {
                   </div>
                 </div>
               </div>
-              <p className="text-xs font-bold text-slate-400 text-center max-w-[280px] leading-relaxed">
-                Inicia sesión con tu usuario y contraseña de operador para comenzar
+              <p className="text-xs font-bold text-slate-400 text-center max-w-[300px] leading-relaxed">
+                Sistema de Seguridad Escalonado por Capas y Permisos
               </p>
+            </div>
+
+            {/* Quick Role Selectors */}
+            <div className="grid grid-cols-3 gap-2 pt-1">
+              {[
+                { id: 'admin', label: 'Dueño / Admin', icon: 'admin_panel_settings', badge: '👑 Total', color: 'border-purple-500/50 bg-purple-950/40 text-purple-200' },
+                { id: 'cajero', label: 'Cajero', icon: 'point_of_sale', badge: '💵 Caja', color: 'border-cyan-500/40 bg-cyan-950/30 text-cyan-200' },
+                { id: 'mozo', label: 'Mozo', icon: 'table_restaurant', badge: '🍽️ Salón', color: 'border-indigo-500/40 bg-indigo-950/30 text-indigo-200' }
+              ].map(r => {
+                const isSelected = loginUsername.toLowerCase() === r.id;
+                return (
+                  <button
+                    key={r.id}
+                    type="button"
+                    onClick={() => {
+                      setLoginUsername(r.id);
+                      setLoginPassword('');
+                      setLoginError('');
+                    }}
+                    className={`p-2.5 rounded-2xl border flex flex-col items-center justify-center gap-1 transition-all cursor-pointer ${
+                      isSelected 
+                        ? 'border-purple-400 bg-purple-600 text-slate-950 font-black shadow-lg shadow-purple-600/30 scale-[1.02]' 
+                        : `${r.color} hover:bg-white/5`
+                    }`}
+                  >
+                    <Icon name={r.icon} size={18} />
+                    <span className="text-[10px] font-black uppercase tracking-tight">{r.label}</span>
+                  </button>
+                );
+              })}
             </div>
 
             <form onSubmit={(e) => {
               e.preventDefault();
-              if (!loginUsername.trim() || !loginPassword.trim()) {
+              const u = loginUsername.trim().toLowerCase();
+              const p = loginPassword.trim();
+
+              if (!u || !p) {
                 setLoginError('Ingrese usuario y contraseña');
                 return;
               }
+
+              let determinedRole: 'admin' | 'cajero' | 'mozo' = 'cajero';
+              let displayName = 'Cajero';
+
+              if (u === 'admin' || u === 'dueño' || u === 'administrador') {
+                if (p !== 'admin' && p !== 'admin123' && p !== '1234' && p.length < 3) {
+                  setLoginError('Contraseña de Administrador incorrecta');
+                  return;
+                }
+                determinedRole = 'admin';
+                displayName = '👑 Dueño / Administrador';
+              } else if (u === 'mozo' || u === 'salon' || u === 'camarero') {
+                if (p !== 'mozo' && p !== 'mozo123' && p !== '1234' && p.length < 3) {
+                  setLoginError('Contraseña de Mozo incorrecta');
+                  return;
+                }
+                determinedRole = 'mozo';
+                displayName = '🍽️ Mozo / Salón';
+              } else {
+                if (p.length < 3) {
+                  setLoginError('Contraseña incorrecta');
+                  return;
+                }
+                determinedRole = 'cajero';
+                displayName = `💵 Cajero (${loginUsername.trim()})`;
+              }
+
+              const sessionObj = {
+                username: loginUsername.trim(),
+                role: determinedRole,
+                displayName
+              };
+
+              setCurrentUser(sessionObj);
               setIsAuthenticated(true);
               localStorage.setItem('nextcrm_auth', 'true');
-              localStorage.setItem('nextcrm_user', loginUsername);
+              localStorage.setItem('nextcrm_user', sessionObj.username);
+              localStorage.setItem('nextcrm_role', sessionObj.role);
               setLoginError('');
-              showMessage(`¡Bienvenido a NEXT CRM, ${loginUsername}!`);
+
+              if (determinedRole === 'mozo') {
+                setActiveTab('pos');
+              } else if (determinedRole === 'cajero' && ['reports', 'history', 'products', 'support'].includes(activeTab)) {
+                setActiveTab('pos');
+              }
+
+              showMessage(`¡Bienvenido ${displayName}!`);
             }} className="space-y-4 pt-1">
               {loginError && (
                 <div className="p-3 bg-red-950/70 border border-red-500/50 rounded-2xl text-xs font-black text-red-200 text-center uppercase tracking-wider">
@@ -1845,11 +1993,11 @@ export default function App() {
                 </label>
                 <input
                   type="text"
-                  placeholder="ADMIN"
+                  placeholder="ADMIN, CAJERO O MOZO"
                   value={loginUsername}
                   onChange={e => setLoginUsername(e.target.value)}
                   style={{ textAlign: 'center' }}
-                  className="w-full p-4 bg-[#040108] border-2 border-purple-500/30 focus:border-purple-400 rounded-2xl text-base font-black text-center placeholder:text-center text-white outline-none uppercase tracking-widest transition-all focus:shadow-lg focus:shadow-purple-900/30"
+                  className="w-full p-3.5 bg-[#040108] border-2 border-purple-500/30 focus:border-purple-400 rounded-2xl text-sm font-black text-center placeholder:text-center text-white outline-none uppercase tracking-widest transition-all focus:shadow-lg focus:shadow-purple-900/30"
                   required
                 />
               </div>
@@ -1864,7 +2012,7 @@ export default function App() {
                   value={loginPassword}
                   onChange={e => setLoginPassword(e.target.value)}
                   style={{ textAlign: 'center' }}
-                  className="w-full p-4 bg-[#040108] border-2 border-purple-500/30 focus:border-purple-400 rounded-2xl text-base font-black text-center placeholder:text-center text-white outline-none tracking-widest transition-all focus:shadow-lg focus:shadow-purple-900/30"
+                  className="w-full p-3.5 bg-[#040108] border-2 border-purple-500/30 focus:border-purple-400 rounded-2xl text-sm font-black text-center placeholder:text-center text-white outline-none tracking-widest transition-all focus:shadow-lg focus:shadow-purple-900/30"
                   required
                 />
               </div>
@@ -1881,7 +2029,7 @@ export default function App() {
         </div>
       )}
 
-      {/* Header - Deluxe Lila, White & Black Edition (Crisp, Perfectly Aligned) */}
+      {/* Header - Deluxe Lila, White & Black Edition with RBAC Role Indicator */}
       <header className="h-15 bg-[#040108] border-b border-purple-500/20 text-white flex items-center justify-between px-3 shrink-0 shadow-lg z-50 gap-3">
         <div className="flex items-center gap-2 shrink-0 pr-3 border-r border-purple-500/20">
           <div className="w-8 h-8 rounded-xl border border-purple-500/50 bg-[#0d061c] flex items-center justify-center font-black text-sm text-purple-300 shadow-xs">
@@ -1893,25 +2041,25 @@ export default function App() {
           </div>
         </div>
 
-        {/* Navigation Bar - Smooth horizontal scroll, starts left, zero misalignment */}
+        {/* Navigation Bar - Filtered by Security Layer Role */}
         <nav className="flex-1 flex h-full gap-1 overflow-x-auto no-scrollbar items-center py-1 scroll-smooth">
           {[ 
-            {id: 'kitchen', label: 'KDS Cocina', icon: 'tv', count: badges.kitchen}, 
-            {id: 'pos', label: 'Toma Pedido', icon: 'point_of_sale'}, 
-            {id: 'web', label: 'Web', icon: 'public', count: badges.web}, 
-            {id: 'counter', label: 'Mostrador', icon: 'storefront', count: badges.mostrador}, 
-            {id: 'tables', label: 'Mesas', icon: 'table_restaurant', count: badges.mesas}, 
-            {id: 'delivery', label: 'Delivery', icon: 'two_wheeler', count: badges.delivery}, 
-            {id: 'finished', label: 'Finalizados', icon: 'check_circle', count: badges.finished}, 
-            {id: 'clients', label: 'Clientes', icon: 'people'}, 
-            {id: 'products', label: 'Menú', icon: 'menu_book'}, 
-            {id: 'stock', label: 'Stock', icon: 'inventory_2', count: badges.stock}, 
-            {id: 'reports', label: 'Reportes', icon: 'bar_chart'}, 
-            {id: 'history', label: 'Historial', icon: 'history'}, 
-            {id: 'cash', label: 'Arqueo', icon: 'account_balance_wallet'},
-            {id: 'manual', label: 'Manual', icon: 'auto_stories'},
-            {id: 'support', label: 'Soporte', icon: 'support_agent', count: supportTickets.filter(t => t.status !== 'Resuelto').length, highlight: true}
-          ].map(tab => {
+            {id: 'pos', label: 'Toma Pedido', icon: 'point_of_sale', roles: ['admin', 'cajero', 'mozo']}, 
+            {id: 'counter', label: 'Mostrador', icon: 'storefront', count: badges.mostrador, roles: ['admin', 'cajero', 'mozo']}, 
+            {id: 'tables', label: 'Mesas', icon: 'table_restaurant', count: badges.mesas, roles: ['admin', 'cajero', 'mozo']}, 
+            {id: 'kitchen', label: 'KDS Cocina', icon: 'tv', count: badges.kitchen, roles: ['admin', 'cajero', 'mozo']}, 
+            {id: 'delivery', label: 'Delivery', icon: 'two_wheeler', count: badges.delivery, roles: ['admin', 'cajero']}, 
+            {id: 'web', label: 'Web', icon: 'public', count: badges.web, roles: ['admin', 'cajero']}, 
+            {id: 'finished', label: 'Finalizados', icon: 'check_circle', count: badges.finished, roles: ['admin', 'cajero']}, 
+            {id: 'clients', label: 'Clientes', icon: 'people', roles: ['admin', 'cajero']}, 
+            {id: 'stock', label: 'Stock', icon: 'inventory_2', count: badges.stock, roles: ['admin', 'cajero']}, 
+            {id: 'cash', label: 'Arqueo', icon: 'account_balance_wallet', roles: ['admin', 'cajero']},
+            {id: 'products', label: 'Menú', icon: 'menu_book', roles: ['admin']}, 
+            {id: 'reports', label: 'Reportes', icon: 'bar_chart', roles: ['admin']}, 
+            {id: 'history', label: 'Historial', icon: 'history', roles: ['admin']}, 
+            {id: 'manual', label: 'Manual', icon: 'auto_stories', roles: ['admin', 'cajero', 'mozo']},
+            {id: 'support', label: 'Soporte', icon: 'support_agent', count: supportTickets.filter(t => t.status !== 'Resuelto').length, roles: ['admin'], highlight: true}
+          ].filter(tab => tab.roles.includes(currentUser.role)).map(tab => {
             const isActive = activeTab === tab.id;
             const rawCount = tab.count !== undefined ? tab.count : 0;
             const dismissed = dismissedBadges[tab.id] || 0;
@@ -1949,15 +2097,21 @@ export default function App() {
           })}
         </nav>
 
-        {/* Live Status Indicator & Logout */}
+        {/* User Role Badge & Logout */}
         <div className="flex items-center gap-2.5 shrink-0 pl-2 border-l border-purple-500/20">
+          {/* Active User Role Badge */}
+          <div className="hidden sm:flex items-center gap-1.5 px-2.5 py-1 rounded-xl bg-[#0c061a] border border-purple-500/30 text-[10px] font-black uppercase text-purple-200">
+            <span className={`w-2 h-2 rounded-full ${currentUser.role === 'admin' ? 'bg-purple-400' : currentUser.role === 'cajero' ? 'bg-cyan-400' : 'bg-indigo-400'} animate-pulse`}></span>
+            <span>{currentUser.role === 'admin' ? 'Dueño' : currentUser.role === 'cajero' ? 'Cajero' : 'Mozo'}</span>
+          </div>
+
           <div className="flex items-center gap-1.5">
             <div 
               className={`w-2.5 h-2.5 rounded-full transition-colors ${register.isOpen ? 'bg-emerald-400 shadow-sm shadow-emerald-400/50 animate-pulse' : 'bg-amber-500'}`} 
               title={register.isOpen ? 'Caja Abierta' : 'Caja Cerrada'} 
             />
-            <span className="text-[9px] font-black uppercase text-slate-300 hidden lg:inline">
-              {register.isOpen ? 'Turno Abierto' : 'Caja Cerrada'}
+            <span className="text-[10px] font-black uppercase tracking-wider text-slate-300 hidden md:inline">
+              {register.isOpen ? 'Caja Abierta' : 'Caja Cerrada'}
             </span>
           </div>
 
@@ -4207,6 +4361,78 @@ export default function App() {
         isOpen={customerObjectionsModalOpen}
         onClose={() => setCustomerObjectionsModalOpen(false)}
       />
+
+      {/* Supervisor / Admin Authorization Override Modal */}
+      {adminAuthModal.isOpen && (
+        <div className="fixed inset-0 z-[12000] bg-black/85 backdrop-blur-md flex items-center justify-center p-4">
+          <div className="relative max-w-md w-full bg-[#090314] border-2 border-purple-500/50 rounded-[36px] p-8 shadow-2xl shadow-purple-950/90 space-y-5 text-slate-100 text-center animate-in zoom-in-95">
+            <div className="w-16 h-16 rounded-3xl bg-purple-950/80 border-2 border-purple-500/40 text-purple-300 flex items-center justify-center mx-auto shadow-lg shadow-purple-950/50">
+              <Icon name="shield" size={32} />
+            </div>
+
+            <div className="space-y-1.5">
+              <h3 className="text-xl font-black uppercase tracking-tight text-white">
+                Autorización de Supervisor
+              </h3>
+              <p className="text-xs font-bold text-slate-300">
+                La acción (<strong className="text-purple-300">{adminAuthModal.actionName}</strong>) está restringida y requiere la clave del <strong>Administrador / Dueño</strong>.
+              </p>
+            </div>
+
+            {adminAuthError && (
+              <div className="p-3 bg-red-950/80 border border-red-500/50 rounded-2xl text-xs font-black text-red-200 uppercase tracking-wider">
+                {adminAuthError}
+              </div>
+            )}
+
+            <form onSubmit={(e) => {
+              e.preventDefault();
+              if (adminAuthPassword === 'admin' || adminAuthPassword === 'admin123' || adminAuthPassword === '1234') {
+                const cb = adminAuthModal.onSuccess;
+                setAdminAuthModal({ isOpen: false, actionName: '', onSuccess: null });
+                setAdminAuthPassword('');
+                setAdminAuthError('');
+                if (cb) cb();
+                showMessage("Acción autorizada por Administrador", "success");
+              } else {
+                setAdminAuthError("Clave de Administrador incorrecta");
+              }
+            }} className="space-y-4">
+              <div className="space-y-1.5">
+                <label className="text-[11px] font-black uppercase text-purple-300 flex items-center justify-center gap-1.5">
+                  <Icon name="lock" size={14} className="text-purple-400" /> Clave de Administrador
+                </label>
+                <input
+                  type="password"
+                  autoFocus
+                  placeholder="••••••••"
+                  value={adminAuthPassword}
+                  onChange={e => setAdminAuthPassword(e.target.value)}
+                  style={{ textAlign: 'center' }}
+                  className="w-full p-4 bg-[#040108] border-2 border-purple-500/40 focus:border-purple-400 rounded-2xl text-base font-black text-center text-white outline-none tracking-widest"
+                  required
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-3 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setAdminAuthModal({ isOpen: false, actionName: '', onSuccess: null })}
+                  className="py-3.5 bg-[#160829] hover:bg-[#220c40] text-purple-300 border border-purple-500/30 rounded-2xl font-black uppercase text-xs transition-all cursor-pointer"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="submit"
+                  className="py-3.5 bg-purple-600 hover:bg-purple-500 text-slate-950 rounded-2xl font-black uppercase text-xs shadow-lg shadow-purple-600/30 transition-all cursor-pointer"
+                >
+                  Autorizar
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
