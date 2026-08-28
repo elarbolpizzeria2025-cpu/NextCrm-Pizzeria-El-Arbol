@@ -197,7 +197,7 @@ export const StaffPerformanceTab: React.FC<StaffPerformanceTabProps> = ({
                 No hay comandas registradas en mesas aún
               </div>
               <p className="text-xs font-bold text-slate-500 max-w-sm mx-auto">
-                Cuando las mozas tomen pedidos para mesas (1 al 15) quedarán registradas aquí con sus clientes y propinas.
+                Cuando las mozas tomen pedidos para mesas (1 al 20) quedarán registradas aquí con sus clientes y propinas.
               </p>
             </div>
           ) : (

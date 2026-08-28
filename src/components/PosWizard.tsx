@@ -539,19 +539,19 @@ export const PosWizard: React.FC<PosWizardProps> = ({
 
                   {orderType === 'Mesa' ? (
                     <div className="space-y-4">
-                      {/* Interactive 15-Table Selector Grid */}
+                      {/* Interactive 20-Table Selector Grid */}
                       <div className="space-y-1.5">
                         <div className="flex items-center justify-between">
                           <label className="text-[10px] font-black text-blue-400 uppercase tracking-wider flex items-center gap-1">
-                            <Icon name="table_restaurant" size={14} /> Seleccionar Mesa (Máximo 15 Mesas)
+                            <Icon name="table_restaurant" size={14} /> Seleccionar Mesa (Mesas 1 al 20)
                           </label>
                           <span className="text-[10px] font-black uppercase text-purple-300">
                             {clientInfo.tableNumber ? `Mesa #${clientInfo.tableNumber} Seleccionada` : 'Selecciona una mesa'}
                           </span>
                         </div>
 
-                        <div className="grid grid-cols-5 sm:grid-cols-8 md:grid-cols-5 lg:grid-cols-5 xl:grid-cols-5 gap-2 pt-1">
-                          {Array.from({ length: 15 }, (_, i) => i + 1).map(num => {
+                        <div className="grid grid-cols-5 sm:grid-cols-10 md:grid-cols-5 lg:grid-cols-10 xl:grid-cols-10 gap-2 pt-1">
+                          {Array.from({ length: 20 }, (_, i) => i + 1).map(num => {
                             const isSelected = clientInfo.tableNumber === num || clientInfo.tableNumber === String(num);
                             return (
                               <button
