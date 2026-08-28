@@ -255,7 +255,27 @@ export default function App() {
   const [selectedFinishedOrders, setSelectedFinishedOrders] = useState<string[]>([]);
   const [selectedSessionIds, setSelectedSessionIds] = useState<string[]>([]);
   const [menuActiveCategory, setMenuActiveCategory] = useState<string>('TODAS');
-  const [dismissedBadges, setDismissedBadges] = useState<Record<string, number>>({});
+  const [dismissedBadges, setDismissedBadges] = useState<Record<string, number>>(() => {
+    if (typeof window !== 'undefined') {
+      try {
+        const saved = localStorage.getItem('elarbol_dismissed_badges');
+        return saved ? JSON.parse(saved) : {};
+      } catch {
+        return {};
+      }
+    }
+    return {};
+  });
+
+  const markTabBadgeDismissed = (tabId: string, count: number) => {
+    setDismissedBadges(prev => {
+      const updated = { ...prev, [tabId]: count };
+      try {
+        localStorage.setItem('elarbol_dismissed_badges', JSON.stringify(updated));
+      } catch {}
+      return updated;
+    });
+  };
 
   // NEXT CRM Security Layers (4-Tier Role-Based Access Control)
   const [currentUser, setCurrentUser] = useState<{
@@ -719,6 +739,16 @@ export default function App() {
     finished: reportData.finishedTotal, 
     stock: lowStockAlerts.length 
   }), [reportData, lowStockAlerts.length]);
+
+  // Auto-dismiss active tab badge and persist in localStorage
+  useEffect(() => {
+    if (activeTab) {
+      const currentRaw = (badges as any)[activeTab] || (activeTab === 'finished' ? reportData.finishedTotal : activeTab === 'stock' ? lowStockAlerts.length : 0);
+      if (currentRaw > 0) {
+        markTabBadgeDismissed(activeTab, currentRaw);
+      }
+    }
+  }, [activeTab, badges, reportData.finishedTotal, lowStockAlerts.length]);
 
   const addToCart = (item: MenuItem, selectedToppings: any[], initialQty = 1) => {
     const toppingsCost = calculateToppingsCost(item, selectedToppings);
@@ -2332,10 +2362,7 @@ export default function App() {
                   key={tab.id} 
                   onClick={() => {
                     setActiveTab(tab.id);
-                    setDismissedBadges(prev => ({
-                      ...prev,
-                      [tab.id]: tab.count || 0
-                    }));
+                    markTabBadgeDismissed(tab.id, rawCount);
                   }} 
                   className={`relative px-2.5 py-1.5 h-10 rounded-xl flex items-center gap-1.5 font-black text-[10px] uppercase transition-all shrink-0 min-w-fit cursor-pointer ${
                     isActive 
