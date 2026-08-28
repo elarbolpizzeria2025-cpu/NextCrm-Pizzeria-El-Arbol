@@ -375,20 +375,38 @@ export const PosWizard: React.FC<PosWizardProps> = ({
                   >
                     TODOS
                   </button>
-                  {Object.keys(menu).filter(cat => cat.toLowerCase() !== 'gustos').map(cat => (
-                    <button
-                      key={cat}
-                      type="button"
-                      onClick={() => setActiveCategory(cat)}
-                      className={`px-3.5 py-1.5 rounded-xl text-[11px] font-black uppercase transition-all shrink-0 ${
-                        activeCategory === cat
-                          ? 'bg-purple-600 text-white font-black shadow-md shadow-purple-600/25'
-                          : 'bg-[#120926] text-slate-300 hover:bg-[#1f103d] border border-purple-500/20'
-                      }`}
-                    >
-                      {cat}
-                    </button>
-                  ))}
+                  {(() => {
+                    const allCategories = Object.keys(menu).filter(cat => cat.toLowerCase() !== 'gustos');
+                    // Ensure promos is right at the front
+                    const sortedCategories = [
+                      ...allCategories.filter(c => c.toLowerCase() === 'promos' || c.toLowerCase() === 'promociones'),
+                      ...allCategories.filter(c => c.toLowerCase() !== 'promos' && c.toLowerCase() !== 'promociones')
+                    ];
+                    return sortedCategories.map(cat => {
+                      const count = (menu[cat] || []).length;
+                      const isPromo = cat.toLowerCase() === 'promos' || cat.toLowerCase() === 'promociones';
+                      return (
+                        <button
+                          key={cat}
+                          type="button"
+                          onClick={() => setActiveCategory(cat)}
+                          className={`px-3.5 py-1.5 rounded-xl text-[11px] font-black uppercase transition-all shrink-0 flex items-center gap-1.5 cursor-pointer ${
+                            activeCategory === cat
+                              ? isPromo ? 'bg-amber-500 text-slate-950 font-black shadow-md shadow-amber-500/30' : 'bg-purple-600 text-white font-black shadow-md shadow-purple-600/25'
+                              : isPromo ? 'bg-[#201505] text-amber-300 hover:bg-[#352208] border border-amber-500/40' : 'bg-[#120926] text-slate-300 hover:bg-[#1f103d] border border-purple-500/20'
+                          }`}
+                        >
+                          {isPromo && <span>⭐</span>}
+                          <span>{cat}</span>
+                          <span className={`text-[9px] px-1.5 py-0.2 rounded-full font-black ${
+                            activeCategory === cat ? 'bg-black/30 text-white' : 'bg-purple-950 text-purple-300'
+                          }`}>
+                            {count}
+                          </span>
+                        </button>
+                      );
+                    });
+                  })()}
                 </div>
 
                 {/* Compact Product Search */}

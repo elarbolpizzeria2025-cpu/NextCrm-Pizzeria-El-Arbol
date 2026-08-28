@@ -516,9 +516,12 @@ export default function App() {
             return true;
           });
         });
+        if (!cleaned.promos || cleaned.promos.length === 0) {
+          cleaned.promos = DEFAULT_MENU.promos || [];
+        }
         setMenu(cleaned);
       } else {
-        setMenu({});
+        setMenu(DEFAULT_MENU);
       }
     }, console.error);
 
