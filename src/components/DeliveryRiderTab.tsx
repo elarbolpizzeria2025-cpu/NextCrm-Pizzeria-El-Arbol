@@ -17,7 +17,7 @@ export interface DeliveryOrder {
   paymentMethod: string;
   total: number;
   tip?: number;
-  status: 'Pendiente' | 'Preparando' | 'En Camino' | 'Finalizado' | 'Cancelado';
+  status: 'Pendiente' | 'Preparando' | 'Listo' | 'En Camino' | 'Finalizado' | 'Cancelado';
   createdAt: number;
   client?: {
     name?: string;
@@ -27,8 +27,16 @@ export interface DeliveryOrder {
   };
   notes?: string;
   assignedDriver?: string;
+  assignedDriverId?: string;
   deliveredAt?: number;
+  onWayAt?: number;
 }
+
+export const DELIVERY_DRIVERS = [
+  { id: 'delivery1', name: 'Fefo', number: 1, color: 'border-purple-500 bg-purple-950/40 text-purple-200 hover:bg-purple-900/60' },
+  { id: 'delivery2', name: 'Caetano', number: 2, color: 'border-cyan-500 bg-cyan-950/40 text-cyan-200 hover:bg-cyan-900/60' },
+  { id: 'delivery3', name: 'Samuel', number: 3, color: 'border-amber-500 bg-amber-950/40 text-amber-200 hover:bg-amber-900/60' },
+];
 
 interface DeliveryRiderTabProps {
   orders: DeliveryOrder[];
@@ -50,8 +58,26 @@ export const DeliveryRiderTab: React.FC<DeliveryRiderTabProps> = ({
   showMessage
 }) => {
   const [filterState, setFilterState] = useState<'all' | 'ready' | 'on_way' | 'delivered'>('ready');
+  const [driverFilter, setDriverFilter] = useState<string>(() => {
+    // If the logged in user is one of the 3 delivery drivers, filter by their name by default
+    const u = (currentUser.username || '').toLowerCase();
+    if (u.includes('fefo') || u === 'delivery1') return 'Fefo';
+    if (u.includes('caetano') || u === 'delivery2') return 'Caetano';
+    if (u.includes('samuel') || u === 'delivery3') return 'Samuel';
+    return 'ALL';
+  });
+
   const [searchQuery, setSearchQuery] = useState('');
   const [expandedOrderId, setExpandedOrderId] = useState<string | null>(null);
+
+  // Modal to assign driver (Fefo, Caetano, Samuel)
+  const [assignModal, setAssignModal] = useState<{
+    isOpen: boolean;
+    order: DeliveryOrder | null;
+  }>({
+    isOpen: false,
+    order: null
+  });
 
   // Filter only delivery / envio orders
   const deliveryOrders = useMemo(() => {
@@ -64,9 +90,18 @@ export const DeliveryRiderTab: React.FC<DeliveryRiderTabProps> = ({
   const filteredOrders = useMemo(() => {
     return deliveryOrders.filter(o => {
       // Status filter
-      if (filterState === 'ready' && (o.status !== 'Pendiente' && o.status !== 'Preparando')) return false;
+      if (filterState === 'ready' && (o.status !== 'Pendiente' && o.status !== 'Preparando' && o.status !== 'Listo')) return false;
       if (filterState === 'on_way' && o.status !== 'En Camino') return false;
       if (filterState === 'delivered' && o.status !== 'Finalizado') return false;
+
+      // Driver filter
+      if (driverFilter !== 'ALL') {
+        if (driverFilter === 'UNASSIGNED') {
+          if (o.assignedDriver) return false;
+        } else {
+          if ((o.assignedDriver || '').toLowerCase() !== driverFilter.toLowerCase()) return false;
+        }
+      }
 
       // Search filter (address, name, phone, id)
       if (searchQuery.trim()) {
@@ -75,34 +110,40 @@ export const DeliveryRiderTab: React.FC<DeliveryRiderTabProps> = ({
         const matchesAddress = (o.client?.address || '').toLowerCase().includes(q);
         const matchesPhone = (o.client?.phone || '').includes(q);
         const matchesId = (o.id || '').toLowerCase().includes(q);
-        if (!matchesName && !matchesAddress && !matchesPhone && !matchesId) return false;
+        const matchesDriver = (o.assignedDriver || '').toLowerCase().includes(q);
+        if (!matchesName && !matchesAddress && !matchesPhone && !matchesId && !matchesDriver) return false;
       }
 
       return true;
     });
-  }, [deliveryOrders, filterState, searchQuery]);
+  }, [deliveryOrders, filterState, driverFilter, searchQuery]);
 
   const counts = useMemo(() => {
     return {
       all: deliveryOrders.length,
-      ready: deliveryOrders.filter(o => o.status === 'Pendiente' || o.status === 'Preparando').length,
+      ready: deliveryOrders.filter(o => o.status === 'Pendiente' || o.status === 'Preparando' || o.status === 'Listo').length,
       on_way: deliveryOrders.filter(o => o.status === 'En Camino').length,
       delivered: deliveryOrders.filter(o => o.status === 'Finalizado').length,
+      fefo: deliveryOrders.filter(o => (o.assignedDriver || '').toLowerCase() === 'fefo' && o.status !== 'Finalizado').length,
+      caetano: deliveryOrders.filter(o => (o.assignedDriver || '').toLowerCase() === 'caetano' && o.status !== 'Finalizado').length,
+      samuel: deliveryOrders.filter(o => (o.assignedDriver || '').toLowerCase() === 'samuel' && o.status !== 'Finalizado').length,
     };
   }, [deliveryOrders]);
 
-  // Status transitions
-  const handleStartDelivery = async (order: DeliveryOrder) => {
+  // Status transitions & driver assignment
+  const handleAssignDriverAndSend = async (order: DeliveryOrder, driverName: string, driverId: string) => {
     if (!db) return;
     try {
       await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'orders', order.firestoreId), {
         status: 'En Camino',
-        assignedDriver: currentUser.displayName || currentUser.username,
+        assignedDriver: driverName,
+        assignedDriverId: driverId,
         onWayAt: Date.now()
       });
-      showMessage(`🏍️ Pedido #${order.id} marcado "En Camino"`);
+      setAssignModal({ isOpen: false, order: null });
+      showMessage(`🏍️ Pedido #${order.id} asignado a ${driverName} y puesto "En Camino"`, 'success');
     } catch (e: any) {
-      showMessage(`Error al actualizar estado: ${e.message}`, 'error');
+      showMessage(`Error al asignar repartidor: ${e.message}`, 'error');
     }
   };
 
@@ -114,7 +155,7 @@ export const DeliveryRiderTab: React.FC<DeliveryRiderTabProps> = ({
         status: 'Finalizado',
         deliveredAt: Date.now()
       });
-      showMessage(`✅ ¡Pedido #${order.id} entregado con éxito!`);
+      showMessage(`✅ ¡Pedido #${order.id} entregado con éxito!`, 'success');
     } catch (e: any) {
       showMessage(`Error al finalizar pedido: ${e.message}`, 'error');
     }
@@ -126,7 +167,7 @@ export const DeliveryRiderTab: React.FC<DeliveryRiderTabProps> = ({
       showMessage('El cliente no tiene teléfono registrado', 'info');
       return;
     }
-    const driverName = currentUser.displayName.replace(/[^a-zA-Z0-9 áéíóúÁÉÍÓÚ]/g, '').trim() || 'el repartidor';
+    const driverName = order.assignedDriver || currentUser.displayName.replace(/[^a-zA-Z0-9 áéíóúÁÉÍÓÚ]/g, '').trim() || 'el repartidor';
     const msg = `¡Hola ${order.client?.name || ''}! 👋 Tu pedido *#${order.id}* de *Pizzería El Árbol* ya va en camino con ${driverName} 🛵💨.\n\n📍 Destino: ${order.client?.address || ''}\n💰 Total a abonar: $${order.total} (${order.paymentMethod || 'Efectivo'})\n\n¡Muchas gracias por tu compra!`;
     const cleanNumber = rawPhone.startsWith('598') ? rawPhone : `598${rawPhone.replace(/^0/, '')}`;
     window.open(`https://wa.me/${cleanNumber}?text=${encodeURIComponent(msg)}`, '_blank');
@@ -163,7 +204,7 @@ export const DeliveryRiderTab: React.FC<DeliveryRiderTabProps> = ({
             <Icon name="search" size={18} className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" />
             <input
               type="text"
-              placeholder="Buscar dirección, cliente, #"
+              placeholder="Buscar dirección, cliente, repartidor, #"
               value={searchQuery}
               onChange={e => setSearchQuery(e.target.value)}
               className="w-full pl-11 pr-4 py-3 bg-[#040108] border border-purple-500/30 rounded-2xl text-xs font-bold text-white outline-none focus:border-purple-400 placeholder:text-slate-500"
@@ -172,13 +213,66 @@ export const DeliveryRiderTab: React.FC<DeliveryRiderTabProps> = ({
         </div>
       </div>
 
-      {/* Filter Tabs Pills */}
+      {/* Driver Filter Badges: FEFO, CAETANO, SAMUEL */}
+      <div className="bg-[#090314] border border-purple-500/20 rounded-3xl p-4 flex flex-wrap items-center justify-between gap-3">
+        <div className="flex items-center gap-2 text-xs font-black uppercase text-slate-300">
+          <Icon name="two_wheeler" size={16} className="text-purple-400" />
+          <span>Filtrar por Repartidor:</span>
+        </div>
+
+        <div className="flex flex-wrap gap-2">
+          <button
+            onClick={() => setDriverFilter('ALL')}
+            className={`px-3.5 py-1.5 rounded-xl font-black text-xs uppercase transition-all cursor-pointer border ${
+              driverFilter === 'ALL'
+                ? 'bg-purple-600 text-slate-950 border-purple-400 shadow-md'
+                : 'bg-[#040108] text-slate-400 border-purple-500/20 hover:text-white'
+            }`}
+          >
+            Todos los Repartidores
+          </button>
+
+          {DELIVERY_DRIVERS.map(driver => {
+            const isSelected = driverFilter.toLowerCase() === driver.name.toLowerCase();
+            const count = counts[driver.name.toLowerCase() as keyof typeof counts] || 0;
+            return (
+              <button
+                key={driver.id}
+                onClick={() => setDriverFilter(driver.name)}
+                className={`px-3.5 py-1.5 rounded-xl font-black text-xs uppercase flex items-center gap-2 transition-all cursor-pointer border ${
+                  isSelected
+                    ? 'bg-purple-600 text-slate-950 border-purple-400 shadow-md'
+                    : 'bg-[#040108] text-slate-300 border-purple-500/20 hover:border-purple-400 hover:text-white'
+                }`}
+              >
+                <span>🏍️ #{driver.number} {driver.name}</span>
+                <span className={`px-1.5 py-0.2 rounded-md text-[10px] font-black ${isSelected ? 'bg-slate-950/30 text-white' : 'bg-purple-950 text-purple-300 border border-purple-500/30'}`}>
+                  {count}
+                </span>
+              </button>
+            );
+          })}
+
+          <button
+            onClick={() => setDriverFilter('UNASSIGNED')}
+            className={`px-3.5 py-1.5 rounded-xl font-black text-xs uppercase transition-all cursor-pointer border ${
+              driverFilter === 'UNASSIGNED'
+                ? 'bg-amber-500 text-slate-950 border-amber-400 shadow-md'
+                : 'bg-[#040108] text-amber-300/80 border-amber-500/20 hover:text-amber-200'
+            }`}
+          >
+            ⚠️ Sin Asignar
+          </button>
+        </div>
+      </div>
+
+      {/* Filter Tabs Pills (Status) */}
       <div className="flex flex-wrap gap-2.5">
         {[
-          { id: 'ready', label: 'Listos para Salir', count: counts.ready, icon: 'inventory_2' },
-          { id: 'on_way', label: 'En Camino / En Ruta', count: counts.on_way, icon: 'two_wheeler' },
-          { id: 'delivered', label: 'Entregados Hoy', count: counts.delivered, icon: 'check_circle' },
-          { id: 'all', label: 'Todos los Envíos', count: counts.all, icon: 'list_alt' },
+          { id: 'ready', label: 'Listos / En Cocina', count: counts.ready, icon: 'inventory_2', color: 'text-amber-300' },
+          { id: 'on_way', label: 'En Camino / En Ruta', count: counts.on_way, icon: 'two_wheeler', color: 'text-cyan-300' },
+          { id: 'delivered', label: 'Entregados Hoy', count: counts.delivered, icon: 'check_circle', color: 'text-emerald-300' },
+          { id: 'all', label: 'Todos los Envíos', count: counts.all, icon: 'list_alt', color: 'text-purple-300' },
         ].map(tab => {
           const isActive = filterState === tab.id;
           return (
@@ -227,13 +321,15 @@ export const DeliveryRiderTab: React.FC<DeliveryRiderTabProps> = ({
                     ? 'border-cyan-500/60 bg-[#070b1a] shadow-cyan-950/30'
                     : order.status === 'Finalizado'
                     ? 'border-emerald-500/30 opacity-80'
+                    : order.status === 'Listo'
+                    ? 'border-emerald-500/60 bg-[#081512] shadow-emerald-950/30 ring-1 ring-emerald-500/40'
                     : 'border-purple-500/30 hover:border-purple-500/60'
                 }`}
               >
                 <div className="space-y-4">
-                  {/* Top Bar: Order ID, Status, Timer */}
+                  {/* Top Bar: Order ID, Status, Assigned Driver Badge */}
                   <div className="flex items-start justify-between gap-3 border-b border-purple-500/10 pb-3">
-                    <div className="flex items-center gap-2.5">
+                    <div className="flex flex-wrap items-center gap-2">
                       <span className="font-black text-sm bg-purple-600 text-slate-950 px-3 py-1 rounded-xl shadow-xs font-mono">
                         #{order.id}
                       </span>
@@ -242,10 +338,24 @@ export const DeliveryRiderTab: React.FC<DeliveryRiderTabProps> = ({
                           ? 'bg-cyan-950/80 text-cyan-300 border-cyan-500/50 animate-pulse'
                           : order.status === 'Finalizado'
                           ? 'bg-emerald-950/80 text-emerald-300 border-emerald-500/50'
+                          : order.status === 'Listo'
+                          ? 'bg-emerald-950/80 text-emerald-300 border-emerald-500/50 animate-pulse font-black'
                           : 'bg-amber-950/80 text-amber-300 border-amber-500/50'
                       }`}>
-                        {order.status === 'En Camino' ? '🏍️ En Camino' : order.status === 'Finalizado' ? '✅ Entregado' : '⏳ Listo / En Preparación'}
+                        {order.status === 'En Camino' 
+                          ? '🏍️ En Camino' 
+                          : order.status === 'Finalizado' 
+                          ? '✅ Entregado' 
+                          : order.status === 'Listo'
+                          ? '🔥 Listo en Cocina (Pronto para Enviar)'
+                          : '⏳ En Preparación'}
                       </span>
+
+                      {order.assignedDriver && (
+                        <span className="text-[10px] font-black uppercase px-2.5 py-1 rounded-xl bg-purple-950 text-purple-200 border border-purple-500/40 flex items-center gap-1">
+                          <Icon name="two_wheeler" size={13} /> {order.assignedDriver}
+                        </span>
+                      )}
                     </div>
 
                     <div className="text-right">
@@ -292,7 +402,7 @@ export const DeliveryRiderTab: React.FC<DeliveryRiderTabProps> = ({
                     )}
                   </div>
 
-                  {/* Interactive Map & Address Section */}
+                  {/* Interactive Map & Address Section with Turn-by-Turn GPS */}
                   <GoogleDeliveryMap
                     address={order.client?.address || ''}
                     zone={order.client?.zone || ''}
@@ -307,7 +417,7 @@ export const DeliveryRiderTab: React.FC<DeliveryRiderTabProps> = ({
                     showMessage={showMessage}
                   />
 
-                  {/* Order Items Accordion / Summary */}
+                  {/* Order Items Summary */}
                   <div className="bg-[#040108] p-3.5 rounded-2xl border border-purple-500/20 space-y-2">
                     <button
                       type="button"
@@ -368,11 +478,11 @@ export const DeliveryRiderTab: React.FC<DeliveryRiderTabProps> = ({
                   {order.status !== 'En Camino' && order.status !== 'Finalizado' && (
                     <button
                       type="button"
-                      onClick={() => handleStartDelivery(order)}
-                      className="w-full py-3.5 bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-500 hover:to-blue-500 text-white rounded-2xl font-black uppercase text-xs shadow-lg shadow-cyan-600/30 transition-all flex items-center justify-center gap-2 cursor-pointer col-span-1 sm:col-span-2"
+                      onClick={() => setAssignModal({ isOpen: true, order })}
+                      className="w-full py-3.5 bg-gradient-to-r from-purple-600 via-indigo-600 to-cyan-600 hover:from-purple-500 hover:to-cyan-500 text-white rounded-2xl font-black uppercase text-xs shadow-lg shadow-purple-600/30 transition-all flex items-center justify-center gap-2 cursor-pointer col-span-1 sm:col-span-2"
                     >
                       <Icon name="two_wheeler" size={18} />
-                      <span>Iniciar Entrega (En Camino)</span>
+                      <span>{order.assignedDriver ? `Reasignar Repartidor (${order.assignedDriver})` : '🛵 Elegir Repartidor y Enviar'}</span>
                     </button>
                   )}
 
@@ -407,6 +517,57 @@ export const DeliveryRiderTab: React.FC<DeliveryRiderTabProps> = ({
               </div>
             );
           })}
+        </div>
+      )}
+
+      {/* Modal: Asignar a Fefo, Caetano o Samuel */}
+      {assignModal.isOpen && assignModal.order && (
+        <div className="fixed inset-0 z-[10000] bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-[#090314] border-2 border-purple-500/50 rounded-[36px] max-w-md w-full p-6 sm:p-8 space-y-6 shadow-2xl animate-in zoom-in-95 text-center">
+            <div className="space-y-2">
+              <div className="w-14 h-14 rounded-2xl bg-purple-600/20 text-purple-300 flex items-center justify-center mx-auto border border-purple-500/40">
+                <Icon name="two_wheeler" size={32} />
+              </div>
+              <h3 className="text-xl font-black uppercase text-white">
+                ¿A qué Delivery se lo vas a enviar?
+              </h3>
+              <p className="text-xs font-bold text-slate-400">
+                Pedido <strong className="text-purple-300">#{assignModal.order.id}</strong> • Destino: <strong className="text-white">{assignModal.order.client?.address || 'Sin dirección'}</strong>
+              </p>
+            </div>
+
+            <div className="space-y-3">
+              {DELIVERY_DRIVERS.map(driver => (
+                <button
+                  key={driver.id}
+                  type="button"
+                  onClick={() => handleAssignDriverAndSend(assignModal.order!, driver.name, driver.id)}
+                  className={`w-full p-4 rounded-2xl border-2 flex items-center justify-between font-black text-sm uppercase transition-all cursor-pointer shadow-lg ${driver.color}`}
+                >
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-xl bg-black/40 flex items-center justify-center text-lg font-black font-mono">
+                      #{driver.number}
+                    </div>
+                    <div className="text-left">
+                      <div className="text-sm font-black text-white">{driver.name}</div>
+                      <div className="text-[10px] font-bold text-slate-400">Usuario: {driver.id}</div>
+                    </div>
+                  </div>
+                  <span className="text-xs px-3 py-1 bg-white/10 rounded-xl font-black">
+                    ASIGNAR 🛵
+                  </span>
+                </button>
+              ))}
+            </div>
+
+            <button
+              type="button"
+              onClick={() => setAssignModal({ isOpen: false, order: null })}
+              className="w-full py-3 bg-[#120726] hover:bg-[#1a0c36] text-slate-400 hover:text-white rounded-2xl font-black text-xs uppercase transition-all cursor-pointer border border-purple-500/20"
+            >
+              Cancelar
+            </button>
+          </div>
         </div>
       )}
     </div>

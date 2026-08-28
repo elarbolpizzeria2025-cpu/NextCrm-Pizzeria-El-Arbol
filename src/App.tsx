@@ -41,7 +41,27 @@ export type UserRole = 'admin' | 'cajero' | 'mozo' | 'delivery';
 export const detectRoleFromIdentity = (input: string): { role: UserRole; displayName: string } => {
   const normalized = input.trim().toLowerCase();
 
-  // 1. Delivery Driver / Repartidor (delivery1, delivery2, repartidor1, moto1, cadete1, etc.)
+  // 1. Delivery Drivers by Name (Fefo = 1, Caetano = 2, Samuel = 3)
+  if (normalized.includes('fefo') || normalized === 'delivery1' || normalized.includes('delivery 1') || normalized.includes('repartidor1')) {
+    return {
+      role: 'delivery',
+      displayName: '🏍️ Delivery 1 • Fefo'
+    };
+  }
+  if (normalized.includes('caetano') || normalized === 'delivery2' || normalized.includes('delivery 2') || normalized.includes('repartidor2')) {
+    return {
+      role: 'delivery',
+      displayName: '🏍️ Delivery 2 • Caetano'
+    };
+  }
+  if (normalized.includes('samuel') || normalized === 'delivery3' || normalized.includes('delivery 3') || normalized.includes('repartidor3')) {
+    return {
+      role: 'delivery',
+      displayName: '🏍️ Delivery 3 • Samuel'
+    };
+  }
+
+  // Generic Delivery Driver / Repartidor (delivery, moto, cadete, etc.)
   if (
     normalized.includes('delivery') || 
     normalized.includes('repartidor') || 
@@ -2284,7 +2304,7 @@ export default function App() {
         {(['counter', 'tables', 'web'].includes(activeTab)) && (
           <div className="p-8 h-full overflow-y-auto no-scrollbar bg-[#040108]">
              <div className="max-w-[1600px] mx-auto grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6 content-start">
-               {orders.filter(o => !o.isArchived && o.status === 'Pendiente').filter(o => { 
+               {orders.filter(o => !o.isArchived && o.status !== 'Finalizado' && o.status !== 'Cancelado').filter(o => { 
                    const safeType = String(o.type || '').trim().toLowerCase();
                    if (activeTab === 'counter') return ['local', 'mostrador'].includes(safeType); 
                    if (activeTab === 'tables') return safeType === 'mesa'; 
