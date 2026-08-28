@@ -1848,7 +1848,8 @@ export default function App() {
                   placeholder="ADMIN"
                   value={loginUsername}
                   onChange={e => setLoginUsername(e.target.value)}
-                  className="w-full p-4 bg-[#040108] border-2 border-purple-500/30 focus:border-purple-400 rounded-2xl text-sm font-black text-center text-white outline-none uppercase tracking-widest transition-all focus:shadow-lg focus:shadow-purple-900/30"
+                  style={{ textAlign: 'center' }}
+                  className="w-full p-4 bg-[#040108] border-2 border-purple-500/30 focus:border-purple-400 rounded-2xl text-base font-black text-center placeholder:text-center text-white outline-none uppercase tracking-widest transition-all focus:shadow-lg focus:shadow-purple-900/30"
                   required
                 />
               </div>
@@ -1862,7 +1863,8 @@ export default function App() {
                   placeholder="••••••••"
                   value={loginPassword}
                   onChange={e => setLoginPassword(e.target.value)}
-                  className="w-full p-4 bg-[#040108] border-2 border-purple-500/30 focus:border-purple-400 rounded-2xl text-sm font-black text-center text-white outline-none tracking-widest transition-all focus:shadow-lg focus:shadow-purple-900/30"
+                  style={{ textAlign: 'center' }}
+                  className="w-full p-4 bg-[#040108] border-2 border-purple-500/30 focus:border-purple-400 rounded-2xl text-base font-black text-center placeholder:text-center text-white outline-none tracking-widest transition-all focus:shadow-lg focus:shadow-purple-900/30"
                   required
                 />
               </div>
