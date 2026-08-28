@@ -504,21 +504,23 @@ export const PosWizard: React.FC<PosWizardProps> = ({
 
           {/* STEP 2: DESTINATION & CLIENT */}
           {posStep === 2 && (
-            <div className="flex-1 p-4 sm:p-6 overflow-y-auto custom-dark-scrollbar bg-[#050508] space-y-4">
-              <div className="max-w-3xl mx-auto space-y-4">
-                <div>
-                  <h2 className="text-xl sm:text-2xl font-black uppercase tracking-tight text-white flex items-center gap-2">
-                    <Icon name="local_shipping" size={24} className="text-blue-400" /> Paso 2: Destino & Datos del Cliente
-                  </h2>
-                  <p className="text-[11px] font-bold text-slate-400 uppercase">
-                    Selecciona retiro en local, mesa o delivery a domicilio con mapa GPS
-                  </p>
+            <div className="flex-1 p-3 sm:p-4 overflow-y-auto custom-dark-scrollbar bg-[#050508] space-y-2.5">
+              <div className="max-w-3xl mx-auto space-y-2.5">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <h2 className="text-base sm:text-lg font-black uppercase tracking-tight text-white flex items-center gap-1.5">
+                      <Icon name="local_shipping" size={18} className="text-blue-400" /> Paso 2: Destino & Datos del Cliente
+                    </h2>
+                    <p className="text-[9.5px] font-bold text-slate-400 uppercase">
+                      Selecciona retiro en local, mesa o delivery a domicilio con mapa GPS
+                    </p>
+                  </div>
                 </div>
 
-                {/* Destination Selector Cards */}
-                <div className="space-y-1.5">
-                  <label className="text-[10px] font-black uppercase text-blue-400 tracking-wider">Tipo de Servicio / Destino</label>
-                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
+                {/* Destination Selector Cards - Sleek Compact Horizontal Pills */}
+                <div className="space-y-1">
+                  <label className="text-[9.5px] font-black uppercase text-blue-400 tracking-wider">Tipo de Servicio / Destino</label>
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-1.5">
                     {[
                       { id: 'Local', label: 'Mostrador', desc: 'Retiro en local', icon: 'storefront' },
                       { id: 'Envío', label: 'Delivery', desc: 'Envío a domicilio', icon: 'two_wheeler' },
@@ -531,16 +533,16 @@ export const PosWizard: React.FC<PosWizardProps> = ({
                           key={dest.id}
                           type="button"
                           onClick={() => setOrderType(dest.id)}
-                          className={`p-3 rounded-2xl border text-left transition-all flex flex-col justify-between h-24 ${
+                          className={`p-2 rounded-xl border text-left transition-all flex items-center gap-2 h-11 sm:h-12 cursor-pointer ${
                             isSel
                               ? 'bg-blue-600/25 border-blue-500 text-white shadow-md'
                               : 'bg-[#0a0718] border-purple-500/20 text-slate-300 hover:border-blue-500/40'
                           }`}
                         >
-                          <Icon name={dest.icon} size={22} className={isSel ? 'text-blue-400' : 'text-slate-400'} />
-                          <div>
-                            <div className="font-black text-xs uppercase">{dest.label}</div>
-                            <div className="text-[9px] text-slate-400 font-bold uppercase">{dest.desc}</div>
+                          <Icon name={dest.icon} size={17} className={isSel ? 'text-blue-400 shrink-0' : 'text-slate-400 shrink-0'} />
+                          <div className="min-w-0">
+                            <div className="font-black text-xs uppercase leading-tight truncate">{dest.label}</div>
+                            <div className="text-[8.5px] text-slate-400 font-bold uppercase truncate hidden sm:block">{dest.desc}</div>
                           </div>
                         </button>
                       );
@@ -549,36 +551,36 @@ export const PosWizard: React.FC<PosWizardProps> = ({
                 </div>
 
                 {/* Client Data Form */}
-                <div className="bg-[#0b071a] p-5 rounded-2xl border border-purple-500/20 space-y-3">
-                  <div className="flex items-center justify-between border-b border-purple-500/20 pb-2.5">
+                <div className="bg-[#0b071a] p-3 rounded-2xl border border-purple-500/20 space-y-2">
+                  <div className="flex items-center justify-between border-b border-purple-500/20 pb-1.5">
                     <span className="text-xs font-black uppercase text-blue-400 flex items-center gap-1.5">
-                      <Icon name="person" size={15} /> {orderType === 'Mesa' ? 'Datos de Mesa / Salón' : 'Datos del Cliente'}
+                      <Icon name="person" size={14} /> {orderType === 'Mesa' ? 'Datos de Mesa / Salón' : 'Datos del Cliente'}
                     </span>
                     {orderType !== 'Mesa' && allClients.length > 0 && (
                       <button
                         type="button"
                         onClick={() => setShowClientDropdown(!showClientDropdown)}
-                        className="text-[10px] font-black uppercase text-blue-300 bg-blue-950 px-2.5 py-1 rounded-xl border border-blue-500/30 hover:bg-blue-900 flex items-center gap-1"
+                        className="text-[9.5px] font-black uppercase text-blue-300 bg-blue-950 px-2 py-0.5 rounded-lg border border-blue-500/30 hover:bg-blue-900 flex items-center gap-1 cursor-pointer"
                       >
-                        <Icon name="history" size={12} /> Directorio ({allClients.length})
+                        <Icon name="history" size={11} /> Directorio ({allClients.length})
                       </button>
                     )}
                   </div>
 
                   {orderType === 'Mesa' ? (
-                    <div className="space-y-4">
+                    <div className="space-y-2">
                       {/* Interactive 20-Table Selector Grid */}
-                      <div className="space-y-1.5">
+                      <div className="space-y-1">
                         <div className="flex items-center justify-between">
-                          <label className="text-[10px] font-black text-blue-400 uppercase tracking-wider flex items-center gap-1">
-                            <Icon name="table_restaurant" size={14} /> Seleccionar Mesa (Mesas 1 al 20)
+                          <label className="text-[9.5px] font-black text-blue-400 uppercase tracking-wider flex items-center gap-1">
+                            <Icon name="table_restaurant" size={13} /> Seleccionar Mesa (Mesas 1 al 20)
                           </label>
-                          <span className="text-[10px] font-black uppercase text-purple-300">
+                          <span className="text-[9.5px] font-black uppercase text-purple-300">
                             {clientInfo.tableNumber ? `Mesa #${clientInfo.tableNumber} Seleccionada` : 'Selecciona una mesa'}
                           </span>
                         </div>
 
-                        <div className="grid grid-cols-5 sm:grid-cols-10 md:grid-cols-5 lg:grid-cols-10 xl:grid-cols-10 gap-2 pt-1">
+                        <div className="grid grid-cols-5 sm:grid-cols-10 gap-1.5 pt-0.5">
                           {Array.from({ length: 20 }, (_, i) => i + 1).map(num => {
                             const isSelected = clientInfo.tableNumber === num || clientInfo.tableNumber === String(num);
                             return (
@@ -592,114 +594,109 @@ export const PosWizard: React.FC<PosWizardProps> = ({
                                     name: clientInfo.name && !clientInfo.name.startsWith('MESA ') ? clientInfo.name : ''
                                   });
                                 }}
-                                className={`py-2.5 px-2 rounded-xl font-black text-xs uppercase flex flex-col items-center justify-center gap-0.5 transition-all cursor-pointer border ${
+                                className={`py-1.5 px-1 rounded-lg font-black text-xs font-mono uppercase flex items-center justify-center transition-all cursor-pointer border ${
                                   isSelected
-                                    ? 'bg-blue-600 text-white border-blue-400 shadow-lg shadow-blue-600/40 scale-105 ring-2 ring-blue-400/50'
+                                    ? 'bg-blue-600 text-white border-blue-400 shadow-md scale-105 ring-2 ring-blue-400/50'
                                     : 'bg-[#060410] text-slate-300 border-purple-500/20 hover:border-blue-400 hover:bg-blue-950/30'
                                 }`}
                               >
-                                <span className="text-[9px] text-slate-400 font-bold">MESA</span>
-                                <span className="text-sm font-black font-mono">#{num}</span>
+                                #{num}
                               </button>
                             );
                           })}
                         </div>
                       </div>
 
-                      {/* Required Customer Name in Table */}
-                      <div className="space-y-1.5">
-                        <label className="text-[10px] font-black text-slate-300 uppercase flex items-center justify-between">
-                          <span>Nombre del Cliente / Referencia en Mesa *</span>
-                          <span className="text-[9px] text-amber-400 font-bold lowercase">requerido para historial</span>
-                        </label>
-                        <input
-                          type="text"
-                          placeholder="Ej: Juan, Familia Gómez, Pareja Terraza..."
-                          value={clientInfo.name}
-                          onChange={e => setClientInfo({ ...clientInfo, name: e.target.value.toUpperCase() })}
-                          className="w-full p-3 bg-[#060410] border border-purple-500/30 text-white rounded-xl text-xs font-black uppercase outline-none focus:border-blue-400 placeholder:text-slate-600"
-                        />
-                      </div>
-
-                      {/* Waiter / Moza Assigner */}
-                      <div className="space-y-1.5">
-                        <label className="text-[10px] font-black text-slate-300 uppercase flex items-center gap-1">
-                          <Icon name="person" size={13} className="text-purple-400" /> Moza / Mozo que Atiende la Mesa
-                        </label>
-                        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-                          {['Moza 1', 'Moza 2', 'Mozo 1', 'Mozo 2'].map(w => {
-                            const isWSelected = clientInfo.assignedWaiter === w;
-                            return (
-                              <button
-                                key={w}
-                                type="button"
-                                onClick={() => setClientInfo({ ...clientInfo, assignedWaiter: w })}
-                                className={`p-2 rounded-xl border text-xs font-black uppercase transition-all cursor-pointer ${
-                                  isWSelected
-                                    ? 'bg-purple-600 text-white border-purple-400 shadow-md'
-                                    : 'bg-[#060410] text-slate-400 border-purple-500/20 hover:text-white'
-                                }`}
-                              >
-                                {w}
-                              </button>
-                            );
-                          })}
+                      {/* Required Customer Name & Waiter inline */}
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-0.5">
+                        <div className="space-y-0.5">
+                          <label className="text-[9.5px] font-black text-slate-300 uppercase flex items-center justify-between">
+                            <span>Nombre / Referencia en Mesa *</span>
+                            <span className="text-[8.5px] text-amber-400 font-bold lowercase">requerido</span>
+                          </label>
+                          <input
+                            type="text"
+                            placeholder="Ej: Juan, Familia Gómez, Pareja Terraza..."
+                            value={clientInfo.name}
+                            onChange={e => setClientInfo({ ...clientInfo, name: e.target.value.toUpperCase() })}
+                            className="w-full p-2 bg-[#060410] border border-purple-500/30 text-white rounded-xl text-xs font-black uppercase outline-none focus:border-blue-400 placeholder:text-slate-600"
+                          />
                         </div>
-                        <input
-                          type="text"
-                          placeholder="O escribe nombre personalizado de Moza / Mozo..."
-                          value={clientInfo.assignedWaiter || ''}
-                          onChange={e => setClientInfo({ ...clientInfo, assignedWaiter: e.target.value })}
-                          className="w-full p-2.5 bg-[#060410] border border-purple-500/20 text-purple-200 rounded-xl text-xs font-bold uppercase outline-none focus:border-purple-400 placeholder:text-slate-600"
-                        />
+
+                        <div className="space-y-0.5">
+                          <label className="text-[9.5px] font-black text-slate-300 uppercase flex items-center gap-1">
+                            <Icon name="person" size={12} className="text-purple-400" /> Moza / Mozo que Atiende
+                          </label>
+                          <div className="grid grid-cols-4 gap-1">
+                            {['Moza 1', 'Moza 2', 'Mozo 1', 'Mozo 2'].map(w => {
+                              const isWSelected = clientInfo.assignedWaiter === w;
+                              return (
+                                <button
+                                  key={w}
+                                  type="button"
+                                  onClick={() => setClientInfo({ ...clientInfo, assignedWaiter: w })}
+                                  className={`p-1.5 rounded-lg border text-[10px] font-black uppercase transition-all cursor-pointer truncate ${
+                                    isWSelected
+                                      ? 'bg-purple-600 text-white border-purple-400 shadow-sm'
+                                      : 'bg-[#060410] text-slate-400 border-purple-500/20 hover:text-white'
+                                  }`}
+                                >
+                                  {w}
+                                </button>
+                              );
+                            })}
+                          </div>
+                        </div>
                       </div>
                     </div>
                   ) : (
-                    <div className="space-y-2.5 relative">
-                      <div className="relative space-y-1">
-                        <label className="text-[10px] font-black text-slate-400 uppercase">Nombre / Apellido</label>
-                        <input
-                          type="text"
-                          placeholder="Buscar cliente en directorio o ingresar nuevo..."
-                          value={clientInfo.name}
-                          onChange={e => {
-                            setClientInfo({ ...clientInfo, name: e.target.value });
-                            setShowClientDropdown(true);
-                          }}
-                          onFocus={() => setShowClientDropdown(true)}
-                          className="w-full p-3 bg-[#060410] border border-purple-500/30 text-white rounded-xl text-xs font-black uppercase outline-none focus:border-blue-400"
-                        />
+                    <div className="space-y-2 relative">
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                        {/* Nombre / Apellido */}
+                        <div className="relative space-y-0.5">
+                          <label className="text-[9.5px] font-black text-slate-400 uppercase">Nombre / Apellido</label>
+                          <input
+                            type="text"
+                            placeholder="Buscar en directorio o ingresar..."
+                            value={clientInfo.name}
+                            onChange={e => {
+                              setClientInfo({ ...clientInfo, name: e.target.value });
+                              setShowClientDropdown(true);
+                            }}
+                            onFocus={() => setShowClientDropdown(true)}
+                            className="w-full p-2 bg-[#060410] border border-purple-500/30 text-white rounded-xl text-xs font-black uppercase outline-none focus:border-blue-400"
+                          />
 
-                        {/* CRM Dropdown */}
-                        {showClientDropdown && (
-                          <div className="absolute top-full left-0 right-0 mt-1 bg-[#0e0722] border-2 border-blue-500 rounded-2xl shadow-2xl p-2 z-50 space-y-1 max-h-52 overflow-y-auto">
-                            <div className="flex items-center justify-between pb-1 px-1 border-b border-purple-500/20 text-[9px] font-black text-slate-400 uppercase">
-                              <span>Clientes coincidentes ({matchingClients.length > 0 ? matchingClients.length : allClients.length})</span>
-                              <button type="button" onClick={() => setShowClientDropdown(false)} className="text-red-400 hover:text-red-300">Cerrar</button>
-                            </div>
-                            {(matchingClients.length > 0 ? matchingClients : allClients.slice(0, 8)).map(c => (
-                              <button
-                                key={c.firestoreId}
-                                type="button"
-                                onClick={() => handleSelectClient(c)}
-                                className="w-full p-2 text-left hover:bg-blue-950/80 rounded-xl transition-colors flex items-center justify-between"
-                              >
-                                <div>
-                                  <div className="font-black text-xs text-blue-300 uppercase">{c.name}</div>
-                                  <div className="text-[10px] font-bold text-slate-400">
-                                    {c.phone ? `📞 ${c.phone}` : ''} {c.address ? `📍 ${c.address}` : ''} {c.zone ? `(${c.zone})` : ''}
+                          {/* CRM Dropdown */}
+                          {showClientDropdown && (
+                            <div className="absolute top-full left-0 right-0 mt-1 bg-[#0e0722] border-2 border-blue-500 rounded-xl shadow-2xl p-1 z-50 space-y-1 max-h-44 overflow-y-auto">
+                              <div className="flex items-center justify-between pb-1 px-1 border-b border-purple-500/20 text-[9px] font-black text-slate-400 uppercase">
+                                <span>Clientes coincidentes ({matchingClients.length > 0 ? matchingClients.length : allClients.length})</span>
+                                <button type="button" onClick={() => setShowClientDropdown(false)} className="text-red-400 hover:text-red-300">Cerrar</button>
+                              </div>
+                              {(matchingClients.length > 0 ? matchingClients : allClients.slice(0, 8)).map(c => (
+                                <button
+                                  key={c.firestoreId}
+                                  type="button"
+                                  onClick={() => handleSelectClient(c)}
+                                  className="w-full p-1.5 text-left hover:bg-blue-950/80 rounded-lg transition-colors flex items-center justify-between"
+                                >
+                                  <div>
+                                    <div className="font-black text-xs text-blue-300 uppercase">{c.name}</div>
+                                    <div className="text-[9.5px] font-bold text-slate-400">
+                                      {c.phone ? `📞 ${c.phone}` : ''} {c.address ? `📍 ${c.address}` : ''}
+                                    </div>
                                   </div>
-                                </div>
-                                <Icon name="arrow_forward" size={13} className="text-blue-400" />
-                              </button>
-                            ))}
-                          </div>
-                        )}
-                      </div>
+                                  <Icon name="arrow_forward" size={12} className="text-blue-400" />
+                                </button>
+                              ))}
+                            </div>
+                          )}
+                        </div>
 
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 pt-1">
-                        <div className="space-y-1">
-                          <label className="text-[10px] font-black text-slate-400 uppercase flex items-center justify-between">
+                        {/* Teléfono / Celular */}
+                        <div className="space-y-0.5">
+                          <label className="text-[9.5px] font-black text-slate-400 uppercase flex items-center justify-between">
                             <span>Teléfono / Celular</span>
                             {clientInfo.phone && (
                               <button
@@ -720,67 +717,74 @@ export const PosWizard: React.FC<PosWizardProps> = ({
                             placeholder="098356320"
                             value={clientInfo.phone}
                             onChange={e => setClientInfo({ ...clientInfo, phone: e.target.value })}
-                            className="w-full p-3 bg-[#060410] border border-purple-500/30 text-white rounded-xl text-xs font-black outline-none focus:border-blue-400"
-                          />
-                        </div>
-
-                        <div className="space-y-1">
-                          <label className="text-[10px] font-black text-slate-400 uppercase">Zona / Barrio</label>
-                          <input
-                            type="text"
-                            placeholder="Centro, Pocitos, Cordón..."
-                            value={clientInfo.zone}
-                            onChange={e => setClientInfo({ ...clientInfo, zone: e.target.value.toUpperCase() })}
-                            className="w-full p-3 bg-[#060410] border border-purple-500/30 text-white rounded-xl text-xs font-black uppercase outline-none focus:border-blue-400"
+                            className="w-full p-2 bg-[#060410] border border-purple-500/30 text-white rounded-xl text-xs font-black outline-none focus:border-blue-400 font-mono"
                           />
                         </div>
                       </div>
 
-                      <div className="space-y-1">
-                        <label className="text-[10px] font-black text-slate-400 uppercase">Dirección de Entrega</label>
-                        <input
-                          type="text"
-                          placeholder="Calle, número de puerta, esq / apto"
-                          value={clientInfo.address}
-                          onChange={e => setClientInfo({ ...clientInfo, address: e.target.value.toUpperCase() })}
-                          className="w-full p-3 bg-[#060410] border border-purple-500/30 text-white rounded-xl text-xs font-black uppercase outline-none focus:border-blue-400"
+                      {/* Dirección de Entrega & Zona (Visible si es Delivery / Envío / Web) */}
+                      {['envío', 'delivery', 'web'].includes(orderType.toLowerCase()) && (
+                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 pt-0.5">
+                          <div className="sm:col-span-2 space-y-0.5">
+                            <label className="text-[9.5px] font-black text-slate-400 uppercase">Dirección de Entrega</label>
+                            <input
+                              type="text"
+                              placeholder="Calle, número de puerta, esq / apto"
+                              value={clientInfo.address}
+                              onChange={e => setClientInfo({ ...clientInfo, address: e.target.value.toUpperCase() })}
+                              className="w-full p-2 bg-[#060410] border border-purple-500/30 text-white rounded-xl text-xs font-black uppercase outline-none focus:border-blue-400"
+                            />
+                          </div>
+
+                          <div className="space-y-0.5">
+                            <label className="text-[9.5px] font-black text-slate-400 uppercase">Zona / Barrio</label>
+                            <input
+                              type="text"
+                              placeholder="Centro, Pocitos, Cordón..."
+                              value={clientInfo.zone}
+                              onChange={e => setClientInfo({ ...clientInfo, zone: e.target.value.toUpperCase() })}
+                              className="w-full p-2 bg-[#060410] border border-purple-500/30 text-white rounded-xl text-xs font-black uppercase outline-none focus:border-blue-400"
+                            />
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Google Maps Interactive Delivery Pin (Solo cuando es Envío/Web y hay dirección) */}
+                      {['envío', 'delivery', 'web'].includes(orderType.toLowerCase()) && clientInfo.address && clientInfo.address.trim().length > 2 && (
+                        <GoogleDeliveryMap
+                          address={clientInfo.address}
+                          zone={clientInfo.zone}
+                          clientName={clientInfo.name}
+                          clientPhone={clientInfo.phone}
+                          orderDetails={{
+                            itemsSummary: cart.map(i => `• ${i.quantity || 1}x ${i.name}`).join('\n'),
+                            totalAmount: cartTotal,
+                            paymentMethod,
+                            cashProvided: parseFloat(cashProvided) || undefined,
+                            changeDue: Math.max(0, (parseFloat(cashProvided) || 0) - cartTotal)
+                          }}
+                          showMessage={showMessage}
                         />
-                      </div>
-
-                      {/* Google Maps Interactive Delivery Pin */}
-                      <GoogleDeliveryMap
-                        address={clientInfo.address}
-                        zone={clientInfo.zone}
-                        clientName={clientInfo.name}
-                        clientPhone={clientInfo.phone}
-                        orderDetails={{
-                          itemsSummary: cart.map(i => `• ${i.quantity || 1}x ${i.name}`).join('\n'),
-                          totalAmount: cartTotal,
-                          paymentMethod,
-                          cashProvided: parseFloat(cashProvided) || undefined,
-                          changeDue: Math.max(0, (parseFloat(cashProvided) || 0) - cartTotal)
-                        }}
-                        showMessage={showMessage}
-                      />
+                      )}
                     </div>
                   )}
                 </div>
 
                 {/* Step 2 Navigation Buttons */}
-                <div className="flex gap-2.5 pt-1">
+                <div className="flex gap-2 pt-0.5">
                   <button
                     type="button"
                     onClick={() => setPosStep(1)}
-                    className="flex-1 py-3.5 bg-[#120824] hover:bg-[#1e0e3b] text-slate-300 rounded-xl font-black uppercase text-xs transition-all flex items-center justify-center gap-2 border border-purple-500/20"
+                    className="flex-1 py-2.5 bg-[#120824] hover:bg-[#1e0e3b] text-slate-300 rounded-xl font-black uppercase text-xs transition-all flex items-center justify-center gap-1.5 border border-purple-500/20 cursor-pointer"
                   >
-                    <Icon name="arrow_back" size={15} /> Volver al Menú
+                    <Icon name="arrow_back" size={14} /> Volver al Menú
                   </button>
                   <button
                     type="button"
                     onClick={() => setPosStep(3)}
-                    className="flex-1 py-3.5 bg-blue-600 hover:bg-blue-500 text-white rounded-xl font-black uppercase text-xs transition-all flex items-center justify-center gap-2 shadow-md shadow-blue-600/25"
+                    className="flex-1 py-2.5 bg-blue-600 hover:bg-blue-500 text-white rounded-xl font-black uppercase text-xs transition-all flex items-center justify-center gap-1.5 shadow-md shadow-blue-600/25 cursor-pointer"
                   >
-                    Continuar al Pago <Icon name="arrow_forward" size={15} />
+                    Continuar al Pago <Icon name="arrow_forward" size={14} />
                   </button>
                 </div>
               </div>
@@ -789,27 +793,29 @@ export const PosWizard: React.FC<PosWizardProps> = ({
 
           {/* STEP 3: PAYMENT METHOD & FINAL CONFIRMATION */}
           {posStep === 3 && (
-            <div className="flex-1 p-4 sm:p-6 overflow-y-auto custom-dark-scrollbar bg-[#050508] space-y-4">
-              <div className="max-w-3xl mx-auto space-y-4">
-                <div>
-                  <h2 className="text-xl sm:text-2xl font-black uppercase tracking-tight text-white flex items-center gap-2">
-                    <Icon name="payments" size={24} className="text-violet-400" /> Paso 3: Forma de Pago & Confirmación
-                  </h2>
-                  <p className="text-[11px] font-bold text-slate-400 uppercase">
-                    Calcula vuelto en efectivo, programa horario o envía directo a cocina
-                  </p>
+            <div className="flex-1 p-3 sm:p-4 overflow-y-auto custom-dark-scrollbar bg-[#050508] space-y-2.5">
+              <div className="max-w-3xl mx-auto space-y-2.5">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <h2 className="text-base sm:text-lg font-black uppercase tracking-tight text-white flex items-center gap-1.5">
+                      <Icon name="payments" size={18} className="text-violet-400" /> Paso 3: Forma de Pago & Confirmación
+                    </h2>
+                    <p className="text-[9.5px] font-bold text-slate-400 uppercase">
+                      Calcula vuelto en efectivo, programa horario o envía directo a cocina
+                    </p>
+                  </div>
                 </div>
 
-                {/* Payment Method Selector Grid */}
-                <div className="space-y-1.5">
-                  <label className="text-[10px] font-black uppercase text-violet-400 tracking-wider">Medio de Pago</label>
-                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5">
+                {/* Payment Method Selector Grid - Compact */}
+                <div className="space-y-1">
+                  <label className="text-[9.5px] font-black uppercase text-violet-400 tracking-wider">Medio de Pago</label>
+                  <div className="grid grid-cols-3 sm:grid-cols-6 gap-1.5">
                     {[
                       { id: 'Efectivo', label: 'Efectivo', icon: 'payments' },
-                      { id: 'Transferencia', label: 'Transferencia', icon: 'account_balance' },
+                      { id: 'Transferencia', label: 'Transfer.', icon: 'account_balance' },
                       { id: 'Débito', label: 'Débito', icon: 'credit_card' },
                       { id: 'Crédito', label: 'Crédito', icon: 'credit_score' },
-                      { id: 'Mercado Pago', label: 'Mercado Pago', icon: 'qr_code_2' },
+                      { id: 'Mercado Pago', label: 'MP', icon: 'qr_code_2' },
                       { id: 'A confirmar', label: 'A Confirmar', icon: 'help_outline' }
                     ].map(pm => {
                       const isSel = paymentMethod === pm.id;
@@ -818,14 +824,14 @@ export const PosWizard: React.FC<PosWizardProps> = ({
                           key={pm.id}
                           type="button"
                           onClick={() => setPaymentMethod(pm.id)}
-                          className={`p-3 rounded-2xl border text-left transition-all flex items-center gap-2.5 ${
+                          className={`p-2 rounded-xl border text-center transition-all flex flex-col items-center justify-center gap-1 h-11 cursor-pointer ${
                             isSel
                               ? 'bg-violet-600/30 border-violet-500 text-white shadow-md'
                               : 'bg-[#0c061a] border-purple-500/20 text-slate-300 hover:border-violet-500/40'
                           }`}
                         >
-                          <Icon name={pm.icon} size={20} className={isSel ? 'text-violet-400' : 'text-slate-400'} />
-                          <span className="font-black text-xs uppercase">{pm.label}</span>
+                          <Icon name={pm.icon} size={15} className={isSel ? 'text-violet-400' : 'text-slate-400'} />
+                          <span className="font-black text-[10px] uppercase truncate">{pm.label}</span>
                         </button>
                       );
                     })}
@@ -834,40 +840,40 @@ export const PosWizard: React.FC<PosWizardProps> = ({
 
                 {/* Live Cash and Change Box (if paymentMethod === 'Efectivo') */}
                 {paymentMethod === 'Efectivo' && (
-                  <div className="bg-[#0e0720] p-5 rounded-2xl border border-purple-500/25 space-y-3">
+                  <div className="bg-[#0e0720] p-3 rounded-2xl border border-purple-500/25 space-y-2">
                     <div className="flex items-center justify-between">
                       <span className="text-xs font-black uppercase text-violet-400 flex items-center gap-1.5">
-                        <Icon name="paid" size={16} /> Pago en Efectivo y Vuelto
+                        <Icon name="paid" size={14} /> Pago en Efectivo y Vuelto
                       </span>
                       <span className="text-xs font-black text-slate-300">
-                        Total comanda: <strong className="text-purple-300 font-black">${cartTotal}</strong>
+                        Total: <strong className="text-purple-300 font-black">${cartTotal}</strong>
                       </span>
                     </div>
 
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                      <div className="space-y-1">
-                        <label className="text-[10px] font-black uppercase text-slate-400">Paga con billete de:</label>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                      <div className="space-y-0.5">
+                        <label className="text-[9.5px] font-black uppercase text-slate-400">Paga con billete de:</label>
                         <div className="relative">
-                          <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 font-black text-sm">$</span>
+                          <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 font-black text-xs">$</span>
                           <input
                             type="number"
                             placeholder="Monto entregado"
                             value={cashProvided}
                             onChange={e => setCashProvided(e.target.value)}
-                            className="w-full pl-8 pr-3 py-2.5 bg-[#06030e] border border-purple-500/30 text-white rounded-xl text-base font-black outline-none focus:border-violet-400"
+                            className="w-full pl-7 pr-2 py-1.5 bg-[#06030e] border border-purple-500/30 text-white rounded-xl text-sm font-black outline-none focus:border-violet-400 font-mono"
                           />
                         </div>
                       </div>
 
                       {/* Change / Vuelto Output Display */}
-                      <div className="p-3 bg-[#06030e] rounded-xl border border-purple-500/20 flex flex-col justify-center">
-                        <div className="text-[10px] font-black uppercase text-slate-400">Vuelto a devolver al cliente:</div>
+                      <div className="p-2 bg-[#06030e] rounded-xl border border-purple-500/20 flex flex-col justify-center">
+                        <div className="text-[9px] font-black uppercase text-slate-400">Vuelto a devolver:</div>
                         {missingCash > 0 ? (
-                          <div className="text-base font-black text-red-500 mt-0.5">
+                          <div className="text-sm font-black text-red-500 font-mono">
                             Faltan ${missingCash}
                           </div>
                         ) : (
-                          <div className="text-2xl font-black text-white font-mono mt-0.5">
+                          <div className="text-xl font-black text-emerald-400 font-mono">
                             ${changeDue}
                           </div>
                         )}
@@ -875,14 +881,14 @@ export const PosWizard: React.FC<PosWizardProps> = ({
                     </div>
 
                     {/* Quick Preset Buttons */}
-                    <div className="flex flex-wrap gap-1.5 pt-1">
-                      <span className="text-[9px] font-black uppercase text-slate-400 flex items-center mr-1">Billetes:</span>
+                    <div className="flex flex-wrap gap-1 pt-0.5">
+                      <span className="text-[8.5px] font-black uppercase text-slate-400 flex items-center mr-1">Billetes:</span>
                       {[cartTotal, 500, 1000, 2000, 5000].filter(v => v >= cartTotal || v === cartTotal).map(val => (
                         <button
                           key={val}
                           type="button"
                           onClick={() => setCashProvided(String(val))}
-                          className="px-2.5 py-1 bg-[#180d33] hover:bg-[#25154d] text-purple-200 border border-purple-500/30 rounded-lg text-xs font-black transition-all font-mono"
+                          className="px-2 py-0.5 bg-[#180d33] hover:bg-[#25154d] text-purple-200 border border-purple-500/30 rounded-lg text-xs font-black transition-all font-mono cursor-pointer"
                         >
                           {val === cartTotal ? `$${val} (Exacto)` : `$${val}`}
                         </button>
@@ -892,18 +898,18 @@ export const PosWizard: React.FC<PosWizardProps> = ({
                 )}
 
                 {/* Scheduled order option */}
-                <div className="bg-[#0b071a] p-4 rounded-2xl border border-purple-500/20 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                  <div className="flex items-center gap-3">
+                <div className="bg-[#0b071a] p-2.5 rounded-2xl border border-purple-500/20 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                  <div className="flex items-center gap-2">
                     <input
                       type="checkbox"
                       id="schedule-order"
                       checked={isScheduled}
                       onChange={e => setIsScheduled(e.target.checked)}
-                      className="w-4 h-4 rounded text-purple-600 accent-purple-600 cursor-pointer"
+                      className="w-3.5 h-3.5 rounded text-purple-600 accent-purple-600 cursor-pointer"
                     />
                     <label htmlFor="schedule-order" className="cursor-pointer">
-                      <div className="font-black text-xs uppercase text-white">Programar Comanda / Horario Futuro</div>
-                      <div className="text-[10px] text-slate-400 font-bold uppercase">Define hora estimada de despacho</div>
+                      <div className="font-black text-xs uppercase text-white">Programar Horario Futuro</div>
+                      <div className="text-[9px] text-slate-400 font-bold uppercase">Define hora de entrega estimada</div>
                     </label>
                   </div>
                   {isScheduled && (
@@ -911,62 +917,56 @@ export const PosWizard: React.FC<PosWizardProps> = ({
                       type="time"
                       value={scheduledTime}
                       onChange={e => setScheduledTime(e.target.value)}
-                      className="p-2 bg-[#06030e] border border-purple-500/30 text-white rounded-xl text-xs font-black outline-none focus:border-violet-400"
+                      className="p-1.5 bg-[#06030e] border border-purple-500/30 text-white rounded-xl text-xs font-black outline-none focus:border-violet-400"
                     />
                   )}
                 </div>
 
                 {/* Order Summary Recap */}
-                <div className="bg-[#0b071a] p-5 rounded-2xl border border-purple-500/20 space-y-3">
-                  <div className="flex items-center justify-between border-b border-purple-500/20 pb-2">
+                <div className="bg-[#0b071a] p-3 rounded-2xl border border-purple-500/20 space-y-1.5">
+                  <div className="flex items-center justify-between border-b border-purple-500/20 pb-1">
                     <h3 className="text-xs font-black uppercase text-slate-400">
                       Resumen Final del Pedido
                     </h3>
-                    <span className="text-[10px] font-black text-purple-300 uppercase">
+                    <span className="text-[9.5px] font-black text-purple-300 uppercase">
                       Pizzería El Árbol
                     </span>
                   </div>
 
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs">
                     <div>
-                      <span className="text-slate-500 font-black uppercase">Destino:</span>{' '}
-                      <strong className="text-blue-400 uppercase">{orderType}</strong>
+                      <span className="text-slate-500 font-black uppercase text-[9px] block">Destino</span>
+                      <strong className="text-blue-400 uppercase font-black">{orderType}</strong>
                     </div>
                     <div>
-                      <span className="text-slate-500 font-black uppercase">Cliente:</span>{' '}
-                      <strong className="text-white uppercase">{clientInfo.name || 'CONSUMIDOR FINAL'}</strong>
-                    </div>
-                    {clientInfo.address && (
-                      <div className="sm:col-span-2">
-                        <span className="text-slate-500 font-black uppercase">Dirección:</span>{' '}
-                        <strong className="text-slate-300 uppercase">{clientInfo.address} {clientInfo.zone ? `(${clientInfo.zone})` : ''}</strong>
-                      </div>
-                    )}
-                    <div>
-                      <span className="text-slate-500 font-black uppercase">Medio de Pago:</span>{' '}
-                      <strong className="text-violet-400 uppercase">{paymentMethod}</strong>
+                      <span className="text-slate-500 font-black uppercase text-[9px] block">Cliente</span>
+                      <strong className="text-white uppercase font-black truncate block">{clientInfo.name || 'CONSUMIDOR FINAL'}</strong>
                     </div>
                     <div>
-                      <span className="text-slate-500 font-black uppercase">Total a Cobrar:</span>{' '}
-                      <strong className="text-xl font-black text-purple-300 font-mono">${cartTotal}</strong>
+                      <span className="text-slate-500 font-black uppercase text-[9px] block">Medio de Pago</span>
+                      <strong className="text-violet-400 uppercase font-black">{paymentMethod}</strong>
+                    </div>
+                    <div>
+                      <span className="text-slate-500 font-black uppercase text-[9px] block">Total</span>
+                      <strong className="text-lg font-black text-emerald-400 font-mono">${cartTotal}</strong>
                     </div>
                   </div>
                 </div>
 
                 {/* Step 3 Navigation and Final Dispatch Button */}
-                <div className="flex gap-2.5 pt-1">
+                <div className="flex gap-2 pt-0.5">
                   <button
                     type="button"
                     onClick={() => setPosStep(2)}
-                    className="py-3.5 px-5 bg-[#120824] hover:bg-[#1e0e3b] text-slate-300 rounded-xl font-black uppercase text-xs transition-all flex items-center justify-center gap-2 border border-purple-500/20"
+                    className="py-2.5 px-4 bg-[#120824] hover:bg-[#1e0e3b] text-slate-300 rounded-xl font-black uppercase text-xs transition-all flex items-center justify-center gap-1.5 border border-purple-500/20 cursor-pointer"
                   >
-                    <Icon name="arrow_back" size={15} /> Volver a Cliente
+                    <Icon name="arrow_back" size={14} /> Volver
                   </button>
                   <button
                     type="button"
                     onClick={() => handleCheckout(false)}
                     disabled={cart.length === 0 || isSubmitting}
-                    className={`flex-1 py-3.5 rounded-xl font-black uppercase text-xs transition-all flex items-center justify-center gap-2 shadow-lg ${
+                    className={`flex-1 py-2.5 rounded-xl font-black uppercase text-xs transition-all flex items-center justify-center gap-2 shadow-lg cursor-pointer ${
                       cart.length === 0 || isSubmitting
                         ? 'bg-slate-800 text-slate-500 cursor-not-allowed'
                         : 'bg-purple-600 hover:bg-purple-500 text-white shadow-purple-600/30'
