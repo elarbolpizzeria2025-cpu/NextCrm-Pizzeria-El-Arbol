@@ -200,6 +200,7 @@ export default function App() {
   const [notesModal, setNotesModal] = useState<{ isOpen: boolean; order: OrderData | null; text: string }>({ 
     isOpen: false, order: null, text: '' 
   });
+  const navRef = useRef<HTMLDivElement>(null);
   const [editingOrder, setEditingOrder] = useState<OrderData | null>(null);
   const [resolvePendingModal, setResolvePendingModal] = useState<{ isOpen: boolean; pending: OrderData[] }>({ 
     isOpen: false, pending: [] 
@@ -1963,28 +1964,33 @@ export default function App() {
       {/* Lock screen overlay if register closed (allow 'cash' & 'stock' tabs so user can see or open shift) */}
       {register.isLoaded && !register.isOpen && activeTab !== 'cash' && activeTab !== 'stock' && (
         <div className="fixed inset-0 z-[9995] bg-[#040108]/90 backdrop-blur-md flex items-center justify-center p-4">
-             <div className="bg-[#0c061a] p-6 sm:p-8 rounded-[40px] max-w-lg w-full shadow-2xl text-center space-y-4 border border-purple-500/30 text-slate-100 animate-in zoom-in-95">
-                 <div className="w-16 h-16 bg-purple-950/80 text-purple-300 rounded-full flex items-center justify-center mx-auto border-2 border-purple-500/50 shadow-inner">
-                   <Icon name="account_balance_wallet" size={32} />
+             <div className="bg-[#0c061a] p-6 sm:p-8 rounded-[40px] max-w-lg w-full shadow-2xl text-center space-y-4 border-2 border-purple-500/40 text-slate-100 animate-in zoom-in-95 max-h-[92vh] overflow-y-auto no-scrollbar">
+                 <div className="w-14 h-14 bg-purple-950/80 text-purple-300 rounded-2xl flex items-center justify-center mx-auto border-2 border-purple-500/50 shadow-inner">
+                   <Icon name="account_balance_wallet" size={28} />
                  </div>
                  <div>
-                   <h2 className="text-2xl sm:text-3xl font-black uppercase text-white tracking-tight">Apertura de Caja</h2>
+                   <h2 className="text-2xl font-black uppercase text-white tracking-tight">Apertura de Caja y Turno</h2>
                    <p className="text-xs font-bold text-slate-400 mt-1">
-                     Ingresa el monto de efectivo con el que inicias la caja para habilitar el sistema de ventas.
+                     Ingresa el efectivo inicial obligatorio. El stock inicial es opcional.
                    </p>
                  </div>
 
-                 {/* Input de Efectivo Inicial y Presets */}
+                 {/* 1. Input de Efectivo Inicial Obligatorio y Presets */}
                  <div className="bg-[#06020e] p-4 rounded-2xl border border-purple-500/30 text-left space-y-2.5">
-                   <label className="text-[11px] font-black uppercase text-purple-300 flex items-center gap-1.5">
-                     <Icon name="monetization_on" size={15} className="text-purple-400"/> Efectivo Inicial para Cambio ($)
+                   <label className="text-[11px] font-black uppercase text-purple-300 flex items-center justify-between">
+                     <span className="flex items-center gap-1.5">
+                       <Icon name="monetization_on" size={15} className="text-emerald-400"/> 1. Efectivo Inicial en Caja ($) *
+                     </span>
+                     <span className="text-[9px] text-emerald-400 font-bold lowercase">requisito obligatorio</span>
                    </label>
                    <input
                      type="number"
                      placeholder="0"
                      value={initialCashInput}
                      onChange={e => setInitialCashInput(e.target.value)}
-                     className="w-full p-3.5 bg-[#0d061c] border-2 border-purple-500/40 text-purple-200 rounded-xl text-2xl font-black text-center outline-none focus:border-purple-400 font-mono"
+                     className="w-full p-3 bg-[#0d061c] border-2 border-purple-500/40 text-purple-200 rounded-xl text-2xl font-black text-center outline-none focus:border-purple-400 font-mono"
+                     min="0"
+                     required
                    />
                    <div className="flex gap-1.5 flex-wrap justify-center pt-1">
                      {[0, 1000, 2000, 3000, 5000].map(val => (
@@ -1992,7 +1998,7 @@ export default function App() {
                          key={val}
                          type="button"
                          onClick={() => setInitialCashInput(val.toString())}
-                         className={`px-3 py-1 rounded-xl text-[11px] font-black uppercase border transition-all ${
+                         className={`px-3 py-1 rounded-xl text-[11px] font-black uppercase border transition-all cursor-pointer ${
                            (initialCashInput === val.toString()) || (val === 0 && initialCashInput === '')
                              ? 'bg-purple-600 text-slate-950 border-purple-400 shadow-md'
                              : 'bg-[#160829] text-purple-300 border-purple-500/30 hover:bg-[#220c40]'
@@ -2004,25 +2010,58 @@ export default function App() {
                    </div>
                  </div>
 
-                 <div className="bg-[#06020e] p-3 rounded-xl border border-purple-500/20 text-left flex items-center gap-2">
-                   <Icon name="info" size={16} className="text-purple-400 shrink-0"/>
-                   <span className="text-[11px] text-slate-300 font-medium leading-tight">
-                     El conteo de inventario/stock inicial es <strong>opcional</strong> y no bloquea la apertura de caja.
-                   </span>
-                 </div>
+                 {/* 2. Cantidades de Stock Inicial (Opcional) */}
+                 {stockItems.length > 0 && (
+                   <div className="bg-[#06020e] p-4 rounded-2xl border border-purple-500/20 text-left space-y-2">
+                     <div className="flex items-center justify-between">
+                       <label className="text-[10px] font-black uppercase text-slate-300 flex items-center gap-1.5">
+                         <Icon name="inventory_2" size={14} className="text-purple-400" />
+                         2. Cantidades de Stock Inicial (Opcional)
+                       </label>
+                       <span className="text-[9px] text-slate-500 font-bold lowercase">
+                         {stockItems.length} insumos
+                       </span>
+                     </div>
+                     <p className="text-[10px] text-slate-400 leading-tight">
+                       Si deseas registrar stock inicial ahora, ingresa las cantidades abajo. Si no, quedarán en 0.
+                     </p>
 
-                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
+                     <div className="max-h-40 overflow-y-auto space-y-1.5 pr-1 no-scrollbar pt-1">
+                       {stockItems.map(item => {
+                         const currentVal = initialStockInput[item.firestoreId] ?? '';
+                         return (
+                           <div
+                             key={item.firestoreId}
+                             className="flex items-center justify-between gap-2 p-2 bg-[#0b0518] rounded-xl border border-purple-500/15"
+                           >
+                             <div className="min-w-0 flex-1">
+                               <div className="text-xs font-black uppercase text-white truncate">{item.name}</div>
+                               <div className="text-[9px] text-purple-400 uppercase font-bold">{item.category} • {getItemUnit(item)}</div>
+                             </div>
+                             <input
+                               type="number"
+                               placeholder="0"
+                               value={currentVal}
+                               onChange={e => setInitialStockInput({ ...initialStockInput, [item.firestoreId]: e.target.value })}
+                               className="w-20 p-1.5 bg-[#040108] border border-purple-500/30 text-purple-200 rounded-lg text-xs font-mono font-black text-center outline-none focus:border-purple-400"
+                               min="0"
+                             />
+                           </div>
+                         );
+                       })}
+                     </div>
+                   </div>
+                 )}
+
+                 {/* Botones de Apertura */}
+                 <div className="pt-1">
                    <button 
-                     onClick={() => setActiveTab('cash')} 
-                     className="w-full py-3.5 bg-[#160829] hover:bg-[#220c40] text-purple-300 border border-purple-500/30 rounded-2xl font-black uppercase text-xs shadow-lg transition-all flex items-center justify-center gap-2"
+                     type="button"
+                     onClick={() => handleOpenRegister(false)} 
+                     className="w-full py-4 bg-gradient-to-r from-purple-600 via-indigo-600 to-purple-600 hover:from-purple-500 hover:to-indigo-500 text-white rounded-2xl font-black uppercase text-xs shadow-lg shadow-purple-600/40 transition-all flex items-center justify-center gap-2 cursor-pointer"
                    >
-                     <Icon name="inventory_2" size={16} className="text-purple-400"/> Cargar Stock (Opcional)
-                   </button>
-                   <button 
-                     onClick={() => handleOpenRegister(true)} 
-                     className="w-full py-3.5 bg-purple-600 hover:bg-purple-400 text-slate-950 rounded-2xl font-black uppercase text-xs shadow-lg shadow-purple-500/20 transition-all flex items-center justify-center gap-2"
-                   >
-                     <Icon name="bolt" size={16} className="text-slate-950"/> Abrir Caja (${initialCashInput || 0})
+                     <Icon name="bolt" size={18} />
+                     <span>Abrir Caja y Habilitar Turno (${initialCashInput || 0})</span>
                    </button>
                  </div>
              </div>
@@ -2228,78 +2267,112 @@ export default function App() {
       )}
 
       {/* Header - Deluxe Lila, White & Black Edition with RBAC Role Indicator */}
-      <header className="h-15 bg-[#040108] border-b border-purple-500/20 text-white flex items-center justify-between px-3 shrink-0 shadow-lg z-50 gap-3">
-        <div className="flex items-center gap-2 shrink-0 pr-3 border-r border-purple-500/20">
+      <header className="h-15 bg-[#040108] border-b border-purple-500/20 text-white flex items-center justify-between px-3 shrink-0 shadow-lg z-50 gap-2">
+        <div className="flex items-center gap-2 shrink-0 pr-2 sm:pr-3 border-r border-purple-500/20">
           <div className="w-8 h-8 rounded-xl border border-purple-500/50 bg-[#0d061c] flex items-center justify-center font-black text-sm text-purple-300 shadow-xs">
             🌳
           </div>
           <div className="font-black text-xs tracking-wider uppercase flex items-center gap-1.5">
-            <span className="text-white font-extrabold">El Árbol</span>
+            <span className="text-white font-extrabold hidden sm:inline">El Árbol</span>
             <span className="text-[8px] bg-purple-950 text-purple-300 px-1.5 py-0.5 rounded-md border border-purple-500/40 font-black tracking-widest">POS</span>
           </div>
         </div>
 
-        {/* Navigation Bar - Filtered by Security Layer Role */}
-        <nav className="flex-1 flex h-full gap-1 overflow-x-auto no-scrollbar items-center py-1 scroll-smooth">
-          {[ 
-            {id: 'delivery', label: 'Ruta Delivery', icon: 'two_wheeler', count: badges.delivery, roles: ['admin', 'cajero', 'delivery']}, 
-            {id: 'pos', label: 'Toma Pedido', icon: 'point_of_sale', roles: ['admin', 'cajero', 'mozo']}, 
-            {id: 'counter', label: 'Mostrador', icon: 'storefront', count: badges.mostrador, roles: ['admin', 'cajero', 'mozo']}, 
-            {id: 'tables', label: 'Mesas', icon: 'table_restaurant', count: badges.mesas, roles: ['admin', 'cajero', 'mozo']}, 
-            {id: 'kitchen', label: 'KDS Cocina', icon: 'tv', count: badges.kitchen, roles: ['admin', 'cajero', 'mozo']}, 
-            {id: 'web', label: 'Web', icon: 'public', count: badges.web, roles: ['admin', 'cajero']}, 
-            {id: 'finished', label: 'Finalizados', icon: 'check_circle', count: badges.finished, roles: ['admin', 'cajero']}, 
-            {id: 'staff', label: 'Propinas', icon: 'payments', roles: ['admin', 'cajero', 'mozo', 'delivery']},
-            {id: 'clients', label: 'Clientes', icon: 'people', roles: ['admin', 'cajero']}, 
-            {id: 'stock', label: 'Stock', icon: 'inventory_2', count: badges.stock, roles: ['admin', 'cajero']}, 
-            {id: 'cash', label: 'Arqueo', icon: 'account_balance_wallet', roles: ['admin', 'cajero']},
-            {id: 'products', label: 'Menú', icon: 'menu_book', roles: ['admin']}, 
-            {id: 'reports', label: 'Reportes', icon: 'bar_chart', roles: ['admin']}, 
-            {id: 'history', label: 'Historial', icon: 'history', roles: ['admin']}, 
-            {id: 'manual', label: 'Manual', icon: 'auto_stories', roles: ['admin', 'cajero', 'mozo', 'delivery']},
-            {id: 'support', label: 'Soporte', icon: 'support_agent', count: supportTickets.filter(t => t.status !== 'Resuelto').length, roles: ['admin'], highlight: true}
-          ].filter(tab => tab.roles.includes(currentUser.role)).map(tab => {
-            const isActive = activeTab === tab.id;
-            const rawCount = tab.count !== undefined ? tab.count : 0;
-            const dismissed = dismissedBadges[tab.id] || 0;
-            const activeCount = Math.max(0, rawCount - dismissed);
+        {/* Navigation Bar with Left/Right Scroll Controls - Filtered by Security Layer Role */}
+        <div className="flex-1 flex items-center min-w-0 relative group">
+          {/* Scroll Left Button */}
+          <button
+            type="button"
+            onClick={() => {
+              if (navRef.current) navRef.current.scrollBy({ left: -220, behavior: 'smooth' });
+            }}
+            className="w-6 h-9 rounded-lg bg-[#0d061c]/90 hover:bg-purple-950 text-purple-400 hover:text-white flex items-center justify-center transition-all border border-purple-500/20 shrink-0 mr-1 z-10 cursor-pointer shadow-sm"
+            title="Desplazar menú a la izquierda"
+          >
+            <Icon name="chevron_left" size={16} />
+          </button>
 
-            return (
-              <button 
-                key={tab.id} 
-                onClick={() => {
-                  setActiveTab(tab.id);
-                  setDismissedBadges(prev => ({
-                    ...prev,
-                    [tab.id]: tab.count || 0
-                  }));
-                }} 
-                className={`relative px-2.5 py-1 h-11 rounded-xl flex flex-col items-center justify-center font-black text-[9px] uppercase transition-all shrink-0 min-w-[58px] ${
-                  isActive 
-                    ? tab.id === 'support' 
-                      ? 'bg-purple-600 text-white shadow-md shadow-purple-600/30'
-                      : 'bg-[#160829] text-purple-300 border border-purple-500/50 shadow-xs' 
-                    : tab.id === 'support'
-                    ? 'text-purple-300 bg-purple-950/40 border border-purple-500/30 hover:bg-purple-900/50'
-                    : 'text-slate-400 hover:text-white hover:bg-white/5'
-                }`}
-              >
-                {activeCount > 0 && (
-                  <span className="absolute -top-1 right-1 bg-red-600 text-white text-[8px] font-black w-4 h-4 rounded-full flex items-center justify-center shadow-md animate-pulse z-10">
-                    {activeCount}
-                  </span>
-                )}
-                <Icon name={tab.icon} size={18} className={isActive ? 'text-purple-300' : 'text-slate-400'}/>
-                <span className="leading-tight tracking-tight mt-0.5 whitespace-nowrap">{tab.label}</span>
-              </button>
-            );
-          })}
-        </nav>
+          <nav 
+            ref={navRef}
+            onWheel={(e) => {
+              if (navRef.current) {
+                navRef.current.scrollLeft += e.deltaY;
+              }
+            }}
+            className="flex-1 flex h-full gap-1 overflow-x-auto no-scrollbar items-center py-1 scroll-smooth"
+          >
+            {[ 
+              {id: 'delivery', label: 'Ruta Delivery', icon: 'two_wheeler', count: badges.delivery, roles: ['admin', 'cajero', 'delivery']}, 
+              {id: 'pos', label: 'Toma Pedido', icon: 'point_of_sale', roles: ['admin', 'cajero', 'mozo']}, 
+              {id: 'counter', label: 'Mostrador', icon: 'storefront', count: badges.mostrador, roles: ['admin', 'cajero', 'mozo']}, 
+              {id: 'tables', label: 'Mesas', icon: 'table_restaurant', count: badges.mesas, roles: ['admin', 'cajero', 'mozo']}, 
+              {id: 'kitchen', label: 'KDS Cocina', icon: 'tv', count: badges.kitchen, roles: ['admin', 'cajero', 'mozo']}, 
+              {id: 'web', label: 'Web', icon: 'public', count: badges.web, roles: ['admin', 'cajero']}, 
+              {id: 'finished', label: 'Finalizados', icon: 'check_circle', count: badges.finished, roles: ['admin', 'cajero']}, 
+              {id: 'staff', label: 'Propinas', icon: 'payments', roles: ['admin', 'cajero', 'mozo', 'delivery']},
+              {id: 'clients', label: 'Clientes', icon: 'people', roles: ['admin', 'cajero']}, 
+              {id: 'stock', label: 'Stock', icon: 'inventory_2', count: badges.stock, roles: ['admin', 'cajero']}, 
+              {id: 'cash', label: 'Arqueo', icon: 'account_balance_wallet', roles: ['admin', 'cajero']},
+              {id: 'products', label: 'Menú', icon: 'menu_book', roles: ['admin']}, 
+              {id: 'reports', label: 'Reportes', icon: 'bar_chart', roles: ['admin']}, 
+              {id: 'history', label: 'Historial', icon: 'history', roles: ['admin']}, 
+              {id: 'manual', label: 'Manual', icon: 'auto_stories', roles: ['admin', 'cajero', 'mozo', 'delivery']},
+              {id: 'support', label: 'Soporte', icon: 'support_agent', count: supportTickets.filter(t => t.status !== 'Resuelto').length, roles: ['admin'], highlight: true}
+            ].filter(tab => tab.roles.includes(currentUser.role)).map(tab => {
+              const isActive = activeTab === tab.id;
+              const rawCount = tab.count !== undefined ? tab.count : 0;
+              const dismissed = dismissedBadges[tab.id] || 0;
+              const activeCount = Math.max(0, rawCount - dismissed);
+
+              return (
+                <button 
+                  key={tab.id} 
+                  onClick={() => {
+                    setActiveTab(tab.id);
+                    setDismissedBadges(prev => ({
+                      ...prev,
+                      [tab.id]: tab.count || 0
+                    }));
+                  }} 
+                  className={`relative px-2.5 py-1.5 h-10 rounded-xl flex items-center gap-1.5 font-black text-[10px] uppercase transition-all shrink-0 min-w-fit cursor-pointer ${
+                    isActive 
+                      ? tab.id === 'support' 
+                        ? 'bg-purple-600 text-white shadow-md shadow-purple-600/30'
+                        : 'bg-[#180930] text-purple-200 border-2 border-purple-400 shadow-md shadow-purple-900/30' 
+                      : tab.id === 'support'
+                      ? 'text-purple-300 bg-purple-950/40 border border-purple-500/30 hover:bg-purple-900/50'
+                      : 'text-slate-300 hover:text-white hover:bg-white/5 border border-transparent hover:border-purple-500/20'
+                  }`}
+                >
+                  {activeCount > 0 && (
+                    <span className="absolute -top-1 right-1 bg-red-600 text-white text-[8px] font-black w-4 h-4 rounded-full flex items-center justify-center shadow-md animate-pulse z-10">
+                      {activeCount}
+                    </span>
+                  )}
+                  <Icon name={tab.icon} size={16} className={isActive ? 'text-purple-300' : 'text-slate-400'}/>
+                  <span className="leading-tight tracking-tight whitespace-nowrap">{tab.label}</span>
+                </button>
+              );
+            })}
+          </nav>
+
+          {/* Scroll Right Button */}
+          <button
+            type="button"
+            onClick={() => {
+              if (navRef.current) navRef.current.scrollBy({ left: 220, behavior: 'smooth' });
+            }}
+            className="w-6 h-9 rounded-lg bg-[#0d061c]/90 hover:bg-purple-950 text-purple-400 hover:text-white flex items-center justify-center transition-all border border-purple-500/20 shrink-0 ml-1 z-10 cursor-pointer shadow-sm"
+            title="Desplazar menú a la derecha"
+          >
+            <Icon name="chevron_right" size={16} />
+          </button>
+        </div>
 
         {/* User Role Badge & Logout */}
-        <div className="flex items-center gap-2.5 shrink-0 pl-2 border-l border-purple-500/20">
+        <div className="flex items-center gap-2 shrink-0 pl-2 sm:pl-3 border-l border-purple-500/20 bg-[#040108] z-30">
           {/* Active User Role Badge */}
-          <div className="hidden sm:flex items-center gap-1.5 px-2.5 py-1 rounded-xl bg-[#0c061a] border border-purple-500/30 text-[10px] font-black uppercase text-purple-200">
+          <div className="flex items-center gap-1.5 px-2 py-1 rounded-xl bg-[#0c061a] border border-purple-500/30 text-[9px] sm:text-[10px] font-black uppercase text-purple-200">
             <span className={`w-2 h-2 rounded-full ${
               currentUser.role === 'admin' ? 'bg-purple-400' :
               currentUser.role === 'cajero' ? 'bg-cyan-400' :
@@ -2317,7 +2390,7 @@ export default function App() {
               className={`w-2.5 h-2.5 rounded-full transition-colors ${register.isOpen ? 'bg-emerald-400 shadow-sm shadow-emerald-400/50 animate-pulse' : 'bg-amber-500'}`} 
               title={register.isOpen ? 'Caja Abierta' : 'Caja Cerrada'} 
             />
-            <span className="text-[10px] font-black uppercase tracking-wider text-slate-300 hidden md:inline">
+            <span className="text-[9px] sm:text-[10px] font-black uppercase tracking-wider text-slate-300 hidden lg:inline">
               {register.isOpen ? 'Caja Abierta' : 'Caja Cerrada'}
             </span>
           </div>
@@ -2332,7 +2405,7 @@ export default function App() {
                   showMessage("Sesión cerrada");
                 }
               }}
-              className="p-2 hover:bg-red-950/50 text-slate-400 hover:text-red-300 rounded-xl transition-all border border-transparent hover:border-red-500/30 flex items-center gap-1 text-[9px] font-black uppercase"
+              className="p-1.5 sm:p-2 hover:bg-red-950/50 text-slate-400 hover:text-red-300 rounded-xl transition-all border border-transparent hover:border-red-500/30 flex items-center gap-1 text-[9px] font-black uppercase cursor-pointer"
               title="Cerrar sesión NEXT CRM"
             >
               <Icon name="logout" size={15} />
