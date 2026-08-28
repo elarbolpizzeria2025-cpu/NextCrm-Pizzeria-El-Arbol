@@ -1,8 +1,8 @@
-import React, { useState, useEffect, useRef } from 'react';
-import { MenuItem, Topping } from '../types';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
+import { MenuItem, Topping, ClientData } from '../types';
 import { 
   ParsedVoiceOrder, 
-  parseVoiceOrderHeuristic,
+  parseVoiceOrderHeuristic, 
   cleanSpokenTranscript 
 } from '../utils/voiceOrderParser';
 import { Icon } from './Icon';
@@ -11,6 +11,8 @@ interface VoiceOrderModalProps {
   isOpen: boolean;
   onClose: () => void;
   menu: Record<string, MenuItem[]>;
+  allMenuItems?: MenuItem[];
+  allClients?: ClientData[];
   toppings: Topping[];
   onApplyToCart: (parsed: ParsedVoiceOrder, autoSubmit?: boolean) => void;
   showMessage: (text: string, type?: 'success' | 'error') => void;
@@ -20,6 +22,8 @@ export const VoiceOrderModal: React.FC<VoiceOrderModalProps> = ({
   isOpen,
   onClose,
   menu,
+  allMenuItems = [],
+  allClients = [],
   toppings,
   onApplyToCart,
   showMessage,
@@ -31,6 +35,21 @@ export const VoiceOrderModal: React.FC<VoiceOrderModalProps> = ({
   const [micError, setMicError] = useState<string | null>(null);
   const [isMinimized, setIsMinimized] = useState(false);
 
+  // Quick Controls State within Voice Modal
+  const [quickDestination, setQuickDestination] = useState<'Local' | 'Envío' | 'Mesa'>('Local');
+  const [quickTableNumber, setQuickTableNumber] = useState<number | string>(1);
+  const [quickPaymentMethod, setQuickPaymentMethod] = useState<string>('Efectivo');
+  const [quickCashAmount, setQuickCashAmount] = useState<string>('');
+  
+  // Client selection / quick registration state
+  const [clientSearchQuery, setClientSearchQuery] = useState('');
+  const [selectedClient, setSelectedClient] = useState<ClientData | null>(null);
+  const [customClientName, setCustomClientName] = useState('');
+  const [customClientPhone, setCustomClientPhone] = useState('');
+  const [customClientAddress, setCustomClientAddress] = useState('');
+  const [showClientDropdown, setShowClientDropdown] = useState(false);
+  const [showQuickSettings, setShowQuickSettings] = useState(true);
+
   const modalRef = useRef<HTMLDivElement>(null);
   const recognitionRef = useRef<any>(null);
 
@@ -41,8 +60,8 @@ export const VoiceOrderModal: React.FC<VoiceOrderModalProps> = ({
 
   useEffect(() => {
     if (isOpen) {
-      const initialY = Math.max(65, Math.min(window.innerHeight - 560, 80));
-      const initialX = Math.max(16, Math.min(window.innerWidth - 480, 24));
+      const initialY = Math.max(60, Math.min(window.innerHeight - 620, 75));
+      const initialX = Math.max(12, Math.min(window.innerWidth - 500, 24));
       setPosition({ x: initialX, y: initialY });
       startContinuousListening();
     } else {
@@ -50,9 +69,20 @@ export const VoiceOrderModal: React.FC<VoiceOrderModalProps> = ({
     }
   }, [isOpen]);
 
+  // Filter matching clients for quick dropdown
+  const filteredClients = useMemo(() => {
+    if (!clientSearchQuery.trim()) return allClients.slice(0, 10);
+    const q = clientSearchQuery.toLowerCase().trim();
+    return allClients.filter(c => 
+      (c.name && c.name.toLowerCase().includes(q)) || 
+      (c.phone && c.phone.includes(q)) ||
+      (c.address && c.address.toLowerCase().includes(q))
+    ).slice(0, 10);
+  }, [allClients, clientSearchQuery]);
+
   // Dragging logic
   const handlePointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
-    if ((e.target as HTMLElement).closest('button') || (e.target as HTMLElement).closest('input') || (e.target as HTMLElement).closest('textarea')) {
+    if ((e.target as HTMLElement).closest('button') || (e.target as HTMLElement).closest('input') || (e.target as HTMLElement).closest('textarea') || (e.target as HTMLElement).closest('select')) {
       return;
     }
     isDraggingRef.current = true;
@@ -83,7 +113,7 @@ export const VoiceOrderModal: React.FC<VoiceOrderModalProps> = ({
     const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
     if (!SpeechRecognition) {
       setSpeechSupported(false);
-      setMicError('El navegador no soporta reconocimiento de voz nativo. Puedes escribir el pedido.');
+      setMicError('El navegador no soporta reconocimiento de voz nativo. Puedes escribir o elegir productos.');
       return;
     }
 
@@ -142,7 +172,6 @@ export const VoiceOrderModal: React.FC<VoiceOrderModalProps> = ({
   const toggleListening = () => {
     if (isLiveListening) {
       stopListening();
-      // On pause, parse the current transcript automatically
       if (transcript.trim()) {
         const parsed = parseVoiceOrderHeuristic(transcript, menu, toppings);
         setParsedResult(parsed);
@@ -155,26 +184,86 @@ export const VoiceOrderModal: React.FC<VoiceOrderModalProps> = ({
   // Real-time automatic heuristic parsing whenever transcript updates
   useEffect(() => {
     if (!transcript.trim()) {
-      setParsedResult(null);
       return;
     }
     const parsed = parseVoiceOrderHeuristic(transcript, menu, toppings);
+    
+    // Auto-detect destination if spoken
+    if (parsed.destination) {
+      if (['Local', 'Envío', 'Mesa'].includes(parsed.destination)) {
+        setQuickDestination(parsed.destination as any);
+      }
+    }
+    // Auto-detect payment if spoken
+    if (parsed.paymentMethod) {
+      setQuickPaymentMethod(parsed.paymentMethod);
+    }
+    if (parsed.cashProvided) {
+      setQuickCashAmount(String(parsed.cashProvided));
+    }
+    // Auto-detect client if spoken
+    if (parsed.client?.name && !customClientName) {
+      setCustomClientName(parsed.client.name);
+    }
+    if (parsed.client?.phone && !customClientPhone) {
+      setCustomClientPhone(parsed.client.phone);
+    }
+    if (parsed.client?.address && !customClientAddress) {
+      setCustomClientAddress(parsed.client.address);
+    }
+
     setParsedResult(parsed);
   }, [transcript, menu, toppings]);
 
-  // Loading items and resetting for next batch of spoken items
+  // Loading items and applying to order
   const handleApplyBatchAndContinue = (autoSubmit = false) => {
-    if (!parsedResult || (parsedResult.items.length === 0 && !parsedResult.notes && !parsedResult.destination && !parsedResult.paymentMethod)) {
-      showMessage('No se detectaron artículos para cargar', 'error');
+    const finalItems = parsedResult?.items || [];
+    if (finalItems.length === 0 && !parsedResult?.notes && !customClientName && !selectedClient) {
+      showMessage('Dicta o selecciona al menos un producto para cargar', 'error');
       return;
     }
 
-    onApplyToCart(parsedResult, autoSubmit);
-    // Clear transcript and parsed state to allow adding more items immediately!
+    // Build client info
+    let finalClient: any = null;
+    if (selectedClient) {
+      finalClient = {
+        name: selectedClient.name,
+        phone: selectedClient.phone,
+        address: selectedClient.address,
+        zone: selectedClient.zone,
+        tableNumber: quickDestination === 'Mesa' ? quickTableNumber : null
+      };
+    } else if (customClientName || customClientPhone || customClientAddress || quickDestination === 'Mesa') {
+      finalClient = {
+        name: customClientName || (quickDestination === 'Mesa' ? `Mesa #${quickTableNumber}` : 'Cliente'),
+        phone: customClientPhone || 'N/A',
+        address: customClientAddress || (quickDestination === 'Envío' ? 'Dirección a confirmar' : 'Mostrador'),
+        zone: '',
+        tableNumber: quickDestination === 'Mesa' ? quickTableNumber : null
+      };
+    }
+
+    const payload: ParsedVoiceOrder = {
+      items: finalItems,
+      destination: quickDestination,
+      paymentMethod: quickPaymentMethod,
+      cashProvided: quickPaymentMethod === 'Efectivo' && quickCashAmount ? parseFloat(quickCashAmount) : null,
+      client: finalClient,
+      notes: parsedResult?.notes || '',
+      matchedCount: finalItems.length
+    };
+
+    onApplyToCart(payload, autoSubmit);
+    
+    // Clear state
     setTranscript('');
     setParsedResult(null);
+    setCustomClientName('');
+    setCustomClientPhone('');
+    setCustomClientAddress('');
+    setSelectedClient(null);
+    setClientSearchQuery('');
     
-    // Ensure dictation continues seamlessly
     if (!isLiveListening && !autoSubmit) {
       startContinuousListening();
     }
@@ -239,9 +328,9 @@ export const VoiceOrderModal: React.FC<VoiceOrderModalProps> = ({
         });
       }
       return {
-        destination: prev?.destination || null,
-        paymentMethod: prev?.paymentMethod || null,
-        cashProvided: prev?.cashProvided || null,
+        destination: prev?.destination || quickDestination,
+        paymentMethod: prev?.paymentMethod || quickPaymentMethod,
+        cashProvided: prev?.cashProvided || (quickCashAmount ? parseFloat(quickCashAmount) : null),
         notes: prev?.notes || '',
         items: existingItems,
         matchedCount: existingItems.length
@@ -252,9 +341,9 @@ export const VoiceOrderModal: React.FC<VoiceOrderModalProps> = ({
 
   if (!isOpen) return null;
 
-  const totalCalculated = parsedResult?.items.reduce(
+  const totalCalculated = (parsedResult?.items || []).reduce(
     (sum, it) => sum + (it.finalPrice || 0) * (it.quantity || 1), 0
-  ) || 0;
+  );
 
   return (
     <div className="fixed inset-0 z-50 pointer-events-none">
@@ -262,43 +351,43 @@ export const VoiceOrderModal: React.FC<VoiceOrderModalProps> = ({
         ref={modalRef}
         style={{
           transform: `translate3d(${position.x}px, ${position.y}px, 0)`,
-          width: isMinimized ? '340px' : '450px',
-          maxWidth: 'calc(100vw - 32px)',
+          width: isMinimized ? '340px' : '480px',
+          maxWidth: 'calc(100vw - 24px)',
         }}
-        className="pointer-events-auto absolute bg-[#05080c] border border-blue-500/30 rounded-3xl shadow-2xl overflow-hidden flex flex-col text-slate-100 transition-all duration-150 backdrop-blur-xl"
+        className="pointer-events-auto absolute bg-[#05080c] border-2 border-purple-500/40 rounded-3xl shadow-2xl overflow-hidden flex flex-col text-slate-100 transition-all duration-150 backdrop-blur-xl"
       >
         {/* Draggable Header */}
         <div
           onPointerDown={handlePointerDown}
           onPointerMove={handlePointerMove}
           onPointerUp={handlePointerUp}
-          className="bg-[#0b1219] p-3.5 border-b border-blue-500/20 flex items-center justify-between cursor-move select-none"
+          className="bg-[#0e071e] p-3.5 border-b border-purple-500/30 flex items-center justify-between cursor-move select-none"
         >
           <div className="flex items-center gap-2.5">
-            <div className="text-blue-400 flex items-center">
+            <div className="text-purple-400 flex items-center">
               <Icon name="drag_indicator" size={18} />
             </div>
             <div className="relative">
               <div className={`w-8 h-8 rounded-xl flex items-center justify-center font-black transition-all ${
-                isLiveListening ? 'bg-blue-600 text-white shadow-lg shadow-blue-500/40 animate-pulse' : 'bg-[#0f1722] text-blue-400 border border-blue-500/30'
+                isLiveListening ? 'bg-purple-600 text-white shadow-lg shadow-purple-500/40 animate-pulse' : 'bg-[#150a2b] text-purple-400 border border-purple-500/30'
               }`}>
                 <Icon name={isLiveListening ? "mic" : "mic_off"} size={18} />
               </div>
               {isLiveListening && (
-                <span className="absolute -top-1 -right-1 w-2.5 h-2.5 rounded-full bg-blue-400 animate-ping"></span>
+                <span className="absolute -top-1 -right-1 w-2.5 h-2.5 rounded-full bg-purple-400 animate-ping"></span>
               )}
             </div>
 
             <div>
               <div className="flex items-center gap-1.5">
                 <span className="text-xs font-black uppercase text-white tracking-wider">
-                  Dictado Continuo de Pedidos
+                  Toma Rápida por Voz + Opciones
                 </span>
-                <span className="text-[8px] bg-blue-950 text-blue-300 px-1.5 py-0.5 rounded-full font-black border border-blue-500/40">
-                  VOZ DIRECTA
+                <span className="text-[8px] bg-purple-950 text-purple-300 px-1.5 py-0.5 rounded-full font-black border border-purple-500/40">
+                  IA VOZ
                 </span>
               </div>
-              <p className="text-[10px] text-blue-400/80 font-bold uppercase">
+              <p className="text-[10px] text-purple-300/80 font-bold uppercase">
                 {isLiveListening ? 'Escuchando en vivo...' : 'En pausa (Toca micrófono para reanudar)'}
               </p>
             </div>
@@ -308,7 +397,7 @@ export const VoiceOrderModal: React.FC<VoiceOrderModalProps> = ({
             <button
               type="button"
               onClick={() => setIsMinimized(!isMinimized)}
-              className="w-7 h-7 rounded-lg bg-[#0f1722] hover:bg-[#162232] text-slate-300 hover:text-white flex items-center justify-center text-xs transition-all border border-blue-500/20"
+              className="w-7 h-7 rounded-lg bg-[#150a2b] hover:bg-[#220f44] text-slate-300 hover:text-white flex items-center justify-center text-xs transition-all border border-purple-500/20 cursor-pointer"
               title={isMinimized ? 'Expandir' : 'Minimizar'}
             >
               <Icon name={isMinimized ? "expand_less" : "expand_more"} size={16} />
@@ -316,7 +405,7 @@ export const VoiceOrderModal: React.FC<VoiceOrderModalProps> = ({
             <button
               type="button"
               onClick={onClose}
-              className="w-7 h-7 rounded-lg bg-[#141b24] hover:bg-red-950 text-slate-400 hover:text-red-400 flex items-center justify-center text-xs transition-all border border-red-500/20"
+              className="w-7 h-7 rounded-lg bg-[#1c0822] hover:bg-red-950 text-slate-400 hover:text-red-400 flex items-center justify-center text-xs transition-all border border-red-500/20 cursor-pointer"
               title="Cerrar pedido por voz"
             >
               <Icon name="close" size={16} />
@@ -330,8 +419,8 @@ export const VoiceOrderModal: React.FC<VoiceOrderModalProps> = ({
             <button
               type="button"
               onClick={toggleListening}
-              className={`px-3 py-1.5 rounded-xl font-black text-xs uppercase flex items-center gap-1.5 transition-all ${
-                isLiveListening ? 'bg-blue-600 text-white animate-pulse' : 'bg-[#101926] text-blue-400 border border-blue-500/30'
+              className={`px-3 py-1.5 rounded-xl font-black text-xs uppercase flex items-center gap-1.5 transition-all cursor-pointer ${
+                isLiveListening ? 'bg-purple-600 text-white animate-pulse' : 'bg-[#101926] text-purple-400 border border-purple-500/30'
               }`}
             >
               <Icon name={isLiveListening ? "mic" : "mic_off"} size={14} />
@@ -342,7 +431,7 @@ export const VoiceOrderModal: React.FC<VoiceOrderModalProps> = ({
               <button
                 type="button"
                 onClick={() => handleApplyBatchAndContinue(false)}
-                className="px-3 py-1.5 bg-blue-600 hover:bg-blue-500 text-white rounded-xl font-black text-xs uppercase flex items-center gap-1 shadow-md shadow-blue-500/30"
+                className="px-3 py-1.5 bg-purple-600 hover:bg-purple-500 text-white rounded-xl font-black text-xs uppercase flex items-center gap-1 shadow-md shadow-purple-500/30 cursor-pointer"
               >
                 <Icon name="add_shopping_cart" size={14} />
                 <span>+ Cargar ({parsedResult.items.length})</span>
@@ -355,17 +444,17 @@ export const VoiceOrderModal: React.FC<VoiceOrderModalProps> = ({
           </div>
         ) : (
           /* Expanded Body */
-          <div className="p-4 space-y-3.5 max-h-[82vh] overflow-y-auto no-scrollbar bg-[#060a0f]">
+          <div className="p-4 space-y-3.5 max-h-[82vh] overflow-y-auto no-scrollbar bg-[#06030c]">
             {/* Live Status Strip */}
-            <div className="bg-gradient-to-r from-[#0b1420] to-[#070e17] p-3.5 rounded-2xl border border-blue-500/30 flex items-center justify-between gap-3 shadow-inner">
+            <div className="bg-gradient-to-r from-[#120726] to-[#0a0316] p-3.5 rounded-2xl border border-purple-500/30 flex items-center justify-between gap-3 shadow-inner">
               <div className="flex items-center gap-3">
                 <button
                   type="button"
                   onClick={toggleListening}
-                  className={`w-12 h-12 rounded-2xl flex items-center justify-center transition-all shrink-0 shadow-lg ${
+                  className={`w-12 h-12 rounded-2xl flex items-center justify-center transition-all shrink-0 shadow-lg cursor-pointer ${
                     isLiveListening
-                      ? 'bg-blue-600 text-white scale-105 shadow-blue-500/50 animate-pulse'
-                      : 'bg-[#101a26] text-blue-400 border border-blue-500/40 hover:bg-[#162334]'
+                      ? 'bg-purple-600 text-white scale-105 shadow-purple-500/50 animate-pulse'
+                      : 'bg-[#180b33] text-purple-300 border border-purple-500/40 hover:bg-[#261050]'
                   }`}
                   title={isLiveListening ? 'Pausar dictado' : 'Reanudar dictado'}
                 >
@@ -376,8 +465,8 @@ export const VoiceOrderModal: React.FC<VoiceOrderModalProps> = ({
                   <div className="text-xs font-black uppercase text-white flex items-center gap-1.5">
                     <span>{isLiveListening ? 'Dictado continuo activo' : 'Dictado pausado'}</span>
                   </div>
-                  <div className="text-[10px] text-blue-300/80 font-medium mt-0.5">
-                    {isLiveListening ? 'Habla y los productos se detectarán automáticamente.' : 'Toca el micrófono para comenzar o reanudar.'}
+                  <div className="text-[10px] text-purple-300/80 font-medium mt-0.5">
+                    {isLiveListening ? 'Habla y los productos, destino y pago se detectarán.' : 'Toca el micrófono para comenzar o reanudar.'}
                   </div>
                 </div>
               </div>
@@ -386,11 +475,11 @@ export const VoiceOrderModal: React.FC<VoiceOrderModalProps> = ({
                 <button
                   type="button"
                   onClick={() => handleApplyBatchAndContinue(false)}
-                  className="px-3 py-2 bg-blue-600 hover:bg-blue-500 text-white font-black text-[10px] uppercase rounded-xl transition-all flex items-center gap-1 shadow-md shadow-blue-500/30"
-                  title="Carga los productos actuales y continúa escuchando"
+                  className="px-3 py-2 bg-purple-600 hover:bg-purple-500 text-white font-black text-[10px] uppercase rounded-xl transition-all flex items-center gap-1 shadow-md shadow-purple-500/30 cursor-pointer"
+                  title="Carga los productos actuales y continúa"
                 >
                   <Icon name="add_shopping_cart" size={14} />
-                  <span>+ Agregar ({parsedResult.items.length})</span>
+                  <span>+ Cargar ({parsedResult.items.length})</span>
                 </button>
               )}
             </div>
@@ -402,13 +491,211 @@ export const VoiceOrderModal: React.FC<VoiceOrderModalProps> = ({
               </div>
             )}
 
+            {/* QUICK SETTINGS TOGGLE (Destino + Pago + Cliente) */}
+            <div className="bg-[#0b0518] border border-purple-500/30 rounded-2xl p-3 space-y-3">
+              <div className="flex items-center justify-between border-b border-purple-500/20 pb-2">
+                <span className="text-[11px] font-black uppercase text-purple-300 flex items-center gap-1.5">
+                  <Icon name="tune" size={15} className="text-purple-400" />
+                  Destino, Pago & Cliente Rápido
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setShowQuickSettings(!showQuickSettings)}
+                  className="text-[10px] text-purple-400 font-bold uppercase hover:text-white flex items-center gap-0.5 cursor-pointer"
+                >
+                  <span>{showQuickSettings ? 'Ocultar' : 'Configurar'}</span>
+                  <Icon name={showQuickSettings ? "expand_less" : "expand_more"} size={14} />
+                </button>
+              </div>
+
+              {showQuickSettings && (
+                <div className="space-y-3 text-left animate-in fade-in-50">
+                  {/* 1. Destino Rápido: Mostrador, Envío, Mesa */}
+                  <div className="space-y-1">
+                    <label className="text-[10px] font-black uppercase text-slate-400 flex items-center justify-between">
+                      <span>1. Tipo / Destino del Pedido</span>
+                      <span className="text-purple-300 font-bold lowercase">{quickDestination}</span>
+                    </label>
+                    <div className="grid grid-cols-3 gap-1.5">
+                      {[
+                        { id: 'Local', label: '🏢 Mostrador', icon: 'storefront' },
+                        { id: 'Envío', label: '🛵 Envío', icon: 'two_wheeler' },
+                        { id: 'Mesa', label: '🍽️ Mesa', icon: 'table_restaurant' }
+                      ].map(d => (
+                        <button
+                          key={d.id}
+                          type="button"
+                          onClick={() => setQuickDestination(d.id as any)}
+                          className={`p-2 rounded-xl text-xs font-black uppercase border transition-all cursor-pointer text-center ${
+                            quickDestination === d.id
+                              ? 'bg-purple-600 text-white border-purple-400 shadow-md'
+                              : 'bg-[#06020e] text-slate-300 border-purple-500/20 hover:border-purple-400'
+                          }`}
+                        >
+                          {d.label}
+                        </button>
+                      ))}
+                    </div>
+
+                    {/* Mesa Number Selector if Mesa is chosen */}
+                    {quickDestination === 'Mesa' && (
+                      <div className="pt-1.5 flex items-center gap-2">
+                        <span className="text-[10px] font-black uppercase text-blue-400 shrink-0">N° Mesa:</span>
+                        <div className="flex gap-1 overflow-x-auto no-scrollbar py-0.5">
+                          {Array.from({ length: 20 }, (_, i) => i + 1).map(num => (
+                            <button
+                              key={num}
+                              type="button"
+                              onClick={() => setQuickTableNumber(num)}
+                              className={`w-7 h-7 rounded-lg text-xs font-black font-mono shrink-0 transition-all border cursor-pointer ${
+                                quickTableNumber === num
+                                  ? 'bg-blue-600 text-white border-blue-400 shadow-md'
+                                  : 'bg-[#06020e] text-slate-400 border-purple-500/20 hover:text-white'
+                              }`}
+                            >
+                              #{num}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* 2. Método de Pago Rápido */}
+                  <div className="space-y-1">
+                    <label className="text-[10px] font-black uppercase text-slate-400 flex items-center justify-between">
+                      <span>2. Método de Pago</span>
+                      <span className="text-purple-300 font-bold">{quickPaymentMethod}</span>
+                    </label>
+                    <div className="grid grid-cols-3 sm:grid-cols-5 gap-1">
+                      {['Efectivo', 'Débito', 'Crédito', 'Transferencia', 'Mercado Pago'].map(pm => (
+                        <button
+                          key={pm}
+                          type="button"
+                          onClick={() => setQuickPaymentMethod(pm)}
+                          className={`p-1.5 rounded-lg text-[10px] font-black uppercase border transition-all cursor-pointer text-center ${
+                            quickPaymentMethod === pm
+                              ? 'bg-emerald-600 text-white border-emerald-400 shadow-md'
+                              : 'bg-[#06020e] text-slate-300 border-purple-500/20 hover:border-emerald-500/50'
+                          }`}
+                        >
+                          {pm === 'Efectivo' ? '💵 Efect.' : pm === 'Débito' ? '💳 Déb.' : pm === 'Crédito' ? '💳 Créd.' : pm === 'Transferencia' ? '📲 Transf.' : '📱 MP'}
+                        </button>
+                      ))}
+                    </div>
+
+                    {quickPaymentMethod === 'Efectivo' && (
+                      <div className="flex items-center gap-2 pt-1">
+                        <span className="text-[10px] font-black uppercase text-emerald-400 shrink-0">Paga con $:</span>
+                        <input
+                          type="number"
+                          placeholder="Ej: 1000"
+                          value={quickCashAmount}
+                          onChange={e => setQuickCashAmount(e.target.value)}
+                          className="flex-1 p-1.5 bg-[#06020e] border border-emerald-500/40 text-emerald-300 rounded-lg text-xs font-mono font-black outline-none focus:border-emerald-400"
+                        />
+                      </div>
+                    )}
+                  </div>
+
+                  {/* 3. Cliente Registrado o Nuevo */}
+                  <div className="space-y-1.5 relative">
+                    <div className="flex items-center justify-between">
+                      <label className="text-[10px] font-black uppercase text-slate-400">
+                        3. Cliente (Directorio o Nuevo)
+                      </label>
+                      {selectedClient && (
+                        <button
+                          type="button"
+                          onClick={() => { setSelectedClient(null); setClientSearchQuery(''); }}
+                          className="text-[9px] text-red-400 hover:underline font-bold uppercase cursor-pointer"
+                        >
+                          Quitar selección
+                        </button>
+                      )}
+                    </div>
+
+                    {/* Quick Client Search Input */}
+                    <div className="relative">
+                      <input
+                        type="text"
+                        placeholder="Buscar cliente en directorio (nombre o cel)..."
+                        value={selectedClient ? `${selectedClient.name} (${selectedClient.phone || 'S/N'})` : clientSearchQuery}
+                        onChange={e => {
+                          setSelectedClient(null);
+                          setClientSearchQuery(e.target.value);
+                          setShowClientDropdown(true);
+                        }}
+                        onFocus={() => setShowClientDropdown(true)}
+                        className="w-full p-2 bg-[#06020e] border border-purple-500/30 text-white rounded-xl text-xs font-black uppercase outline-none focus:border-purple-400"
+                      />
+                    </div>
+
+                    {/* Matching Clients Dropdown */}
+                    {showClientDropdown && !selectedClient && filteredClients.length > 0 && (
+                      <div className="absolute top-full left-0 right-0 z-30 mt-1 max-h-40 overflow-y-auto bg-[#090314] border border-purple-500/40 rounded-xl shadow-2xl p-1 space-y-1">
+                        {filteredClients.map(c => (
+                          <div
+                            key={c.firestoreId}
+                            onClick={() => {
+                              setSelectedClient(c);
+                              setCustomClientName(c.name || '');
+                              setCustomClientPhone(c.phone || '');
+                              setCustomClientAddress(c.address || '');
+                              setShowClientDropdown(false);
+                            }}
+                            className="p-2 rounded-lg bg-[#06020e] hover:bg-purple-950 border border-purple-500/15 cursor-pointer text-left transition-colors flex items-center justify-between"
+                          >
+                            <div>
+                              <div className="text-xs font-black uppercase text-white">{c.name}</div>
+                              <div className="text-[9px] text-purple-300">{c.phone || 'Sin cel'} • {c.address || 'Mostrador'}</div>
+                            </div>
+                            <span className="text-[9px] bg-purple-900 text-purple-200 px-1.5 py-0.5 rounded font-black">ELEGIR</span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+
+                    {/* Manual Client Name & Phone & Address Fields */}
+                    {!selectedClient && (
+                      <div className="grid grid-cols-2 sm:grid-cols-3 gap-1.5 pt-1">
+                        <input
+                          type="text"
+                          placeholder="Nombre Cliente"
+                          value={customClientName}
+                          onChange={e => setCustomClientName(e.target.value.toUpperCase())}
+                          className="p-1.5 bg-[#06020e] border border-purple-500/20 text-white rounded-lg text-xs font-bold uppercase outline-none focus:border-purple-400"
+                        />
+                        <input
+                          type="text"
+                          placeholder="Celular"
+                          value={customClientPhone}
+                          onChange={e => setCustomClientPhone(e.target.value)}
+                          className="p-1.5 bg-[#06020e] border border-purple-500/20 text-white rounded-lg text-xs font-mono font-bold outline-none focus:border-purple-400"
+                        />
+                        {quickDestination === 'Envío' && (
+                          <input
+                            type="text"
+                            placeholder="Dirección entrega"
+                            value={customClientAddress}
+                            onChange={e => setCustomClientAddress(e.target.value)}
+                            className="p-1.5 bg-[#06020e] border border-purple-500/20 text-white rounded-lg text-xs font-bold uppercase outline-none focus:border-purple-400 col-span-2 sm:col-span-1"
+                          />
+                        )}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+            </div>
+
             {/* Lo Más Pedido / Ranking Rápido */}
             <div>
               <div className="flex items-center justify-between text-[10px] font-black uppercase text-slate-400 mb-1.5 px-1">
-                <span className="flex items-center gap-1 text-blue-400">
+                <span className="flex items-center gap-1 text-purple-400">
                   <Icon name="trending_up" size={13} /> Lo Más Pedido (Agregar con 1 toque)
                 </span>
-                <span className="text-[9px] text-slate-500">Ranking</span>
+                <span className="text-[9px] text-slate-500">Popular</span>
               </div>
               <div className="flex items-center gap-1.5 overflow-x-auto pb-1 no-scrollbar">
                 {POPULAR_SUGGESTIONS.map(sugg => (
@@ -416,12 +703,12 @@ export const VoiceOrderModal: React.FC<VoiceOrderModalProps> = ({
                     key={sugg.name}
                     type="button"
                     onClick={() => handleAddPopularItem(sugg)}
-                    className="px-2.5 py-1.5 bg-[#0a131f] hover:bg-blue-950/80 border border-blue-500/30 hover:border-blue-400 text-blue-200 hover:text-white rounded-xl text-[10px] font-black uppercase transition-all shrink-0 flex items-center gap-1.5 shadow-xs"
+                    className="px-2.5 py-1.5 bg-[#0a0416] hover:bg-purple-950/80 border border-purple-500/30 hover:border-purple-400 text-purple-200 hover:text-white rounded-xl text-[10px] font-black uppercase transition-all shrink-0 flex items-center gap-1.5 shadow-xs cursor-pointer"
                     title={`Agregar 1x ${sugg.name} ($${sugg.price})`}
                   >
                     <span>{sugg.icon}</span>
                     <span>{sugg.name}</span>
-                    <span className="text-blue-400 font-mono text-[9px]">${sugg.price}</span>
+                    <span className="text-purple-400 font-mono text-[9px]">${sugg.price}</span>
                   </button>
                 ))}
               </div>
@@ -429,14 +716,14 @@ export const VoiceOrderModal: React.FC<VoiceOrderModalProps> = ({
 
             {/* Transcript Area */}
             <div>
-              <div className="flex items-center justify-between text-[10px] font-black uppercase text-blue-400/90 mb-1 px-1">
-                <span>Texto Dictado</span>
+              <div className="flex items-center justify-between text-[10px] font-black uppercase text-purple-300 mb-1 px-1">
+                <span>Texto Dictado por Voz</span>
                 <div className="flex items-center gap-2">
                   {transcript && (
                     <button
                       type="button"
                       onClick={() => { setTranscript(''); setParsedResult(null); }}
-                      className="text-slate-400 hover:text-red-400 flex items-center gap-1 font-bold"
+                      className="text-slate-400 hover:text-red-400 flex items-center gap-1 font-bold cursor-pointer"
                     >
                       <Icon name="clear" size={12} />
                       <span>Limpiar</span>
@@ -448,54 +735,54 @@ export const VoiceOrderModal: React.FC<VoiceOrderModalProps> = ({
               <textarea
                 value={transcript}
                 onChange={(e) => setTranscript(e.target.value)}
-                placeholder='Dicta productos, ej: "2 fainá con queso, 1 pizza con jamón y morrón, nota refresco 1.5 coca cola"'
+                placeholder='Dicta productos, ej: "2 fainá con queso, 1 pizza con jamón y morrón, para enviar a Juan en 18 de julio"'
                 rows={2}
-                className="w-full bg-[#04070a] border border-blue-500/30 focus:border-blue-400 rounded-2xl p-3 text-xs text-blue-100 placeholder-slate-600 focus:outline-none transition-all resize-none shadow-inner"
+                className="w-full bg-[#040108] border border-purple-500/30 focus:border-purple-400 rounded-2xl p-3 text-xs text-purple-100 placeholder-slate-600 focus:outline-none transition-all resize-none shadow-inner"
               />
             </div>
 
             {/* Real-time Parsed Items Preview */}
             {parsedResult && (
-              <div className="bg-[#091018] border border-blue-500/30 rounded-2xl p-3.5 space-y-3 shadow-lg">
-                <div className="flex items-center justify-between border-b border-blue-500/20 pb-2">
+              <div className="bg-[#090314] border border-purple-500/30 rounded-2xl p-3.5 space-y-3 shadow-lg">
+                <div className="flex items-center justify-between border-b border-purple-500/20 pb-2">
                   <div className="flex items-center gap-1.5 text-xs font-black uppercase text-white">
-                    <Icon name="check_circle" size={16} className="text-blue-400" />
+                    <Icon name="check_circle" size={16} className="text-purple-400" />
                     <span>Detectado ({parsedResult.items.length} {parsedResult.items.length === 1 ? 'producto' : 'productos'})</span>
                   </div>
-                  <div className="text-sm font-black text-blue-400">
+                  <div className="text-sm font-black text-emerald-400 font-mono">
                     Total: ${totalCalculated}
                   </div>
                 </div>
 
                 {parsedResult.items.length === 0 ? (
-                  <div className="text-center py-2 text-[11px] font-bold text-slate-400 bg-[#060a0f] border border-slate-800 rounded-xl p-2">
-                    {transcript.trim() ? 'No se reconoció un ítem del menú en la frase dictada.' : 'Comienza a hablar para detectar productos.'}
+                  <div className="text-center py-2 text-[11px] font-bold text-slate-400 bg-[#06020e] border border-purple-500/15 rounded-xl p-2">
+                    {transcript.trim() ? 'No se reconoció un ítem del menú en la frase dictada.' : 'Comienza a hablar o toca los botones para agregar productos.'}
                   </div>
                 ) : (
-                  <div className="space-y-2 max-h-48 overflow-y-auto pr-1 no-scrollbar">
+                  <div className="space-y-2 max-h-44 overflow-y-auto pr-1 no-scrollbar">
                     {parsedResult.items.map((item, idx) => (
                       <div
                         key={idx}
-                        className="bg-[#0d1622] border border-blue-500/20 p-2.5 rounded-xl flex items-center justify-between gap-2 hover:border-blue-400/50 transition-all"
+                        className="bg-[#0c051a] border border-purple-500/20 p-2.5 rounded-xl flex items-center justify-between gap-2 hover:border-purple-400/50 transition-all"
                       >
                         <div className="min-w-0 flex-1">
                           <div className="flex items-center gap-2">
                             {/* Quantity Controls */}
-                            <div className="flex items-center gap-1 bg-[#060b10] p-0.5 rounded-lg border border-blue-500/20 shrink-0">
+                            <div className="flex items-center gap-1 bg-[#06020e] p-0.5 rounded-lg border border-purple-500/20 shrink-0">
                               <button
                                 type="button"
                                 onClick={() => handleUpdateItemQty(idx, -1)}
-                                className="w-5 h-5 rounded flex items-center justify-center text-slate-400 hover:text-white hover:bg-blue-950 text-xs font-black"
+                                className="w-5 h-5 rounded flex items-center justify-center text-slate-400 hover:text-white hover:bg-purple-950 text-xs font-black cursor-pointer"
                               >
                                 -
                               </button>
-                              <span className="w-5 text-center font-black text-xs text-blue-400">
+                              <span className="w-5 text-center font-black text-xs text-purple-300 font-mono">
                                 {item.quantity}
                               </span>
                               <button
                                 type="button"
                                 onClick={() => handleUpdateItemQty(idx, 1)}
-                                className="w-5 h-5 rounded flex items-center justify-center text-slate-400 hover:text-white hover:bg-blue-950 text-xs font-black"
+                                className="w-5 h-5 rounded flex items-center justify-center text-slate-400 hover:text-white hover:bg-purple-950 text-xs font-black cursor-pointer"
                               >
                                 +
                               </button>
@@ -511,7 +798,7 @@ export const VoiceOrderModal: React.FC<VoiceOrderModalProps> = ({
                               {item.selectedToppings.map((top, tidx) => (
                                 <span
                                   key={tidx}
-                                  className="px-1.5 py-0.2 bg-blue-950 border border-blue-500/30 text-blue-300 rounded text-[9px] font-bold"
+                                  className="px-1.5 py-0.2 bg-purple-950 border border-purple-500/30 text-purple-300 rounded text-[9px] font-bold"
                                 >
                                   +{top.name} {top.price > 0 ? `(+$${top.price})` : ''}
                                 </span>
@@ -522,7 +809,7 @@ export const VoiceOrderModal: React.FC<VoiceOrderModalProps> = ({
 
                         <div className="flex items-center gap-2 shrink-0">
                           <div className="text-right">
-                            <div className="text-xs font-black text-blue-400">
+                            <div className="text-xs font-black text-emerald-400 font-mono">
                               ${item.finalPrice * item.quantity}
                             </div>
                             <div className="text-[9px] text-slate-500">
@@ -533,7 +820,7 @@ export const VoiceOrderModal: React.FC<VoiceOrderModalProps> = ({
                           <button
                             type="button"
                             onClick={() => handleRemoveItem(idx)}
-                            className="p-1 text-slate-500 hover:text-red-400 hover:bg-red-950/40 rounded transition-all"
+                            className="p-1 text-slate-500 hover:text-red-400 hover:bg-red-950/40 rounded transition-all cursor-pointer"
                             title="Quitar producto"
                           >
                             <Icon name="delete" size={16} />
@@ -541,30 +828,6 @@ export const VoiceOrderModal: React.FC<VoiceOrderModalProps> = ({
                         </div>
                       </div>
                     ))}
-                  </div>
-                )}
-
-                {/* Extra Extracted Order Metadata (Destination / Payment / Notes) */}
-                {(parsedResult.destination || parsedResult.paymentMethod || parsedResult.notes || parsedResult.cashProvided) && (
-                  <div className="grid grid-cols-3 gap-2 pt-1 border-t border-blue-500/20 text-[10px]">
-                    <div className="bg-[#060a0f] p-2 rounded-lg border border-blue-500/20">
-                      <span className="text-slate-500 uppercase font-black block">Destino</span>
-                      <span className="font-bold text-blue-300 uppercase">
-                        {parsedResult.destination || 'Local'}
-                      </span>
-                    </div>
-                    <div className="bg-[#060a0f] p-2 rounded-lg border border-blue-500/20">
-                      <span className="text-slate-500 uppercase font-black block">Pago</span>
-                      <span className="font-bold text-blue-300 uppercase">
-                        {parsedResult.paymentMethod || 'Efectivo'} {parsedResult.cashProvided ? `($${parsedResult.cashProvided})` : ''}
-                      </span>
-                    </div>
-                    <div className="bg-[#060a0f] p-2 rounded-lg border border-blue-500/20 truncate">
-                      <span className="text-slate-500 uppercase font-black block">Nota</span>
-                      <span className="font-bold text-blue-300 truncate block">
-                        {parsedResult.notes || 'Ninguna'}
-                      </span>
-                    </div>
                   </div>
                 )}
               </div>
@@ -576,16 +839,16 @@ export const VoiceOrderModal: React.FC<VoiceOrderModalProps> = ({
                 <button
                   type="button"
                   onClick={() => handleApplyBatchAndContinue(false)}
-                  className="py-3 px-3 bg-[#0d1825] hover:bg-[#132336] border border-blue-500/40 text-blue-300 font-black text-xs uppercase rounded-xl transition-all flex items-center justify-center gap-1.5 shadow-lg"
+                  className="py-3 px-3 bg-[#130726] hover:bg-[#200c40] border border-purple-500/40 text-purple-200 font-black text-xs uppercase rounded-xl transition-all flex items-center justify-center gap-1.5 shadow-lg cursor-pointer"
                 >
                   <Icon name="add_shopping_cart" size={16} />
-                  <span>+ Agregar ({parsedResult.items.length})</span>
+                  <span>+ Cargar a Comanda ({parsedResult.items.length})</span>
                 </button>
 
                 <button
                   type="button"
                   onClick={() => handleApplyBatchAndContinue(true)}
-                  className="py-3 px-3 bg-blue-600 hover:bg-blue-500 text-white font-black text-xs uppercase rounded-xl transition-all flex items-center justify-center gap-1.5 shadow-lg shadow-blue-500/30"
+                  className="py-3 px-3 bg-purple-600 hover:bg-purple-500 text-slate-950 font-black text-xs uppercase rounded-xl transition-all flex items-center justify-center gap-1.5 shadow-lg shadow-purple-500/30 cursor-pointer"
                 >
                   <Icon name="local_fire_department" size={16} />
                   <span>Enviar a Cocina</span>

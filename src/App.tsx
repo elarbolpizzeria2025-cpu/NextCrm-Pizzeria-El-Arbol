@@ -367,15 +367,24 @@ export default function App() {
         phone: parsed.client?.phone || prev.phone,
         address: parsed.client?.address || prev.address,
         zone: parsed.client?.zone || prev.zone,
+        tableNumber: parsed.client?.tableNumber || prev.tableNumber,
+        assignedWaiter: parsed.client?.assignedWaiter || prev.assignedWaiter
       }));
     }
     if (parsed.notes) {
       setOrderNotes(prev => prev ? `${prev}, ${parsed.notes}` : (parsed.notes || ''));
     }
     setActiveTab('pos');
-    if (parsed.paymentMethod || parsed.cashProvided) {
-      setPosStep(3);
-    } else if (parsed.client?.name || parsed.client?.address || parsed.destination) {
+
+    if (autoSubmit) {
+      handleCheckout(false);
+      return;
+    }
+
+    // Smart step progression:
+    // If only items were added, keep in Step 1 (Menú) so user sees products added.
+    // If destination or client were specified, move to Step 2 (Destino).
+    if (parsed.client?.name || parsed.client?.address || (parsed.destination && parsed.destination !== 'Local')) {
       setPosStep(2);
     } else {
       setPosStep(1);
@@ -4613,6 +4622,8 @@ export default function App() {
         isOpen={voiceOrderModalOpen}
         onClose={() => setVoiceOrderModalOpen(false)}
         menu={menu}
+        allMenuItems={allMenuItems}
+        allClients={allClients}
         toppings={DEFAULT_TOPPINGS}
         onApplyToCart={handleApplyVoiceOrder}
         showMessage={showMessage}

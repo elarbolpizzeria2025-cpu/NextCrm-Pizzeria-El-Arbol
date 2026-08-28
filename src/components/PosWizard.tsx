@@ -128,13 +128,13 @@ export const PosWizard: React.FC<PosWizardProps> = ({
     },
     3: {
       name: 'Paso 3: Pago y Confirmación',
-      accent: 'violet',
-      activeTab: 'bg-violet-600 text-white shadow-violet-600/30',
-      activeText: 'text-violet-400',
-      activeBorder: 'border-violet-500/40',
-      activeBg: 'bg-[#1a0828]',
-      btnBg: 'bg-violet-600 hover:bg-violet-500 text-white shadow-violet-600/25',
-      badgeBg: 'bg-violet-950 text-violet-300 border-violet-500/40',
+      accent: 'emerald',
+      activeTab: 'bg-emerald-600 text-white shadow-emerald-600/30',
+      activeText: 'text-emerald-400',
+      activeBorder: 'border-emerald-500/40',
+      activeBg: 'bg-[#051a0e]',
+      btnBg: 'bg-emerald-600 hover:bg-emerald-500 text-white shadow-emerald-600/25',
+      badgeBg: 'bg-emerald-950 text-emerald-300 border-emerald-500/40',
     },
   }[posStep];
 
@@ -227,16 +227,17 @@ export const PosWizard: React.FC<PosWizardProps> = ({
   return (
     <div className="h-full flex flex-col relative bg-[#050508] text-slate-100 select-none overflow-hidden">
       {/* Wizard Step Progression Bar with Dynamic Lila/Blue/Violet Colors */}
+      {/* Wizard Step Selector Bar */}
       <div className={`px-3 sm:px-4 py-2 shrink-0 flex flex-wrap items-center justify-between gap-2 shadow-md z-30 transition-all border-b ${stepColorTheme.activeBg} ${stepColorTheme.activeBorder}`}>
         <div className="flex items-center gap-1.5 sm:gap-2.5 overflow-x-auto no-scrollbar">
-          {/* Step 1: Menú */}
+          {/* Step 1: Menú (Morado) */}
           <button
             type="button"
             onClick={() => setPosStep(1)}
-            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl font-black text-xs uppercase transition-all ${
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl font-black text-xs uppercase transition-all cursor-pointer border ${
               posStep === 1
-                ? 'bg-purple-600 text-white shadow-md shadow-purple-600/30'
-                : 'bg-[#0f091f] text-slate-300 hover:bg-[#1a1033] border border-purple-500/20'
+                ? 'bg-purple-600 text-white border-purple-400 shadow-lg shadow-purple-600/40 ring-2 ring-purple-400/60'
+                : 'bg-[#0f091f] text-slate-300 hover:bg-[#1a1033] border-purple-500/20 hover:border-purple-400'
             }`}
           >
             <span className={`w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-black ${posStep === 1 ? 'bg-white text-purple-900' : 'bg-purple-950 text-purple-300'}`}>
@@ -248,18 +249,21 @@ export const PosWizard: React.FC<PosWizardProps> = ({
                 {totalItemCount}
               </span>
             )}
+            {posStep === 1 && (
+              <span className="text-[8px] bg-white/20 px-1 py-0.2 rounded font-black tracking-widest">ACTUAL</span>
+            )}
           </button>
 
           <Icon name="chevron_right" size={14} className="text-slate-600 shrink-0 hidden sm:inline" />
 
-          {/* Step 2: Destino */}
+          {/* Step 2: Destino (Azul) */}
           <button
             type="button"
             onClick={() => setPosStep(2)}
-            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl font-black text-xs uppercase transition-all ${
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl font-black text-xs uppercase transition-all cursor-pointer border ${
               posStep === 2
-                ? 'bg-blue-600 text-white shadow-md shadow-blue-600/30'
-                : 'bg-[#0f091f] text-slate-300 hover:bg-[#1a1033] border border-purple-500/20'
+                ? 'bg-blue-600 text-white border-blue-400 shadow-lg shadow-blue-600/40 ring-2 ring-blue-400/60'
+                : 'bg-[#0a1226] text-slate-300 hover:bg-[#101c3d] border-blue-500/20 hover:border-blue-400'
             }`}
           >
             <span className={`w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-black ${posStep === 2 ? 'bg-white text-blue-900' : 'bg-blue-950 text-blue-300'}`}>
@@ -269,27 +273,33 @@ export const PosWizard: React.FC<PosWizardProps> = ({
             <span className={`text-[10px] px-2 py-0.2 rounded-full font-bold uppercase ${posStep === 2 ? 'bg-white/20 text-white' : 'bg-blue-950 text-blue-300 border border-blue-500/30'}`}>
               {orderType}
             </span>
+            {posStep === 2 && (
+              <span className="text-[8px] bg-white/20 px-1 py-0.2 rounded font-black tracking-widest">ACTUAL</span>
+            )}
           </button>
 
           <Icon name="chevron_right" size={14} className="text-slate-600 shrink-0 hidden sm:inline" />
 
-          {/* Step 3: Pago */}
+          {/* Step 3: Pago (Verde Esmeralda) */}
           <button
             type="button"
             onClick={() => setPosStep(3)}
-            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl font-black text-xs uppercase transition-all ${
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl font-black text-xs uppercase transition-all cursor-pointer border ${
               posStep === 3
-                ? 'bg-violet-600 text-white shadow-md shadow-violet-600/30'
-                : 'bg-[#0f091f] text-slate-300 hover:bg-[#1a1033] border border-purple-500/20'
+                ? 'bg-emerald-600 text-white border-emerald-400 shadow-lg shadow-emerald-600/40 ring-2 ring-emerald-400/60'
+                : 'bg-[#061a10] text-slate-300 hover:bg-[#0c2a1b] border-emerald-500/20 hover:border-emerald-400'
             }`}
           >
-            <span className={`w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-black ${posStep === 3 ? 'bg-white text-violet-900' : 'bg-violet-950 text-violet-300'}`}>
+            <span className={`w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-black ${posStep === 3 ? 'bg-white text-emerald-900' : 'bg-emerald-950 text-emerald-300'}`}>
               3
             </span>
             <span>3. Pago</span>
-            <span className={`text-[10px] px-2 py-0.2 rounded-full font-bold uppercase ${posStep === 3 ? 'bg-white/20 text-white' : 'bg-violet-950 text-violet-300 border border-violet-500/30'}`}>
+            <span className={`text-[10px] px-2 py-0.2 rounded-full font-bold uppercase ${posStep === 3 ? 'bg-white/20 text-white' : 'bg-emerald-950 text-emerald-300 border border-emerald-500/30'}`}>
               {paymentMethod}
             </span>
+            {posStep === 3 && (
+              <span className="text-[8px] bg-white/20 px-1 py-0.2 rounded font-black tracking-widest">ACTUAL</span>
+            )}
           </button>
         </div>
 
