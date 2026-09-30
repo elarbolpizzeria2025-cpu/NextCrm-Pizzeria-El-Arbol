@@ -188,11 +188,11 @@ export const CrmClientsTab: React.FC<CrmClientsTabProps> = ({
   };
 
   return (
-    <div className="p-4 sm:p-8 h-full overflow-y-auto bg-[#050508] text-slate-100 no-scrollbar space-y-6">
-      <div className="max-w-7xl mx-auto space-y-6">
+    <div className="p-3.5 sm:p-5 md:p-6 lg:px-7 lg:py-6 h-full overflow-y-auto bg-[#050508] text-slate-100 no-scrollbar space-y-6">
+      <div className="w-full max-w-none mx-auto space-y-6">
         {/* Header and Actions */}
-        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 border-b border-purple-500/20 pb-6">
-          <div>
+        <div className="w-full flex items-center gap-5 border-b border-purple-500/20 pb-4">
+          <div className="shrink-0 min-w-[390px]">
             <div className="flex items-center gap-3">
               <h1 className="text-2xl sm:text-3xl font-black uppercase tracking-tight text-white flex items-center gap-3">
                 <Icon name="group" size={32} className="text-purple-400" /> Directorio de Clientes & CRM
@@ -206,11 +206,11 @@ export const CrmClientsTab: React.FC<CrmClientsTabProps> = ({
             </p>
           </div>
 
-          <div className="flex flex-wrap items-center gap-2.5">
+          <div className="flex-1 min-w-0 flex items-center justify-end gap-1.5 flex-nowrap overflow-x-auto no-scrollbar whitespace-nowrap">
             <button
               type="button"
               onClick={() => setIsImportModalOpen(true)}
-              className="px-4 py-2.5 bg-[#170a2c] border border-purple-500/40 text-purple-200 hover:bg-[#251046] hover:text-white rounded-2xl font-black uppercase text-xs transition-all flex items-center gap-2 shadow-xs cursor-pointer"
+              className="h-9 px-3 bg-[#170a2c] border border-purple-500/40 text-purple-200 hover:bg-[#251046] hover:text-white rounded-xl font-black uppercase text-[9px] transition-all flex items-center shrink-0 gap-2 shadow-xs cursor-pointer"
               title="Importar lista de clientes desde Excel (.xlsx, .csv) o texto"
             >
               <Icon name="upload_file" size={16} className="text-purple-300" /> 📥 Importar Clientes
@@ -219,7 +219,7 @@ export const CrmClientsTab: React.FC<CrmClientsTabProps> = ({
               <button
                 type="button"
                 onClick={handleInternalClearAllClients}
-                className="px-3.5 py-2.5 bg-red-950/40 hover:bg-red-900/60 border border-red-500/30 text-red-300 rounded-2xl font-black uppercase text-xs transition-all flex items-center gap-1.5"
+                className="h-9 px-3 bg-red-950/40 hover:bg-red-900/60 border border-red-500/30 text-red-300 rounded-xl font-black uppercase text-[9px] transition-all flex items-center shrink-0 gap-1.5"
                 title="Vaciar / Limpiar todos los clientes"
               >
                 <Icon name="delete" size={15} /> Limpiar Clientes
@@ -229,7 +229,7 @@ export const CrmClientsTab: React.FC<CrmClientsTabProps> = ({
               <button
                 type="button"
                 onClick={handleRestoreClientsFromHistory}
-                className="px-4 py-2.5 bg-[#170a2c] border border-purple-500/40 text-purple-300 hover:bg-[#251046] rounded-2xl font-black uppercase text-xs transition-all flex items-center gap-2"
+                className="h-9 px-3 bg-[#170a2c] border border-purple-500/40 text-purple-300 hover:bg-[#251046] rounded-xl font-black uppercase text-[9px] transition-all flex items-center shrink-0 gap-2"
                 title="Guardar todos los clientes encontrados en comandas previas"
               >
                 <Icon name="save" size={16} className="text-purple-400" /> Guardar Virtuales ({virtualClientsCount})
@@ -238,7 +238,7 @@ export const CrmClientsTab: React.FC<CrmClientsTabProps> = ({
             <button
               type="button"
               onClick={() => setNewClientModal(true)}
-              className="px-5 py-2.5 bg-purple-600 hover:bg-purple-500 text-white rounded-2xl font-black uppercase text-xs transition-all flex items-center gap-2 shadow-lg shadow-purple-600/30"
+              className="h-9 px-3 bg-purple-600 hover:bg-purple-500 text-white rounded-xl font-black uppercase text-[9px] transition-all flex items-center shrink-0 gap-2 shadow-lg shadow-purple-600/30"
             >
               <Icon name="person_add" size={16} /> + Nuevo Cliente
             </button>
@@ -247,7 +247,7 @@ export const CrmClientsTab: React.FC<CrmClientsTabProps> = ({
 
         {/* CRM KPI Metric Cards in Lila & Black */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3.5">
-          <div className="bg-[#0b0617] p-4 rounded-2xl border border-purple-500/20 shadow-xs">
+          <div className="bg-[#0b0617] p-4 rounded-xl border border-purple-500/20 shadow-xs">
             <div className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center justify-between">
               <span>Total Clientes</span>
               <Icon name="contacts" size={16} className="text-purple-400" />
@@ -258,7 +258,7 @@ export const CrmClientsTab: React.FC<CrmClientsTabProps> = ({
             </div>
           </div>
 
-          <div className="bg-[#0b0617] p-4 rounded-2xl border border-purple-500/20 shadow-xs">
+          <div className="bg-[#0b0617] p-4 rounded-xl border border-purple-500/20 shadow-xs">
             <div className="text-[10px] font-black text-purple-300 uppercase tracking-widest flex items-center justify-between">
               <span>Con Teléfono / WhatsApp</span>
               <Icon name="phone" size={16} className="text-purple-400" />
@@ -267,7 +267,7 @@ export const CrmClientsTab: React.FC<CrmClientsTabProps> = ({
             <div className="text-[10px] text-slate-400 mt-1">Habilitados para contacto directo</div>
           </div>
 
-          <div className="bg-[#0b0617] p-4 rounded-2xl border border-purple-500/20 shadow-xs">
+          <div className="bg-[#0b0617] p-4 rounded-xl border border-purple-500/20 shadow-xs">
             <div className="text-[10px] font-black text-blue-400 uppercase tracking-widest flex items-center justify-between">
               <span>Clientes Delivery</span>
               <Icon name="location_on" size={16} className="text-blue-400" />
@@ -276,7 +276,7 @@ export const CrmClientsTab: React.FC<CrmClientsTabProps> = ({
             <div className="text-[10px] text-slate-400 mt-1">Con dirección y zona registrada</div>
           </div>
 
-          <div className="bg-[#0b0617] p-4 rounded-2xl border border-purple-500/20 shadow-xs">
+          <div className="bg-[#0b0617] p-4 rounded-xl border border-purple-500/20 shadow-xs">
             <div className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center justify-between">
               <span>Ventas Acumuladas</span>
               <Icon name="trending_up" size={16} className="text-purple-400" />
@@ -289,7 +289,7 @@ export const CrmClientsTab: React.FC<CrmClientsTabProps> = ({
         </div>
 
         {/* Search & Filter Bar */}
-        <div className="bg-[#0b0617] p-4 rounded-2xl border border-purple-500/20 shadow-sm flex flex-col md:flex-row items-center gap-3">
+        <div className="bg-[#0b0617] p-4 rounded-xl border border-purple-500/20 shadow-sm flex flex-col md:flex-row items-center gap-3">
           <div className="relative flex-1 w-full">
             <Icon name="search" size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
             <input
@@ -361,7 +361,7 @@ export const CrmClientsTab: React.FC<CrmClientsTabProps> = ({
               return (
                 <div
                   key={c.firestoreId}
-                  className="bg-[#0b0617] p-5 rounded-2xl border border-purple-500/20 hover:border-purple-500/50 transition-all flex flex-col justify-between space-y-3"
+                  className="bg-[#0b0617] p-5 rounded-xl border border-purple-500/20 hover:border-purple-500/50 transition-all flex flex-col justify-between space-y-3"
                 >
                   <div className="space-y-2">
                     <div className="flex items-start justify-between gap-2">

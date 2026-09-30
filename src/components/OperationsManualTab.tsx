@@ -15,54 +15,36 @@ export const OperationsManualTab: React.FC<OperationsManualTabProps> = ({
   };
 
   const contactWhatsApp = () => {
-    window.open(
-      'https://wa.me/59898356320?text=' +
-        encodeURIComponent(
-          '👋 *Hola Administración de Pizzería El Árbol.*\nMe comunico por una consulta operativa o soporte del sistema.'
-        ),
-      '_blank'
-    );
+    window.alert('El canal de soporte se configura para cada instalación White Label de NextCRM.');
   };
 
   return (
-    <div className="p-6 md:p-10 h-full overflow-y-auto bg-[#040108] text-slate-100 no-scrollbar space-y-8 print:p-0 print:bg-white print:text-black">
-      <div className="max-w-6xl mx-auto space-y-8 print:max-w-none print:space-y-4">
-        {/* Header Bar - Centered Title & Right-Aligned Buttons */}
-        <div className="bg-[#0d061c] border border-purple-500/30 p-6 sm:p-8 rounded-3xl shadow-xl shadow-purple-950/20 space-y-5 print:border-none print:bg-transparent print:p-0">
-          {/* Top Actions: Centered */}
-          <div className="flex justify-center items-center gap-3 print:hidden flex-wrap">
-            <button
-              type="button"
-              onClick={handlePrintManual}
-              className="px-5 py-3 bg-blue-600 hover:bg-blue-500 text-white rounded-2xl font-black text-xs uppercase flex items-center gap-2.5 transition-all shadow-md cursor-pointer hover:scale-[1.02] active:scale-95"
-            >
-              <Icon name="download" size={18} />
-              <span>Imprimir Manual PDF</span>
-            </button>
-
-            <button
-              type="button"
-              onClick={contactWhatsApp}
-              className="px-5 py-3 bg-purple-600 hover:bg-purple-500 text-white rounded-2xl font-black text-xs uppercase flex items-center gap-2.5 transition-all shadow-lg shadow-purple-600/25 cursor-pointer hover:scale-[1.02] active:scale-95"
-            >
-              <Icon name="chat" size={18} />
-              <span>WhatsApp Directo (098356320)</span>
-            </button>
-          </div>
-
-          {/* Centered Main Title and Subtitle */}
-          <div className="text-center space-y-2 max-w-3xl mx-auto">
-            <div className="inline-flex items-center justify-center gap-3">
-              <span className="w-12 h-12 rounded-2xl bg-purple-500/20 text-purple-300 border border-purple-500/40 flex items-center justify-center font-black shadow-inner print:hidden">
-                <Icon name="menu_book" size={26} />
+    <div className="p-3.5 sm:p-5 md:p-6 lg:px-7 lg:py-6 h-full overflow-y-auto bg-[#040108] text-slate-100 no-scrollbar space-y-6 print:p-0 print:bg-white print:text-black">
+      <div className="w-full max-w-none mx-auto space-y-6 print:max-w-none print:space-y-4">
+        {/* Header compacto de Manual */}
+        <div className="w-full bg-[#0d061c] border border-purple-500/30 p-4 rounded-2xl shadow-xl shadow-purple-950/20 flex items-center gap-5 print:border-none print:bg-transparent print:p-0">
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center gap-3">
+              <span className="w-10 h-10 rounded-xl bg-purple-500/20 text-purple-300 border border-purple-500/40 flex items-center justify-center font-black shrink-0 print:hidden">
+                <Icon name="menu_book" size={22} />
               </span>
-              <h1 className="text-2xl sm:text-4xl font-black uppercase tracking-tight text-white print:text-black">
-                Manual de Operaciones & Protocolo de Turno
-              </h1>
+              <div className="min-w-0">
+                <h1 className="text-xl sm:text-2xl font-black uppercase tracking-tight text-white print:text-black">
+                  Manual de Operaciones & Protocolo de Turno
+                </h1>
+                <p className="text-[10px] text-purple-300 font-bold uppercase tracking-wider print:text-gray-600">
+                  NextCRM Pizzería • Guía para Mostrador, Cocina KDS, Reparto y Facturación
+                </p>
+              </div>
             </div>
-            <p className="text-xs sm:text-sm text-purple-300 font-bold uppercase tracking-wider print:text-gray-600">
-              Pizzería El Árbol • Guía Estándar para Mostrador, Cocina KDS, Reparto y Facturación
-            </p>
+          </div>
+          <div className="flex items-center justify-end gap-1.5 flex-nowrap whitespace-nowrap print:hidden shrink-0">
+            <button type="button" onClick={handlePrintManual} className="h-9 px-3 bg-blue-600 hover:bg-blue-500 text-white rounded-xl font-black text-[9px] uppercase flex items-center gap-1.5 transition-all shadow-md cursor-pointer shrink-0">
+              <Icon name="download" size={14} /><span>Imprimir PDF</span>
+            </button>
+            <button type="button" onClick={contactWhatsApp} className="h-9 px-3 bg-purple-600 hover:bg-purple-500 text-white rounded-xl font-black text-[9px] uppercase flex items-center gap-1.5 transition-all shadow-md cursor-pointer shrink-0">
+              <Icon name="support_agent" size={14} /><span>Soporte NextCRM</span>
+            </button>
           </div>
         </div>
 
@@ -112,11 +94,11 @@ export const OperationsManualTab: React.FC<OperationsManualTabProps> = ({
             {/* Box 3 */}
             <div className="bg-[#06020e] border border-purple-500/20 p-5 rounded-2xl space-y-2 print:border-gray-300 print:bg-transparent">
               <div className="flex items-center gap-2 text-purple-400 font-black text-xs uppercase print:text-black">
-                <Icon name="mic" size={18} />
-                <span>3. Pedido por Voz & WhatsApp</span>
+                <Icon name="touch_app" size={18} />
+                <span>3. Pedido Manual & WhatsApp</span>
               </div>
               <p className="text-xs text-slate-300 leading-relaxed font-medium print:text-gray-700">
-                Presiona 'Pedido por Voz' para dictar ítem por ítem con jerga uruguaya, o usa <strong className="text-purple-300 print:text-black">'Pegar de WhatsApp'</strong> para pegar mensajes de clientes y extraer automáticamente la comanda y dirección.
+                Carga el pedido con botones desde el catálogo o usa <strong className="text-purple-300 print:text-black">'Pegar de WhatsApp'</strong> para copiar un mensaje del cliente y revisar la comanda antes de confirmarla.
               </p>
             </div>
           </div>
@@ -136,7 +118,7 @@ export const OperationsManualTab: React.FC<OperationsManualTabProps> = ({
                 <div className="font-black text-blue-300 uppercase print:text-black">Paso 1: Destino & Cliente</div>
                 <ul className="list-disc list-inside space-y-1 text-slate-300 print:text-gray-700">
                   <li>Elige: <strong>Mostrador</strong> (retiro), <strong>Mesas</strong> (salón) o <strong>Delivery</strong> (envío).</li>
-                  <li>Ingresa teléfono (ej: 098356320) y dirección con esquina o apto.</li>
+                  <li>Ingresa teléfono (ej: 099000000) y dirección con esquina o apto.</li>
                   <li>Verifica la ubicación en Google Maps en tiempo real.</li>
                 </ul>
               </div>
@@ -244,7 +226,7 @@ export const OperationsManualTab: React.FC<OperationsManualTabProps> = ({
                 Contacto Directo con Administración & Soporte
               </div>
               <div className="text-slate-300 font-medium print:text-gray-700">
-                Número de contacto oficial: <strong className="text-white print:text-black">098356320</strong> (+598 98 356 320)
+                El canal de contacto se configura con los datos de cada negocio.
               </div>
             </div>
 

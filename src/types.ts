@@ -15,6 +15,15 @@ export interface Topping {
   price: number;
 }
 
+export interface MenuShortage {
+  id: string;
+  keyword: string;
+  mode: 'warn' | 'block';
+  active: boolean;
+  note?: string;
+  createdAt: number;
+}
+
 export interface CartItem extends MenuItem {
   cartId: string;
   selectedToppings?: Topping[];

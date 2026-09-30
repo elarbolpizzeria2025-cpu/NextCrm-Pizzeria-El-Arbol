@@ -33,9 +33,9 @@ export interface DeliveryOrder {
 }
 
 export const DELIVERY_DRIVERS = [
-  { id: 'delivery1', name: 'Fefo', number: 1, color: 'border-purple-500 bg-purple-950/40 text-purple-200 hover:bg-purple-900/60' },
-  { id: 'delivery2', name: 'Caetano', number: 2, color: 'border-cyan-500 bg-cyan-950/40 text-cyan-200 hover:bg-cyan-900/60' },
-  { id: 'delivery3', name: 'Samuel', number: 3, color: 'border-amber-500 bg-amber-950/40 text-amber-200 hover:bg-amber-900/60' },
+  { id: 'delivery1', name: 'Repartidor 1', number: 1, color: 'border-purple-500 bg-purple-950/40 text-purple-200 hover:bg-purple-900/60' },
+  { id: 'delivery2', name: 'Repartidor 2', number: 2, color: 'border-cyan-500 bg-cyan-950/40 text-cyan-200 hover:bg-cyan-900/60' },
+  { id: 'delivery3', name: 'Repartidor 3', number: 3, color: 'border-amber-500 bg-amber-950/40 text-amber-200 hover:bg-amber-900/60' },
 ];
 
 interface DeliveryRiderTabProps {
@@ -63,9 +63,9 @@ export const DeliveryRiderTab: React.FC<DeliveryRiderTabProps> = ({
   const myDriverName = useMemo(() => {
     const u = (currentUser.username || '').toLowerCase();
     const d = (currentUser.displayName || '').toLowerCase();
-    if (u.includes('fefo') || d.includes('fefo') || u === 'delivery1') return 'Fefo';
-    if (u.includes('caetano') || d.includes('caetano') || u === 'delivery2') return 'Caetano';
-    if (u.includes('samuel') || d.includes('samuel') || u === 'delivery3') return 'Samuel';
+    if (u.includes('repartidor1') || u.includes('repartidor 1') || d.includes('repartidor 1') || u === 'delivery1') return 'Repartidor 1';
+    if (u.includes('repartidor2') || u.includes('repartidor 2') || d.includes('repartidor 2') || u === 'delivery2') return 'Repartidor 2';
+    if (u.includes('repartidor3') || u.includes('repartidor 3') || d.includes('repartidor 3') || u === 'delivery3') return 'Repartidor 3';
     return currentUser.displayName.replace(/[^a-zA-Z0-9 áéíóúÁÉÍÓÚ]/g, '').trim() || currentUser.username;
   }, [currentUser]);
 
@@ -78,7 +78,7 @@ export const DeliveryRiderTab: React.FC<DeliveryRiderTabProps> = ({
   const [searchQuery, setSearchQuery] = useState('');
   const [expandedOrderId, setExpandedOrderId] = useState<string | null>(null);
 
-  // Modal to assign driver (Fefo, Caetano, Samuel)
+  // Modal to assign a generic delivery driver
   const [assignModal, setAssignModal] = useState<{
     isOpen: boolean;
     order: DeliveryOrder | null;
@@ -143,9 +143,9 @@ export const DeliveryRiderTab: React.FC<DeliveryRiderTabProps> = ({
       ready: baseList.filter(o => o.status === 'Pendiente' || o.status === 'Preparando' || o.status === 'Listo').length,
       on_way: baseList.filter(o => o.status === 'En Camino').length,
       delivered: baseList.filter(o => o.status === 'Finalizado').length,
-      fefo: deliveryOrders.filter(o => (o.assignedDriver || '').toLowerCase() === 'fefo' && o.status !== 'Finalizado').length,
-      caetano: deliveryOrders.filter(o => (o.assignedDriver || '').toLowerCase() === 'caetano' && o.status !== 'Finalizado').length,
-      samuel: deliveryOrders.filter(o => (o.assignedDriver || '').toLowerCase() === 'samuel' && o.status !== 'Finalizado').length,
+      r1: deliveryOrders.filter(o => (o.assignedDriver || '').toLowerCase() === 'repartidor 1' && o.status !== 'Finalizado').length,
+      r2: deliveryOrders.filter(o => (o.assignedDriver || '').toLowerCase() === 'repartidor 2' && o.status !== 'Finalizado').length,
+      r3: deliveryOrders.filter(o => (o.assignedDriver || '').toLowerCase() === 'repartidor 3' && o.status !== 'Finalizado').length,
     };
   }, [deliveryOrders, isDriverUser, myDriverName]);
 
@@ -187,7 +187,7 @@ export const DeliveryRiderTab: React.FC<DeliveryRiderTabProps> = ({
       return;
     }
     const driverName = order.assignedDriver || currentUser.displayName.replace(/[^a-zA-Z0-9 áéíóúÁÉÍÓÚ]/g, '').trim() || 'el repartidor';
-    const msg = `¡Hola ${order.client?.name || ''}! 👋 Tu pedido *#${order.id}* de *Pizzería El Árbol* ya va en camino con ${driverName} 🛵💨.\n\n📍 Destino: ${order.client?.address || ''}\n💰 Total a abonar: $${order.total} (${order.paymentMethod || 'Efectivo'})\n\n¡Muchas gracias por tu compra!`;
+    const msg = `¡Hola ${order.client?.name || ''}! 👋 Tu pedido *#${order.id}* de *NextCRM Pizzería* ya va en camino con ${driverName} 🛵💨.\n\n📍 Destino: ${order.client?.address || ''}\n💰 Total a abonar: $${order.total} (${order.paymentMethod || 'Efectivo'})\n\n¡Muchas gracias por tu compra!`;
     const cleanNumber = rawPhone.startsWith('598') ? rawPhone : `598${rawPhone.replace(/^0/, '')}`;
     window.open(`https://wa.me/${cleanNumber}?text=${encodeURIComponent(msg)}`, '_blank');
   };
@@ -232,7 +232,7 @@ export const DeliveryRiderTab: React.FC<DeliveryRiderTabProps> = ({
         </div>
       </div>
 
-      {/* Driver Filter Badges: FEFO, CAETANO, SAMUEL (Only for Admin / Cajero) or Driver Private Badge */}
+      {/* Driver Filter Badges: REPARTIDOR 1, 2 Y 3 (Only for Admin / Cajero) or Driver Private Badge */}
       {isDriverUser ? (
         <div className="bg-[#090314] border border-cyan-500/40 rounded-3xl p-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 shadow-lg shadow-cyan-950/30">
           <div className="flex items-center gap-3">
@@ -576,7 +576,7 @@ export const DeliveryRiderTab: React.FC<DeliveryRiderTabProps> = ({
         </div>
       )}
 
-      {/* Modal: Asignar a Fefo, Caetano o Samuel */}
+      {/* Modal: Asignar a Repartidor 1, 2 o 3 */}
       {assignModal.isOpen && assignModal.order && (
         <div className="fixed inset-0 z-[10000] bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
           <div className="bg-[#090314] border-2 border-purple-500/50 rounded-[36px] max-w-md w-full p-6 sm:p-8 space-y-6 shadow-2xl animate-in zoom-in-95 text-center">

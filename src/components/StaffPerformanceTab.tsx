@@ -115,11 +115,11 @@ export const StaffPerformanceTab: React.FC<StaffPerformanceTabProps> = ({
   const grandTotalTips = totalWaiterTips + totalDriverTips;
 
   return (
-    <div className="p-4 sm:p-6 lg:p-8 max-w-7xl mx-auto space-y-6 text-slate-100 min-h-screen">
+    <div className="p-3.5 sm:p-5 md:p-6 lg:px-7 lg:py-6 w-full max-w-none mx-auto space-y-5 text-slate-100 min-h-screen">
       {/* Header Banner */}
-      <div className="bg-[#090314] border-2 border-purple-500/30 rounded-[36px] p-6 sm:p-8 shadow-2xl flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+      <div className="w-full bg-[#090314] border border-purple-500/30 rounded-xl p-4 shadow-xl flex items-center justify-between gap-5">
         <div className="flex items-center gap-4">
-          <div className="w-16 h-16 rounded-3xl bg-gradient-to-tr from-purple-600 via-indigo-600 to-cyan-400 p-[2px] shadow-lg shadow-purple-600/40 shrink-0">
+          <div className="w-12 h-12 rounded-xl bg-gradient-to-tr from-purple-600 via-indigo-600 to-cyan-400 p-[2px] shadow-lg shadow-purple-600/40 shrink-0">
             <div className="w-full h-full bg-[#090314] rounded-[22px] flex items-center justify-center">
               <Icon name="payments" size={32} className="text-purple-300" />
             </div>
@@ -140,7 +140,7 @@ export const StaffPerformanceTab: React.FC<StaffPerformanceTabProps> = ({
         </div>
 
         {/* Propinas Summary Card */}
-        <div className="bg-[#040108] border border-purple-500/30 rounded-2xl p-4 flex items-center gap-4 text-right self-stretch md:self-auto">
+        <div className="bg-[#040108] border border-purple-500/30 rounded-xl h-12 px-3 flex items-center gap-3 text-right shrink-0">
           <div>
             <div className="text-[10px] font-black uppercase text-slate-400">Total Propinas Registradas</div>
             <div className="text-2xl font-black text-emerald-400">${grandTotalTips}</div>
@@ -152,11 +152,11 @@ export const StaffPerformanceTab: React.FC<StaffPerformanceTabProps> = ({
       </div>
 
       {/* Main Mode Toggle: Mozas vs Deliveries */}
-      <div className="flex flex-wrap gap-3">
+      <div className="w-full flex items-center gap-1.5 flex-nowrap overflow-x-auto no-scrollbar whitespace-nowrap">
         <button
           type="button"
           onClick={() => { setActiveSubTab('waiters'); setSelectedStaff('ALL'); }}
-          className={`px-6 py-3.5 rounded-2xl font-black text-xs uppercase flex items-center gap-2.5 transition-all cursor-pointer border ${
+          className={`h-9 px-3 rounded-xl font-black text-[9px] uppercase flex items-center shrink-0 gap-2.5 transition-all cursor-pointer border ${
             activeSubTab === 'waiters'
               ? 'bg-purple-600 text-slate-950 border-purple-400 shadow-lg shadow-purple-600/30'
               : 'bg-[#090314] text-slate-300 border-purple-500/20 hover:border-purple-400 hover:bg-[#120726]'
@@ -172,7 +172,7 @@ export const StaffPerformanceTab: React.FC<StaffPerformanceTabProps> = ({
         <button
           type="button"
           onClick={() => { setActiveSubTab('drivers'); setSelectedStaff('ALL'); }}
-          className={`px-6 py-3.5 rounded-2xl font-black text-xs uppercase flex items-center gap-2.5 transition-all cursor-pointer border ${
+          className={`h-9 px-3 rounded-xl font-black text-[9px] uppercase flex items-center shrink-0 gap-2.5 transition-all cursor-pointer border ${
             activeSubTab === 'drivers'
               ? 'bg-cyan-600 text-white border-cyan-400 shadow-lg shadow-cyan-600/30'
               : 'bg-[#090314] text-slate-300 border-purple-500/20 hover:border-cyan-400 hover:bg-[#120726]'
@@ -209,7 +209,7 @@ export const StaffPerformanceTab: React.FC<StaffPerformanceTabProps> = ({
                 >
                   <div className="flex items-center justify-between border-b border-purple-500/20 pb-3">
                     <div className="flex items-center gap-3">
-                      <div className="w-12 h-12 rounded-2xl bg-purple-600/20 text-purple-300 flex items-center justify-center font-black text-base border border-purple-500/30">
+                      <div className="w-12 h-12 rounded-xl bg-purple-600/20 text-purple-300 flex items-center justify-center font-black text-base border border-purple-500/30">
                         <Icon name="person" size={22} />
                       </div>
                       <div>
@@ -222,11 +222,11 @@ export const StaffPerformanceTab: React.FC<StaffPerformanceTabProps> = ({
                   </div>
 
                   <div className="grid grid-cols-2 gap-2 text-center">
-                    <div className="bg-[#040108] p-3 rounded-2xl border border-purple-500/20">
+                    <div className="bg-[#040108] p-3 rounded-xl border border-purple-500/20">
                       <div className="text-[9px] font-black uppercase text-slate-400">Total Facturado</div>
                       <div className="text-lg font-black text-white">${w.totalSales}</div>
                     </div>
-                    <div className="bg-[#040108] p-3 rounded-2xl border border-emerald-500/30">
+                    <div className="bg-[#040108] p-3 rounded-xl border border-emerald-500/30">
                       <div className="text-[9px] font-black uppercase text-emerald-400">Propinas</div>
                       <div className="text-lg font-black text-emerald-300">${w.totalTips}</div>
                     </div>
@@ -320,7 +320,7 @@ export const StaffPerformanceTab: React.FC<StaffPerformanceTabProps> = ({
                 >
                   <div className="flex items-center justify-between border-b border-purple-500/20 pb-3">
                     <div className="flex items-center gap-3">
-                      <div className="w-12 h-12 rounded-2xl bg-cyan-600/20 text-cyan-300 flex items-center justify-center font-black text-base border border-cyan-500/30">
+                      <div className="w-12 h-12 rounded-xl bg-cyan-600/20 text-cyan-300 flex items-center justify-center font-black text-base border border-cyan-500/30">
                         <Icon name="two_wheeler" size={22} />
                       </div>
                       <div>
@@ -333,11 +333,11 @@ export const StaffPerformanceTab: React.FC<StaffPerformanceTabProps> = ({
                   </div>
 
                   <div className="grid grid-cols-2 gap-2 text-center">
-                    <div className="bg-[#040108] p-3 rounded-2xl border border-purple-500/20">
+                    <div className="bg-[#040108] p-3 rounded-xl border border-purple-500/20">
                       <div className="text-[9px] font-black uppercase text-slate-400">Total Cobrado</div>
                       <div className="text-lg font-black text-white">${d.totalCollected}</div>
                     </div>
-                    <div className="bg-[#040108] p-3 rounded-2xl border border-emerald-500/30">
+                    <div className="bg-[#040108] p-3 rounded-xl border border-emerald-500/30">
                       <div className="text-[9px] font-black uppercase text-emerald-400">Propinas</div>
                       <div className="text-lg font-black text-emerald-300">${d.totalTips}</div>
                     </div>

@@ -18,6 +18,8 @@ interface OrderCardProps {
   setDeliveryShareModal: (data: { isOpen: boolean; order: OrderData | null }) => void;
   setEditOrderModal: (data: { isOpen: boolean; order: OrderData | null; cashReceived: string; tip: string; voucherDelivered: boolean; transferConfirmed: boolean; selectedPaymentMethod: string }) => void;
   handleDirectDispatch: (order: OrderData) => void;
+  requestDeleteOrder?: (order: OrderData) => void;
+  finalizeOrder?: (order: OrderData, cash: string, tipAmount: string, chosenPaymentMethod?: string) => void;
   showMessage: (msg: string, type?: string) => void;
 }
 
@@ -34,6 +36,8 @@ export const OrderCard: React.FC<OrderCardProps> = ({
   setDeliveryShareModal,
   setEditOrderModal,
   handleDirectDispatch,
+  requestDeleteOrder,
+  finalizeOrder,
   showMessage,
 }) => {
   const isDanger = variant === 'danger';
@@ -50,6 +54,10 @@ export const OrderCard: React.FC<OrderCardProps> = ({
   }, [order.createdAt, hideActions, order.status, isScheduled]);
 
   const handleDelete = async () => {
+    if (requestDeleteOrder) {
+      requestDeleteOrder(order);
+      return;
+    }
     try {
       await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'orders', order.firestoreId));
       showMessage(`Comanda #${order.id} eliminada`, 'info');
@@ -171,7 +179,7 @@ export const OrderCard: React.FC<OrderCardProps> = ({
                 <Icon name="edit_square" size={18}/>
               </button>
             )}
-            {!hideActions && order.status === 'Pendiente' && order.client?.phone && order.client.phone !== 'N/A' && (
+            {!hideActions && ['Pendiente', 'Listo'].includes(order.status) && order.client?.phone && order.client.phone !== 'N/A' && (
               <button 
                 type="button"
                 onClick={() => notifyClientWhatsApp(order)} 
@@ -181,7 +189,7 @@ export const OrderCard: React.FC<OrderCardProps> = ({
                 <Icon name="chat" size={18}/>
               </button>
             )}
-            {!hideActions && order.type === 'Envío' && order.status === 'Pendiente' && (
+            {!hideActions && order.type === 'Envío' && ['Pendiente', 'Listo'].includes(order.status) && (
               <button 
                 type="button"
                 onClick={() => setDeliveryShareModal({ isOpen: true, order })} 
@@ -381,6 +389,22 @@ export const OrderCard: React.FC<OrderCardProps> = ({
             ) : !hideActions && (
                 isPreparing ? (
                   <button type="button" onClick={(e) => { e.stopPropagation(); handleDirectDispatch(order); }} className={`px-6 py-2.5 rounded-2xl text-[11px] font-black uppercase transition-all shadow-md flex items-center gap-2 ${isDanger ? 'bg-red-600 text-white hover:bg-red-500' : 'bg-blue-600 text-white hover:bg-blue-500'}`}><Icon name="check_circle" size={16}/> Listo</button>
+                ) : order.isPaid && finalizeOrder ? (
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      finalizeOrder(
+                        order,
+                        String(order.cashReceived || order.cashProvided || order.total || 0),
+                        String(order.tip || 0),
+                        order.paymentMethod || 'Efectivo'
+                      );
+                    }}
+                    className="bg-emerald-600 hover:bg-emerald-500 text-white px-6 py-2.5 rounded-2xl text-[11px] font-black uppercase transition-all shadow-md shadow-emerald-600/30 flex items-center gap-2"
+                  >
+                    <Icon name="done_all" size={16}/> Entregado
+                  </button>
                 ) : (
                   <button type="button" onClick={(e) => { e.stopPropagation(); setEditOrderModal({ isOpen: true, order, cashReceived: order.cashProvided ? order.cashProvided.toString() : '', tip: '0', voucherDelivered: true, transferConfirmed: true, selectedPaymentMethod: (order.paymentMethod && order.paymentMethod !== 'A confirmar') ? order.paymentMethod : 'Efectivo' }); }} className="bg-blue-600 hover:bg-blue-500 text-white px-6 py-2.5 rounded-2xl text-[11px] font-black uppercase transition-all shadow-md shadow-blue-600/30">Cobrar</button>
                 )

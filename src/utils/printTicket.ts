@@ -81,7 +81,7 @@ export const printOrderTicket = (order: OrderData) => {
       ? `<div class="payment-detail">Abonó con: ${order.cashProvided} | <b>VUELTO: ${order.cashProvided - order.total}</b></div>` 
       : '';
       
-  const watermarkText = "EL ÁRBOL PIZZERÍA ".repeat(15);
+  const watermarkText = "NEXTCRM PIZZERÍA ".repeat(15);
 
   const deliveryTypeLabel = order.type === 'Envío' 
     ? '🛵 ENVÍO A DOMICILIO' 
@@ -96,7 +96,7 @@ export const printOrderTicket = (order: OrderData) => {
        <div class="watermark">${watermarkText}</div>
        <div class="content">
            <div class="header">
-              <div class="brand">EL ÁRBOL</div>
+              <div class="brand">NEXTCRM</div>
               <div class="subtitle">PIZZERÍA</div>
               <div class="via-title">${titleCopy}</div>
            </div>
@@ -143,8 +143,8 @@ export const printOrderTicket = (order: OrderData) => {
               ` : ''}
               <div class="uru-banner">
                  <div class="stars">★★★★★</div>
-                 <div class="uru-text">EL ÁRBOL PIZZERÍA</div>
-                 <div class="uru-icons">🍕 EL ÁRBOL 🍕</div>
+                 <div class="uru-text">NEXTCRM PIZZERÍA</div>
+                 <div class="uru-icons">🍕 NEXTCRM 🍕</div>
               </div>
               <div class="thanks">¡GRACIAS POR ELEGIRNOS!</div>
            </div>
@@ -335,7 +335,7 @@ export const printCashClosureTicket = (data: CashClosureReportData) => {
     </div>
   `).join('');
 
-  const watermarkText = "EL ÁRBOL POS - CONTABILIDAD Y CIERRE ".repeat(12);
+  const watermarkText = "NEXTCRM PIZZERÍA - CONTABILIDAD Y CIERRE ".repeat(12);
 
   printWindow.document.write(`
     <!DOCTYPE html>
@@ -413,7 +413,7 @@ export const printCashClosureTicket = (data: CashClosureReportData) => {
          <div class="watermark">${watermarkText}</div>
          <div class="content">
              <div class="header">
-                <div class="brand">EL ÁRBOL</div>
+                <div class="brand">NEXTCRM</div>
                 <div class="subtitle">PIZZERÍA & RESTAURANTE</div>
                 <div class="via-title">REPORTE CONTABLE COMPLETO</div>
              </div>
@@ -484,8 +484,8 @@ export const printCashClosureTicket = (data: CashClosureReportData) => {
              <div class="footer">
                 <div class="uru-banner">
                    <div class="stars">★★★★★</div>
-                   <div class="uru-text">EL ÁRBOL POS - CONTABILIDAD</div>
-                   <div class="uru-icons">🍕 EL ÁRBOL 🍕</div>
+                   <div class="uru-text">NEXTCRM PIZZERÍA - CONTABILIDAD</div>
+                   <div class="uru-icons">🍕 NEXTCRM 🍕</div>
                 </div>
                 <div class="thanks">¡INFORME DE CIERRE REGISTRADO!</div>
              </div>
@@ -601,7 +601,7 @@ export const printFullAccountingReport = (data: CashClosureReportData) => {
       <table class="header-table">
         <tr>
           <td>
-            <div class="brand-title">EL ÁRBOL</div>
+            <div class="brand-title">NEXTCRM</div>
             <div class="brand-subtitle">PIZZERÍA & RESTAURANTE</div>
           </td>
           <td style="text-align: right;">
@@ -737,7 +737,7 @@ export const printFullAccountingReport = (data: CashClosureReportData) => {
       </div>
 
       <div class="footer-note">
-        Sistema EL ÁRBOL POS • Impreso el ${new Date().toLocaleDateString()} a las ${new Date().toLocaleTimeString()}
+        Sistema NEXTCRM PIZZERÍA • Impreso el ${new Date().toLocaleDateString()} a las ${new Date().toLocaleTimeString()}
       </div>
 
       <script>

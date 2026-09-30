@@ -37,16 +37,16 @@ export const ToppingModal: React.FC<ToppingModalProps> = ({
   const specToppings = selectedToppings.filter(t => t.price > 0);
 
   return (
-    <div className="fixed inset-0 bg-[#040108]/90 flex items-center justify-center z-[1100] p-4 backdrop-blur-md">
-      <div className="bg-[#0b0617] border-2 border-purple-500/30 rounded-[36px] shadow-2xl max-w-4xl w-full flex flex-col max-h-[90vh] text-slate-100 overflow-hidden">
+    <div className="fixed inset-0 bg-[#040108]/90 flex items-center justify-center z-[1100] p-2 sm:p-4 backdrop-blur-md">
+      <div className="bg-[#0b0617] border-2 border-purple-500/30 rounded-[24px] sm:rounded-[36px] shadow-2xl max-w-4xl w-full flex flex-col max-h-[96dvh] sm:max-h-[90vh] text-slate-100 overflow-hidden">
         {/* Header */}
-        <div className="bg-[#120924] text-white p-6 flex justify-between items-center border-b border-purple-500/20">
+        <div className="bg-[#120924] text-white p-4 sm:p-6 flex justify-between items-center gap-3 border-b border-purple-500/20">
           <div>
             <div className="flex items-center gap-2">
               <span className="p-2 bg-purple-500/20 text-purple-400 rounded-xl">
                 <Icon name="local_pizza" size={22} />
               </span>
-              <h3 className="font-black uppercase text-xl text-white tracking-tight">
+              <h3 className="font-black uppercase text-base sm:text-xl text-white tracking-tight leading-tight">
                 {item.name}
               </h3>
             </div>
@@ -64,7 +64,7 @@ export const ToppingModal: React.FC<ToppingModalProps> = ({
         </div>
 
         {/* Live Calculation Banner */}
-        <div className="bg-[#070310] px-6 py-4 border-b border-purple-500/20 flex flex-wrap items-center justify-between gap-4">
+        <div className="bg-[#070310] px-4 sm:px-6 py-3 sm:py-4 border-b border-purple-500/20 flex flex-wrap items-center justify-between gap-3 sm:gap-4">
           <div className="flex flex-wrap items-center gap-4 text-xs font-black">
             <div>
               <span className="text-slate-400 uppercase text-[9px] block">Precio Base</span>
@@ -119,7 +119,7 @@ export const ToppingModal: React.FC<ToppingModalProps> = ({
         </div>
 
         {/* Toppings Grid */}
-        <div className="p-6 bg-[#0a0515] flex-1 overflow-y-auto no-scrollbar">
+        <div className="p-3 sm:p-6 bg-[#0a0515] flex-1 overflow-y-auto no-scrollbar">
           <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
             {menuGustos.map(t => {
               const sel = selectedToppings.some(x => x.id === t.id);
@@ -129,7 +129,7 @@ export const ToppingModal: React.FC<ToppingModalProps> = ({
                   key={t.id}
                   type="button"
                   onClick={() => onSelectTopping(t)}
-                  className={`p-4 rounded-[22px] border-2 font-black uppercase text-xs transition-all flex flex-col items-center justify-center text-center relative ${
+                  className={`p-3 sm:p-4 rounded-[18px] sm:rounded-[22px] border-2 font-black uppercase text-[10px] sm:text-xs transition-all flex flex-col items-center justify-center text-center relative ${
                     sel
                       ? 'bg-purple-600 text-white border-purple-400 shadow-md shadow-purple-600/30 scale-[1.02]'
                       : 'bg-[#120824] border-purple-500/20 text-slate-200 hover:border-purple-500/50'
@@ -157,7 +157,7 @@ export const ToppingModal: React.FC<ToppingModalProps> = ({
         </div>
 
         {/* Confirm Footer */}
-        <div className="p-6 border-t border-purple-500/20 bg-[#070310] shrink-0 flex flex-col sm:flex-row items-center justify-between gap-4">
+        <div className="p-3 sm:p-6 border-t border-purple-500/20 bg-[#070310] shrink-0 flex flex-col sm:flex-row items-center justify-between gap-3 sm:gap-4">
           <div className="text-center sm:text-left">
             <span className="text-[10px] font-black uppercase text-slate-400 block">Total con Gustos ({quantity} un.)</span>
             <span className="text-3xl font-black text-purple-300 tracking-tighter">${grandTotal}</span>

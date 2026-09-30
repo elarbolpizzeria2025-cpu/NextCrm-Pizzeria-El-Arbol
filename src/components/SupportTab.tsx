@@ -18,10 +18,10 @@ export const SupportTab: React.FC<SupportTabProps> = ({
   const [newTicketModal, setNewTicketModal] = useState(false);
   const [form, setForm] = useState({
     title: '',
-    category: 'pos_caja' as 'impresora' | 'pos_caja' | 'pedidos_voz' | 'delivery_maps' | 'otro',
+    category: 'pos_caja' as 'impresora' | 'pos_caja' | 'pedidos_whatsapp' | 'delivery_maps' | 'otro',
     priority: 'media' as 'baja' | 'media' | 'alta' | 'urgente',
     description: '',
-    contactPhone: '098356320',
+    contactPhone: '',
     contactName: 'Encargado de Turno',
   });
 
@@ -32,14 +32,14 @@ export const SupportTab: React.FC<SupportTabProps> = ({
   const [diagnostics, setDiagnostics] = useState<{
     internet: 'ok' | 'checking' | 'error';
     firebase: 'ok' | 'checking' | 'error';
-    speech: 'ok' | 'checking' | 'error';
+    interface: 'ok' | 'checking' | 'error';
     maps: 'ok' | 'checking' | 'error';
     whatsapp: 'ok' | 'checking' | 'error';
     printer: 'ok' | 'checking' | 'error';
   }>({
     internet: 'ok',
     firebase: 'ok',
-    speech: 'ok',
+    interface: 'ok',
     maps: 'ok',
     whatsapp: 'ok',
     printer: 'ok',
@@ -52,7 +52,7 @@ export const SupportTab: React.FC<SupportTabProps> = ({
     setDiagnostics({
       internet: 'checking',
       firebase: 'checking',
-      speech: 'checking',
+      interface: 'checking',
       maps: 'checking',
       whatsapp: 'checking',
       printer: 'checking',
@@ -63,7 +63,7 @@ export const SupportTab: React.FC<SupportTabProps> = ({
       setDiagnostics({
         internet: 'ok',
         firebase: 'ok',
-        speech: 'ok',
+        interface: 'ok',
         maps: 'ok',
         whatsapp: 'ok',
         printer: 'ok',
@@ -73,14 +73,7 @@ export const SupportTab: React.FC<SupportTabProps> = ({
   };
 
   const handleOpenWhatsAppSupport = () => {
-    const text = encodeURIComponent(
-      `👋 *HOLA SOPORTE TÉCNICO PIZZERÍA EL ÁRBOL*\n` +
-      `📌 *Solicitud de asistencia técnica del sistema POS*\n` +
-      `🕒 *Fecha:* ${new Date().toLocaleString('es-UY')}\n` +
-      `👤 *Contacto:* ${form.contactName} (${form.contactPhone})\n` +
-      `💬 *Consulta / Incidente:* ${form.description || 'Necesito asistencia con el sistema'}`
-    );
-    window.open(`https://wa.me/59898356320?text=${text}`, '_blank');
+    showMessage('El canal de soporte se configura para cada instalación White Label de NextCRM.', 'success');
   };
 
   const FAQS = [
@@ -113,12 +106,12 @@ export const SupportTab: React.FC<SupportTabProps> = ({
   });
 
   return (
-    <div className="p-4 sm:p-8 h-full overflow-y-auto bg-[#050508] text-slate-100 no-scrollbar space-y-6">
-      <div className="max-w-7xl mx-auto space-y-6">
+    <div className="p-3.5 sm:p-5 md:p-6 lg:px-7 lg:py-6 h-full overflow-y-auto bg-[#050508] text-slate-100 no-scrollbar space-y-6">
+      <div className="w-full max-w-none mx-auto space-y-6">
         
         {/* Header */}
-        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-[#0d071c] border border-purple-500/30 p-5 sm:p-6 rounded-3xl shadow-xl">
-          <div className="space-y-1">
+        <div className="w-full flex items-center gap-5 bg-[#0d071c] border border-purple-500/30 p-4 rounded-2xl shadow-xl">
+          <div className="flex-1 min-w-0 space-y-1">
             <div className="flex items-center gap-2.5">
               <span className="w-10 h-10 rounded-2xl bg-purple-600 text-white flex items-center justify-center font-black shadow-lg shadow-purple-600/30">
                 <Icon name="support_agent" size={24} />
@@ -128,24 +121,24 @@ export const SupportTab: React.FC<SupportTabProps> = ({
                   Centro de Soporte Técnico & Asistencia
                 </h1>
                 <p className="text-[11px] text-purple-300 font-bold uppercase tracking-wider">
-                  Mesa de Ayuda • WhatsApp Directo 098356320 • Monitoreo de Conectividad
+                  Mesa de Ayuda • Soporte configurable • Monitoreo de conectividad
                 </p>
               </div>
             </div>
           </div>
 
-          <div className="flex flex-wrap items-center gap-2.5">
+          <div className="flex items-center justify-end gap-1.5 flex-nowrap whitespace-nowrap shrink-0">
             <button
               type="button"
               onClick={handleOpenWhatsAppSupport}
-              className="px-4 py-2.5 bg-purple-600 hover:bg-purple-500 text-white rounded-xl font-black uppercase text-xs transition-all flex items-center gap-2 shadow-lg shadow-purple-600/30"
+              className="h-9 px-3 bg-purple-600 hover:bg-purple-500 text-white rounded-xl font-black uppercase text-[9px] transition-all flex items-center shrink-0 gap-2 shadow-lg shadow-purple-600/30"
             >
-              <Icon name="chat" size={16} /> WhatsApp 098356320
+              <Icon name="support_agent" size={16} /> Soporte
             </button>
             <button
               type="button"
               onClick={() => setNewTicketModal(true)}
-              className="px-4 py-2.5 bg-[#170a2c] hover:bg-[#251046] text-purple-200 border border-purple-500/40 rounded-xl font-black uppercase text-xs transition-all flex items-center gap-2"
+              className="h-9 px-3 bg-[#170a2c] hover:bg-[#251046] text-purple-200 border border-purple-500/40 rounded-xl font-black uppercase text-[9px] transition-all flex items-center shrink-0 gap-2"
             >
               <Icon name="add_task" size={16} className="text-purple-400" /> + Abrir Ticket
             </button>
@@ -173,7 +166,7 @@ export const SupportTab: React.FC<SupportTabProps> = ({
             {[
               { id: 'internet', name: 'Internet / Red', icon: 'wifi' },
               { id: 'firebase', name: 'Cloud Firestore', icon: 'cloud_done' },
-              { id: 'speech', name: 'Reconocimiento Voz', icon: 'mic' },
+              { id: 'interface', name: 'Interfaz táctil', icon: 'touch_app' },
               { id: 'maps', name: 'Google Maps GPS', icon: 'map' },
               { id: 'whatsapp', name: 'WhatsApp API', icon: 'chat' },
               { id: 'printer', name: 'Impresora Térmica', icon: 'print' },
@@ -233,13 +226,13 @@ export const SupportTab: React.FC<SupportTabProps> = ({
                 <Icon name="confirmation_number" size={20} className="text-purple-400" /> Historial de Tickets de Soporte
               </h2>
               <p className="text-xs text-purple-300 font-bold uppercase">
-                Seguimiento de incidencias técnicas • Envío directo a WhatsApp 098356320
+                Seguimiento de incidencias técnicas • Envío directo a WhatsApp 
               </p>
             </div>
             <button
               type="button"
               onClick={() => setNewTicketModal(true)}
-              className="px-5 py-2.5 bg-purple-600 hover:bg-purple-500 text-white rounded-2xl font-black uppercase text-xs transition-all flex items-center gap-2 shadow-lg shadow-purple-600/30 cursor-pointer hover:scale-[1.02] active:scale-95"
+              className="px-5 py-2.5 bg-purple-600 hover:bg-purple-500 text-white rounded-2xl font-black uppercase text-[9px] transition-all flex items-center shrink-0 gap-2 shadow-lg shadow-purple-600/30 cursor-pointer hover:scale-[1.02] active:scale-95"
             >
               <Icon name="add_task" size={18} /> + Nuevo Ticket
             </button>
@@ -263,9 +256,9 @@ export const SupportTab: React.FC<SupportTabProps> = ({
                     `🕒 *Fecha:* ${new Date(t.createdAt).toLocaleString('es-UY')}\n` +
                     `📝 *Descripción:* ${t.description}\n` +
                     `🔄 *Estado Actual:* ${t.status}\n` +
-                    `\n_Enviado desde el Sistema POS Pizzería El Árbol_`
+                    `\n_Enviado desde el Sistema POS NextCRM Pizzería_`
                   );
-                  window.open(`https://wa.me/59898356320?text=${text}`, '_blank');
+                  window.open(`https://wa.me/?text=${text}`, '_blank');
                 };
 
                 return (
@@ -357,7 +350,7 @@ export const SupportTab: React.FC<SupportTabProps> = ({
                     <option value="pos_caja">Toma de Pedidos / Caja</option>
                     <option value="impresora">Impresora Térmica</option>
                     <option value="delivery_maps">Delivery & GPS</option>
-                    <option value="pedidos_voz">Voz AI</option>
+                    <option value="pedidos_whatsapp">WhatsApp</option>
                     <option value="otro">Otro</option>
                   </select>
                 </div>
@@ -421,9 +414,9 @@ export const SupportTab: React.FC<SupportTabProps> = ({
                       `⚡ *Prioridad:* ${form.priority.toUpperCase()}\n` +
                       `🕒 *Fecha:* ${new Date().toLocaleString('es-UY')}\n` +
                       `📝 *Descripción:* ${form.description || 'Sin detalle adicional'}\n` +
-                      `\n_Enviado desde Pizzería El Árbol_`
+                      `\n_Enviado desde NextCRM Pizzería_`
                     );
-                    window.open(`https://wa.me/59898356320?text=${text}`, '_blank');
+                    window.open(`https://wa.me/?text=${text}`, '_blank');
                     showMessage('Ticket guardado y enviado a WhatsApp');
                   }}
                   className="flex-1 py-3 bg-purple-600 hover:bg-purple-500 text-white rounded-xl font-black uppercase text-xs shadow-lg shadow-purple-600/30 flex items-center justify-center gap-1.5"
