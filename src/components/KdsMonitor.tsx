@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
-import { doc, updateDoc, deleteDoc } from 'firebase/firestore';
+import { doc, updateDoc } from 'firebase/firestore';
 import { OrderData } from '../types';
 import { Icon } from './Icon';
 import { printOrderTicket } from '../utils/printTicket';
@@ -24,6 +24,8 @@ interface KdsMonitorProps {
   }) => void;
   handleDirectDispatch: (order: OrderData) => void;
   showMessage: (msg: string, type?: string) => void;
+  onDeleteOrder: (order: OrderData) => void;
+  currentUserRole?: string;
   onCloseFullScreen?: () => void;
   isStandalone?: boolean;
 }
@@ -40,6 +42,8 @@ export const KdsMonitor: React.FC<KdsMonitorProps> = ({
   setEditOrderModal,
   handleDirectDispatch,
   showMessage,
+  onDeleteOrder,
+  currentUserRole = 'admin',
   onCloseFullScreen,
   isStandalone = false
 }) => {
@@ -50,7 +54,7 @@ export const KdsMonitor: React.FC<KdsMonitorProps> = ({
   const [searchQuery, setSearchQuery] = useState('');
   const [isSearchOpen, setIsSearchOpen] = useState(false);
   const [collapsedCards, setCollapsedCards] = useState<Record<string, boolean>>({});
-  const [collapseAll, setCollapseAll] = useState(false);
+  const [collapseAll, setCollapseAll] = useState(true);
 
   const containerRef = useRef<HTMLDivElement>(null);
   const prevOrderCountRef = useRef<number>(0);
@@ -224,14 +228,6 @@ export const KdsMonitor: React.FC<KdsMonitorProps> = ({
     }
   };
 
-  const handleDeleteOrder = async (order: OrderData) => {
-    try {
-      await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'orders', order.firestoreId));
-      showMessage(`Comanda #${order.id} eliminada`, 'info');
-    } catch (e: any) {
-      showMessage('Error al eliminar: ' + e.message, 'error');
-    }
-  };
 
   // Toggle card collapse
   const toggleCardCollapse = (orderId: string) => {
@@ -260,7 +256,7 @@ export const KdsMonitor: React.FC<KdsMonitorProps> = ({
       <div
         key={order.firestoreId}
         id={`kds-card-${order.firestoreId}`}
-        className={`rounded-2xl transition-all duration-200 relative overflow-hidden flex flex-col p-3 text-[12px] ${
+        className={`rounded-2xl transition-all duration-200 relative overflow-hidden flex flex-col p-3 text-[12px] shrink-0 ${
           isDelayed
             ? 'bg-[#180a0e] border-2 border-red-500 shadow-xl shadow-red-950/60 ring-1 ring-red-500/50'
             : isFutureScheduled
@@ -273,19 +269,26 @@ export const KdsMonitor: React.FC<KdsMonitorProps> = ({
           <div className="absolute top-0 left-0 right-0 h-1 bg-red-500 animate-pulse" />
         )}
 
-        {/* Card Header */}
-        <div className="flex items-center justify-between gap-2 mb-2">
+        {/* Card Header - Clickable to toggle collapse/expand */}
+        <div
+          onClick={() => toggleCardCollapse(order.firestoreId)}
+          className="flex items-center justify-between gap-2 mb-2 cursor-pointer select-none hover:opacity-90"
+          title={isCollapsed ? "Click para desplegar detalles" : "Click para comprimir"}
+        >
           <div className="flex items-center gap-2 overflow-hidden">
-            <span className="font-mono font-black text-sm text-white tracking-wide">
+            <span className="font-mono font-black text-sm text-blue-400 tracking-wide bg-[#05090e] px-2 py-0.5 rounded-lg border border-blue-500/30">
               #{order.id}
             </span>
-            <span className="font-bold text-slate-200 truncate uppercase text-[12px]">
+            <span className="font-black text-slate-100 truncate uppercase text-[12px]">
               {order.client?.name || (order.type === 'Mesa' ? `Mesa` : 'Local')}
+            </span>
+            <span className="text-[9px] px-1.5 py-0.2 rounded-full font-black text-slate-900 bg-blue-400 shrink-0 hidden sm:inline-block">
+              {order.type}
             </span>
           </div>
 
-          {/* Time Badge */}
-          <div className="flex items-center gap-1 shrink-0">
+          {/* Time Badge & Collapse Chevron */}
+          <div className="flex items-center gap-1.5 shrink-0">
             {isFutureScheduled ? (
               <span className="px-2 py-0.5 rounded-full text-[10px] font-black bg-blue-500/20 text-blue-300 border border-blue-500/40 flex items-center gap-1">
                 <Icon name="event_available" size={12} />
@@ -305,23 +308,19 @@ export const KdsMonitor: React.FC<KdsMonitorProps> = ({
                 {elapsedMinutes}m
               </span>
             )}
-            <button
-              type="button"
-              onClick={() => toggleCardCollapse(order.firestoreId)}
-              className="p-1 text-slate-400 hover:text-white rounded hover:bg-slate-800 transition-colors"
-              title={isCollapsed ? 'Desplegar comanda' : 'Plegar comanda'}
-            >
-              <Icon name={isCollapsed ? 'expand_more' : 'expand_less'} size={15} />
-            </button>
+            <div className="p-1 text-slate-400 hover:text-white rounded hover:bg-slate-800 transition-colors">
+              <Icon name={isCollapsed ? 'expand_more' : 'expand_less'} size={16} />
+            </div>
           </div>
         </div>
 
-        {/* Customer Metadata */}
-        <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-slate-400 mb-2 pb-1.5 border-b border-slate-800/80">
+        {/* Customer Metadata (Phone, Address, Driver, Notes) */}
+        {!isCollapsed && (
+        <div className="flex flex-wrap items-center gap-x-2.5 gap-y-1 text-[11px] text-slate-400 mb-2 pb-1.5 border-b border-slate-800/80">
           {order.client?.phone && order.client.phone !== 'N/A' && (
             <button
               type="button"
-              onClick={() => notifyClientWhatsApp(order)}
+              onClick={(e) => { e.stopPropagation(); notifyClientWhatsApp(order); }}
               className="flex items-center gap-1 text-blue-400 hover:text-blue-300 transition-colors"
               title="Contactar por WhatsApp"
             >
@@ -337,37 +336,67 @@ export const KdsMonitor: React.FC<KdsMonitorProps> = ({
             </span>
           )}
 
+          {order.assignedDriver && (
+            <span className="px-1.5 py-0.5 rounded bg-purple-950/80 text-purple-300 font-bold border border-purple-500/30 flex items-center gap-1 text-[10px]" title="Repartidor (lo lleva)">
+              <Icon name="two_wheeler" size={11} className="text-purple-400" />
+              <span>{order.assignedDriver}</span>
+            </span>
+          )}
+
+          {order.orderTaker && (
+            <span className="px-1.5 py-0.5 rounded bg-[#130722] text-purple-200 font-bold border border-purple-500/30 flex items-center gap-1 text-[10px]" title="Tomó el pedido">
+              <Icon name="edit_note" size={11} className="text-purple-400" />
+              <span className="truncate max-w-[120px]">{order.orderTaker.replace(/^[^\wáéíóúÁÉÍÓÚñÑ]+/, '').trim()}</span>
+            </span>
+          )}
+
           {order.notes && (
             <span className="px-1.5 py-0.5 rounded bg-blue-950/80 text-blue-200 font-bold border border-blue-500/30 flex items-center gap-1 text-[10px]">
               <Icon name="info" size={11} className="text-blue-400" />
-              <span className="truncate max-w-[140px]">{order.notes}</span>
+              <span className="truncate max-w-[140px]">Nota: {order.notes}</span>
             </span>
           )}
         </div>
+        )}
+
+        {order.deleteRequested && (
+          <div className="mb-2 px-2.5 py-1.5 rounded-xl bg-amber-950/60 border border-amber-500/40 text-amber-200 text-[10px] font-black uppercase flex items-center gap-1.5">
+            <Icon name="pending_actions" size={13} />
+            Borrado solicitado{order.deleteRequestNote ? `: ${order.deleteRequestNote}` : ''}
+          </div>
+        )}
 
         {/* Items List or Collapsed Preview */}
         {isCollapsed ? (
-          <div className="flex items-center justify-between py-1.5 px-2 bg-[#060c14] rounded-xl border border-slate-800/80 mb-2 text-slate-300">
-            <span className="text-[11px] font-black uppercase text-blue-300 flex items-center gap-1">
-              <Icon name="inventory_2" size={13} /> {order.items?.length || 0} productos
+          <div
+            onClick={() => toggleCardCollapse(order.firestoreId)}
+            className="flex items-center justify-between py-2 px-2.5 bg-[#060c14] hover:bg-[#091320] cursor-pointer rounded-xl border border-slate-800/80 mb-2.5 text-slate-300 transition-colors"
+          >
+            <span className="text-[11px] font-black uppercase text-blue-300 flex items-center gap-1.5">
+              <Icon name="inventory_2" size={14} /> {order.items?.length || 0} productos (ver items)
             </span>
             <span className="text-xs font-mono font-black text-white">${order.total}</span>
           </div>
         ) : (
-          <div className="flex flex-col gap-1.5 mb-3 flex-1 overflow-y-auto max-h-[220px] pr-1 no-scrollbar">
+          <div className="flex flex-col gap-1.5 mb-3 overflow-y-auto max-h-[260px] pr-1 custom-dark-scrollbar">
             {order.items?.map((item, idx) => (
-              <div key={idx} className="flex flex-col text-slate-100">
-                <div className="flex items-baseline gap-1.5 font-medium leading-tight">
-                  <span className="font-mono font-bold text-blue-400 text-[12px] shrink-0">
-                    {item.quantity || 1}x
-                  </span>
-                  <span className="font-semibold text-white tracking-wide">
-                    {item.name}
+              <div key={idx} className="flex flex-col text-slate-100 bg-[#060b12] p-1.5 rounded-lg border border-slate-800/60">
+                <div className="flex items-baseline justify-between gap-1.5 font-medium leading-tight">
+                  <div className="flex items-baseline gap-1.5">
+                    <span className="font-mono font-black text-blue-400 text-[12px] shrink-0">
+                      {item.quantity || 1}x
+                    </span>
+                    <span className="font-bold text-white tracking-wide text-[12px]">
+                      {item.name}
+                    </span>
+                  </div>
+                  <span className="font-mono text-blue-300 text-[11px] font-black">
+                    ${Math.round((item.finalPrice || item.price || 0) * (item.quantity || 1))}
                   </span>
                 </div>
 
                 {item.selectedToppings && item.selectedToppings.length > 0 && (
-                  <div className="ml-5 mt-0.5">
+                  <div className="ml-5 mt-1">
                     <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-blue-950 text-blue-300 font-bold text-[10px] border border-blue-500/40 uppercase tracking-wider">
                       <Icon name="local_pizza" size={10} />+{' '}
                       {item.selectedToppings.map(t => t.name).join(', ')}
@@ -379,32 +408,48 @@ export const KdsMonitor: React.FC<KdsMonitorProps> = ({
           </div>
         )}
 
-        {/* Card Footer / Action Buttons */}
-        <div className="flex items-center gap-1.5 mt-auto pt-2 border-t border-slate-800/80">
+        {/* Acciones visibles solo al desplegar: mantiene las comandas compactas por defecto */}
+        {!isCollapsed && <div className="flex items-center gap-1.5 mt-auto pt-2 border-t border-slate-800/80">
+          {/* Main Action: LISTO */}
           <button
             type="button"
             onClick={() => handleMarkReady(order)}
-            className="flex-1 py-2 px-3 bg-blue-600 hover:bg-blue-500 text-white rounded-xl font-black uppercase text-[11px] tracking-wider transition-all flex items-center justify-center gap-1.5 shadow-md shadow-blue-600/30 active:scale-95"
+            className="flex-1 py-2 px-2.5 bg-blue-600 hover:bg-blue-500 text-white rounded-xl font-black uppercase text-[11px] tracking-wider transition-all flex items-center justify-center gap-1.5 shadow-md shadow-blue-600/30 active:scale-95 cursor-pointer"
+            title="Marcar comanda como Lista / Despachar"
           >
             <Icon name="check" size={14} />
             <span>LISTO</span>
+          </button>
+
+          {/* Edit Order */}
+          <button
+            type="button"
+            onClick={() => handleEditOrder(order)}
+            className="p-2 bg-[#0e1724] hover:bg-[#152438] text-blue-400 hover:text-white rounded-xl border border-blue-500/30 transition-colors cursor-pointer"
+            title="Editar comanda"
+          >
+            <Icon name="edit_square" size={15} />
           </button>
 
           {/* Edit Notes */}
           <button
             type="button"
             onClick={() => setNotesModal({ isOpen: true, order, text: order.notes || '' })}
-            className="p-2 bg-[#0e1724] hover:bg-[#142236] text-blue-300 hover:text-white rounded-xl border border-blue-500/30 transition-colors"
-            title="Editar notas / comentarios"
+            className={`p-2 rounded-xl transition-colors cursor-pointer ${
+              order.notes
+                ? 'bg-blue-950 text-blue-200 border border-blue-500/50 hover:bg-blue-900'
+                : 'bg-[#0e1724] hover:bg-[#142236] text-slate-300 hover:text-white border border-slate-700'
+            }`}
+            title="Editar observaciones / notas"
           >
-            <Icon name="edit_note" size={15} />
+            <Icon name="description" size={15} />
           </button>
 
           {/* Print Ticket */}
           <button
             type="button"
             onClick={() => printOrderTicket(order)}
-            className="p-2 bg-[#0e1724] hover:bg-[#142236] text-slate-300 hover:text-white rounded-xl border border-slate-700 transition-colors"
+            className="p-2 bg-[#0e1724] hover:bg-[#142236] text-slate-300 hover:text-white rounded-xl border border-slate-700 transition-colors cursor-pointer"
             title="Imprimir comanda"
           >
             <Icon name="print" size={15} />
@@ -413,13 +458,13 @@ export const KdsMonitor: React.FC<KdsMonitorProps> = ({
           {/* Delete Order */}
           <button
             type="button"
-            onClick={() => handleDeleteOrder(order)}
-            className="p-2 bg-red-950/40 hover:bg-red-900 text-red-400 hover:text-white rounded-xl border border-red-800/40 transition-colors"
-            title="Eliminar comanda"
+            onClick={() => onDeleteOrder(order)}
+            className="p-2 bg-red-950/40 hover:bg-red-900 text-red-400 hover:text-white rounded-xl border border-red-800/40 transition-colors cursor-pointer"
+            title={currentUserRole === 'admin' ? 'Eliminar comanda' : 'Solicitar borrado al administrador'}
           >
-            <Icon name="delete" size={15} />
+            <Icon name={currentUserRole === 'admin' ? 'delete' : 'delete_forever'} size={15} />
           </button>
-        </div>
+        </div>}
       </div>
     );
   };
@@ -427,7 +472,7 @@ export const KdsMonitor: React.FC<KdsMonitorProps> = ({
   // Render a Column Container
   const renderColumn = (title: string, count: number, orderList: OrderData[], columnKey: string, iconName: string) => {
     return (
-      <div className="flex flex-col bg-[#060b11] rounded-3xl border border-slate-800/90 overflow-hidden shadow-2xl flex-1 min-w-[270px] max-w-full">
+      <div className="flex flex-col bg-[#060b11] rounded-3xl border border-slate-800/90 overflow-hidden shadow-2xl flex-1 min-w-[270px] max-w-full min-h-0 h-full">
         {/* Column Header */}
         <div className="px-4 py-3 border-b border-slate-800 flex items-center justify-between bg-[#0a111a] shrink-0">
           <div className="flex items-center gap-2">
@@ -444,7 +489,7 @@ export const KdsMonitor: React.FC<KdsMonitorProps> = ({
         </div>
 
         {/* Orders Column List */}
-        <div className="p-3 flex flex-col gap-2.5 overflow-y-auto flex-1 no-scrollbar min-h-0">
+        <div className="p-3 flex flex-col gap-2.5 overflow-y-auto flex-1 min-h-0 custom-dark-scrollbar overscroll-contain">
           {orderList.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-12 text-slate-600">
               <Icon name="restaurant" size={30} className="opacity-30 mb-2" />
@@ -462,7 +507,7 @@ export const KdsMonitor: React.FC<KdsMonitorProps> = ({
     <div
       ref={containerRef}
       className={`flex flex-col bg-[#03060a] text-slate-100 overflow-hidden select-none ${
-        isFullscreen || isStandalone ? 'fixed inset-0 z-50 p-3 sm:p-4' : 'h-full p-3 sm:p-4'
+        isFullscreen || isStandalone ? 'fixed inset-0 z-50 p-3 sm:p-4' : 'h-full max-h-full min-h-0 p-3 sm:p-4'
       }`}
     >
       {/* Top Banner Alert if any Delayed Orders */}
@@ -614,7 +659,7 @@ export const KdsMonitor: React.FC<KdsMonitorProps> = ({
       </header>
 
       {/* Grid of Columns: 4 Main Columns (or exclusively Delayed Orders when Call Demorados is active) */}
-      <main className="flex-1 overflow-x-auto no-scrollbar pb-1">
+      <main className="flex-1 min-h-0 overflow-x-auto overflow-y-hidden pb-1">
         {selectedFilter === 'DELAYED' ? (
           <div className="flex flex-col h-full bg-[#060b11] rounded-3xl border-2 border-red-500/60 p-4 shadow-2xl">
             <div className="flex items-center justify-between pb-3 mb-3 border-b border-red-500/30">
@@ -641,7 +686,7 @@ export const KdsMonitor: React.FC<KdsMonitorProps> = ({
                 </span>
               </div>
             ) : (
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3 overflow-y-auto flex-1 no-scrollbar">
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3 overflow-y-auto flex-1 min-h-0 custom-dark-scrollbar overscroll-contain">
                 {delayedOrdersList.map(order => renderCompactCard(order))}
               </div>
             )}

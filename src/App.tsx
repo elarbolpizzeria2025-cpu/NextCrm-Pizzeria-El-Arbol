@@ -1,11 +1,11 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { signInAnonymously, onAuthStateChanged, signInWithCustomToken, signInWithEmailAndPassword } from 'firebase/auth';
-import { doc, setDoc, collection, onSnapshot, addDoc, updateDoc, deleteDoc } from 'firebase/firestore';
+import { doc, setDoc, collection, onSnapshot, addDoc, updateDoc, deleteDoc, getDocs, writeBatch } from 'firebase/firestore';
 
 import { auth, db, firebaseErrorMsg, appId } from './firebase';
 import { 
   MenuItem, CartItem, ClientData, OrderData, StockItem, RegisterConfig, SessionData, ChatMessage,
-  DgiConfig, CfeDocument, SupportTicket
+  DgiConfig, CfeDocument, SupportTicket, OrderAuditEntry, AuditActionType
 } from './types';
 import { DEFAULT_MENU, DEFAULT_TOPPINGS, calculateToppingsCost, WARNING_THRESHOLDS } from './data/defaultMenu';
 import { 
@@ -18,6 +18,7 @@ import {
   exportStockToCSV 
 } from './utils/exports';
 import { printOrderTicket, printCashClosureTicket, printFullAccountingReport, CashClosureReportData } from './utils/printTicket';
+import { extractBarrioAndAddress } from './utils/addressBarrio';
 import { Icon } from './components/Icon';
 import { OrderCard } from './components/OrderCard';
 import { KdsMonitor } from './components/KdsMonitor';
@@ -34,10 +35,20 @@ import { WhatsAppOrderParserModal } from './components/WhatsAppOrderParserModal'
 import { CustomerObjectionsModal } from './components/CustomerObjectionsModal';
 import { DeliveryRiderTab } from './components/DeliveryRiderTab';
 import { StaffPerformanceTab } from './components/StaffPerformanceTab';
+import { AdminAuditHistoryTab } from './components/AdminAuditHistoryTab';
 import { DEFAULT_DGI_CONFIG, createCfeDocumentFromOrder } from './utils/dgiCfe';
 import { ParsedVoiceOrder } from './utils/voiceOrderParser';
 
 export type UserRole = 'admin' | 'cajero' | 'mozo' | 'delivery';
+
+interface ShortageRecord {
+  firestoreId: string;
+  name: string;
+  affectedItemIds: string[];
+  active: boolean;
+  createdAt: number;
+  createdBy?: string;
+}
 
 export const detectRoleFromIdentity = (input: string): { role: UserRole; displayName: string } => {
   const normalized = input.trim().toLowerCase();
@@ -110,18 +121,20 @@ export const detectRoleFromIdentity = (input: string): { role: UserRole; display
     };
   }
 
-  // 4. Dueño / Administrador / Supervisor
+  // 4. Dueño / Administrador / Supervisor / Admin Vicky (Admin1Vicky@gmail.com)
   if (
     normalized.includes('admin') || 
+    normalized.includes('vicky') ||
     normalized.includes('dueño') || 
     normalized.includes('dueno') || 
     normalized.includes('propietario') || 
     normalized.includes('supervisor') || 
     normalized.includes('gerente')
   ) {
+    const isVicky = normalized.includes('vicky');
     return {
       role: 'admin',
-      displayName: '👑 Dueño / Administrador'
+      displayName: isVicky ? '👑 Admin • Vicky' : '👑 Dueño / Administrador'
     };
   }
 
@@ -147,6 +160,14 @@ export default function App() {
     isOpen: false, initialCash: 0, currentCash: 0, sessionId: null, isLoaded: false, currentStock: {}, initialStock: {} 
   });
   const [stockItems, setStockItems] = useState<StockItem[]>([]); 
+  const [shortages, setShortages] = useState<ShortageRecord[]>([]);
+  const [shortagesModalOpen, setShortagesModalOpen] = useState(false);
+  const [shortageName, setShortageName] = useState('');
+  const [shortageAffectedIds, setShortageAffectedIds] = useState<string[]>([]);
+  const [deleteRequestModal, setDeleteRequestModal] = useState<{ isOpen: boolean; order: OrderData | null; note: string; confirmation: string }>({
+    isOpen: false, order: null, note: '', confirmation: ''
+  });
+  const [pendingDeleteModalOpen, setPendingDeleteModalOpen] = useState(false);
   const [uiMessage, setUiMessage] = useState<{ text: string; type: string } | null>(null);
 
   // DGI Facturación Electrónica & Soporte
@@ -170,9 +191,10 @@ export default function App() {
 
   const [activeCategory, setActiveCategory] = useState('TODOS');
   const [orderType, setOrderType] = useState('Local');
-  const [clientInfo, setClientInfo] = useState({ phone: '', name: '', address: '', zone: '' });
+  const [clientInfo, setClientInfo] = useState<{ phone: string; name: string; address: string; zone: string; tableNumber?: string; assignedWaiter?: string }>({ phone: '', name: '', address: '', zone: '' });
   const [paymentMethod, setPaymentMethod] = useState('Efectivo');
   const [cashProvided, setCashProvided] = useState(''); 
+  const [orderTip, setOrderTip] = useState('0');
   const [orderNotes, setOrderNotes] = useState(''); 
   const [showClientDropdown, setShowClientDropdown] = useState(false);
   const [initialCashInput, setInitialCashInput] = useState('');
@@ -180,7 +202,7 @@ export default function App() {
   const [isScheduled, setIsScheduled] = useState(false);
   const [scheduledTime, setScheduledTime] = useState('');
 
-  const [toppingModal, setToppingModal] = useState<{ isOpen: boolean; item: any; selectedToppings: any[]; quantity: number }>({ 
+  const [toppingModal, setToppingModal] = useState<{ isOpen: boolean; item: any; selectedToppings: any[]; quantity: number; editingCartId?: string }>({ 
     isOpen: false, item: null, selectedToppings: [], quantity: 1 
   });
   const [editOrderModal, setEditOrderModal] = useState<{ 
@@ -250,6 +272,107 @@ export default function App() {
     isOpen: false,
     amount: ''
   });
+
+  // Open Register Prompt on Login / Startup
+  const [openRegisterPromptModal, setOpenRegisterPromptModal] = useState<{
+    isOpen: boolean;
+    initialCash: string;
+  }>({
+    isOpen: false,
+    initialCash: ''
+  });
+  const [adminConsultationMode, setAdminConsultationMode] = useState<boolean>(false);
+  const hasCheckedRegisterOnLogin = useRef<boolean>(false);
+
+  // Audit Logs (Anti-fraud & modifications history for admin only)
+  const [auditLogs, setAuditLogs] = useState<OrderAuditEntry[]>([]);
+  const auditLogsRef = useRef<OrderAuditEntry[]>([]);
+  const initialAuditLoadDone = useRef<boolean>(false);
+  const [adminAlertSoundEnabled, setAdminAlertSoundEnabled] = useState<boolean>(() => {
+    if (typeof window !== 'undefined') {
+      return localStorage.getItem('nextcrm_admin_alert_sound') !== 'false';
+    }
+    return true;
+  });
+  const adminAlertSoundEnabledRef = useRef<boolean>(adminAlertSoundEnabled);
+  const [activeAlertBanner, setActiveAlertBanner] = useState<OrderAuditEntry | null>(null);
+
+  useEffect(() => {
+    adminAlertSoundEnabledRef.current = adminAlertSoundEnabled;
+    try {
+      localStorage.setItem('nextcrm_admin_alert_sound', String(adminAlertSoundEnabled));
+    } catch {}
+  }, [adminAlertSoundEnabled]);
+
+  const playAdminAlertTone = () => {
+    try {
+      const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
+      if (!AudioContextClass) return;
+      const ctx = new AudioContextClass();
+      if (ctx.state === 'suspended') ctx.resume();
+      const now = ctx.currentTime;
+
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = 'triangle';
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+
+      // Distinct 3-frequency warning chime for Cashier changes
+      osc.frequency.setValueAtTime(880, now);
+      osc.frequency.setValueAtTime(1174.66, now + 0.12);
+      osc.frequency.setValueAtTime(1567.98, now + 0.24);
+
+      gain.gain.setValueAtTime(0.28, now);
+      gain.gain.exponentialRampToValueAtTime(0.001, now + 0.55);
+
+      osc.start(now);
+      osc.stop(now + 0.55);
+    } catch (e) {
+      console.warn("Could not play admin alert tone:", e);
+    }
+  };
+
+  // Universal In-App Confirmation Dialog (Replaces blocking window.confirm)
+  const [confirmModal, setConfirmModal] = useState<{
+    isOpen: boolean;
+    title: string;
+    message: string;
+    confirmText?: string;
+    cancelText?: string;
+    confirmVariant?: 'danger' | 'primary' | 'success';
+    onConfirm: () => void;
+  }>({
+    isOpen: false,
+    title: '',
+    message: '',
+    confirmText: 'Confirmar',
+    cancelText: 'Cancelar',
+    confirmVariant: 'primary',
+    onConfirm: () => {}
+  });
+
+  const showConfirm = (opts: {
+    title: string;
+    message: string;
+    confirmText?: string;
+    cancelText?: string;
+    confirmVariant?: 'danger' | 'primary' | 'success';
+    onConfirm: () => void;
+  }) => {
+    setConfirmModal({
+      isOpen: true,
+      title: opts.title,
+      message: opts.message,
+      confirmText: opts.confirmText || 'Confirmar',
+      cancelText: opts.cancelText || 'Cancelar',
+      confirmVariant: opts.confirmVariant || 'primary',
+      onConfirm: () => {
+        setConfirmModal(prev => ({ ...prev, isOpen: false }));
+        opts.onConfirm();
+      }
+    });
+  };
 
   const [finishedFilter, setFinishedFilter] = useState({ search: '', method: 'TODOS', type: 'TODOS' });
   const [selectedFinishedOrders, setSelectedFinishedOrders] = useState<string[]>([]);
@@ -389,8 +512,8 @@ export default function App() {
         phone: parsed.client?.phone || prev.phone,
         address: parsed.client?.address || prev.address,
         zone: parsed.client?.zone || prev.zone,
-        tableNumber: parsed.client?.tableNumber || prev.tableNumber,
-        assignedWaiter: parsed.client?.assignedWaiter || prev.assignedWaiter
+        tableNumber: parsed.client?.tableNumber || (prev as any).tableNumber || '',
+        assignedWaiter: parsed.client?.assignedWaiter || (prev as any).assignedWaiter || ''
       }));
     }
     if (parsed.notes) {
@@ -488,8 +611,17 @@ export default function App() {
       setStockItems(items);
     }, console.error);
 
+    const unsubShortages = onSnapshot(collection(db, 'artifacts', appId, 'public', 'data', 'shortages'), (s) => {
+      const items = s.docs
+        .map(d => ({ ...(d.data() as any), firestoreId: d.id } as ShortageRecord))
+        .sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
+      setShortages(items);
+    }, console.error);
+
     const unsubOrders = onSnapshot(collection(db, 'artifacts', appId, 'public', 'data', 'orders'), (s) => {
-      const fetchedOrders = s.docs.map(d => ({ ...(d.data() as any), firestoreId: d.id })).sort((a,b) => b.createdAt - a.createdAt);
+      const rawOrders = s.docs.map(d => ({ ...(d.data() as any), firestoreId: d.id }));
+      const fetchedOrders = rawOrders.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
+
       if (initialLoadComplete.current) {
          const newOnes = fetchedOrders.filter(o => {
              if (prevOrdersIds.current.includes(o.firestoreId)) return false;
@@ -519,7 +651,9 @@ export default function App() {
     }, console.error);
 
     const unsubSessions = onSnapshot(collection(db, 'artifacts', appId, 'public', 'data', 'sessions'), (s) => {
-      setSessions(s.docs.map(d => ({ ...(d.data() as any), firestoreId: d.id })).sort((a,b) => b.closedAt - a.closedAt));
+      const rawSessions = s.docs.map(d => ({ ...(d.data() as any), firestoreId: d.id }));
+      const validSessions = rawSessions.sort((a, b) => (b.openedAt || b.closedAt || 0) - (a.openedAt || a.closedAt || 0));
+      setSessions(validSessions);
     }, console.error);
 
     const unsubMenu = onSnapshot(doc(db, 'artifacts', appId, 'public', 'data', 'config', 'menu'), (s) => {
@@ -566,6 +700,27 @@ export default function App() {
       setSupportTickets(tix);
     }, console.error);
 
+    // Audit Logs Listener (Anti-fraud & modifications for admin)
+    const unsubAudit = onSnapshot(collection(db, 'artifacts', appId, 'public', 'data', 'audit_logs'), (s) => {
+      const logs = s.docs.map(d => ({ ...(d.data() as any), firestoreId: d.id })).sort((a, b) => b.timestamp - a.timestamp);
+      
+      // Trigger live alert for admin when a cashier modifies or deletes an order
+      if (initialAuditLoadDone.current && currentUser.role === 'admin' && logs.length > 0) {
+        const newestLog = logs[0];
+        const isNew = !auditLogsRef.current.some(existing => existing.firestoreId === newestLog.firestoreId);
+        if (isNew && (newestLog.userRole === 'cajero' || (newestLog.userRole !== 'admin' && newestLog.userRole))) {
+          if (adminAlertSoundEnabledRef.current) {
+            playAdminAlertTone();
+          }
+          setActiveAlertBanner(newestLog);
+        }
+      }
+
+      initialAuditLoadDone.current = true;
+      auditLogsRef.current = logs;
+      setAuditLogs(logs);
+    }, console.error);
+
     return () => { 
       unsubOrders(); 
       unsubClients(); 
@@ -573,11 +728,62 @@ export default function App() {
       unsubSessions(); 
       unsubMenu(); 
       unsubStock(); 
+      unsubShortages();
       unsubDgiConfig();
       unsubCfeDocs();
       unsubTickets();
+      unsubAudit();
     };
   }, [user?.uid, forceReconnect]);
+
+  // Prompt cash register opening upon login if closed - mandatory before operation
+  // Cajero: Obligatorio abrir caja con monto (no tiene modo consulta)
+  // Admin: Obligatorio ingresar monto si abre caja, con opción exclusiva de entrar en Modo Consulta
+  useEffect(() => {
+    if (isAuthenticated && register.isLoaded && !register.isOpen) {
+      if (currentUser.role === 'admin') {
+        if (!adminConsultationMode && !openRegisterPromptModal.isOpen) {
+          setOpenRegisterPromptModal(prev => ({
+            isOpen: true,
+            initialCash: prev.isOpen ? prev.initialCash : ''
+          }));
+        }
+      } else if (currentUser.role === 'cajero') {
+        if (!openRegisterPromptModal.isOpen) {
+          setOpenRegisterPromptModal(prev => ({
+            isOpen: true,
+            initialCash: prev.isOpen ? prev.initialCash : ''
+          }));
+        }
+      }
+    } else if (register.isOpen) {
+      if (openRegisterPromptModal.isOpen) {
+        setOpenRegisterPromptModal({ isOpen: false, initialCash: '' });
+      }
+      if (adminConsultationMode) {
+        setAdminConsultationMode(false);
+      }
+    }
+  }, [isAuthenticated, register.isLoaded, register.isOpen, currentUser.role, adminConsultationMode, openRegisterPromptModal.isOpen]);
+
+  // Helper to compute next strictly correlative, non-repeating order ID (#0001, #0002, ...) across all types (Mostrador, Retiro, Mesas, Delivery, Web)
+  const getNextCorrelativeOrderId = (existingOrders: OrderData[]): string => {
+    let maxNum = 0;
+    existingOrders.forEach(o => {
+      if (o.id) {
+        // Extract numeric digits from id (e.g., "#0042" -> 42, "0042" -> 42)
+        const match = o.id.replace('#', '').trim().match(/^\d+/);
+        if (match) {
+          const num = parseInt(match[0], 10);
+          if (!isNaN(num) && num > maxNum) {
+            maxNum = num;
+          }
+        }
+      }
+    });
+    const nextNum = maxNum + 1;
+    return `#${String(nextNum).padStart(4, '0')}`;
+  };
 
   const getItemUnit = (item: StockItem): string => {
     if (item.unit) return item.unit;
@@ -619,51 +825,90 @@ export default function App() {
   }, [lowStockAlerts, dismissedStockAlerts]);
 
   const allClients = useMemo(() => {
-    const clientList: ClientData[] = []; 
-    const seenPhones = new Set<string>(); 
-    const seenNames = new Set<string>();
-    clients.forEach(c => {
-        clientList.push(c);
-        if (c.phone && String(c.phone).trim() !== '') seenPhones.add(String(c.phone).trim().replace(/\D/g, ''));
-        if (c.name && String(c.name).trim() !== '') seenNames.add(String(c.name).trim().toLowerCase());
-    });
+    // Only real clients from database - strictly no fictitious/virtual clients
+    const orderStatsMap: Record<string, { count: number; lastOrder: number }> = {};
     orders.forEach(o => {
-        if (!o.client) return;
-        const rawName = String(o.client.name || '').trim(); 
-        const rawPhone = String(o.client.phone || '').trim();
-        if (rawName === '' && rawPhone === '') return;
-        if (rawName.toLowerCase() === 'sin nombre' && (rawPhone === 'N/A' || rawPhone === '')) return;
-        if (rawName.toLowerCase() === 'general' && (rawPhone === 'N/A' || rawPhone === '')) return;
-        if (rawName.toLowerCase().startsWith('mesa ')) return; 
-        const cleanPhone = rawPhone.replace(/\D/g, ''); 
-        const cleanName = rawName.toLowerCase();
-        const matchPhone = cleanPhone !== '' && seenPhones.has(cleanPhone);
-        const matchName = cleanName !== '' && cleanName !== 'sin nombre' && seenNames.has(cleanName);
-        if (!matchPhone && !matchName) {
-            clientList.push({ 
-              firestoreId: `virtual-${o.id}-${Math.random()}`, 
-              name: rawName || 'Sin Nombre', 
-              phone: rawPhone === 'N/A' ? '' : rawPhone, 
-              address: o.client.address || '', 
-              zone: o.client.zone || '', 
-              isVirtual: true 
-            });
-            if (cleanPhone) seenPhones.add(cleanPhone); 
-            if (cleanName && cleanName !== 'sin nombre') seenNames.add(cleanName);
+      if (!o.client) return;
+      const cleanP = String(o.client.phone || '').trim().replace(/\D/g, '');
+      const cleanN = String(o.client.name || '').trim().toLowerCase();
+      const key = cleanP || (cleanN !== 'sin nombre' && cleanN !== 'consumidor final' ? cleanN : '');
+      if (key) {
+        if (!orderStatsMap[key]) orderStatsMap[key] = { count: 0, lastOrder: 0 };
+        orderStatsMap[key].count++;
+        if (o.createdAt && o.createdAt > orderStatsMap[key].lastOrder) {
+          orderStatsMap[key].lastOrder = o.createdAt;
         }
+      }
     });
-    return clientList.sort((a, b) => String(a.name || '').localeCompare(String(b.name || '')));
+
+    const clientList: ClientData[] = clients.map(c => {
+      const rawPhone = c.phone === 'N/A' ? '' : (c.phone || '');
+      const rawAddress = c.address === 'N/A' ? '' : (c.address || '');
+      const rawZone = c.zone === 'N/A' ? '' : (c.zone || '');
+      const cleanP = rawPhone ? String(rawPhone).trim().replace(/\D/g, '') : '';
+      const cleanN = c.name ? String(c.name).trim().toLowerCase() : '';
+      const key = cleanP || (cleanN !== 'sin nombre' && cleanN !== 'consumidor final' ? cleanN : '');
+      const stats = key ? orderStatsMap[key] : null;
+
+      return {
+        ...c,
+        phone: rawPhone,
+        address: rawAddress,
+        zone: rawZone,
+        orderCount: (c as any).orderCount || stats?.count || 0,
+        lastOrderAt: (c as any).lastOrderAt || stats?.lastOrder || c.createdAt || 0,
+        isVirtual: false
+      };
+    });
+
+    // Sort to keep clients with recent orders first, then alphabetical by name
+    return clientList.sort((a, b) => {
+      const timeA = (a as any).lastOrderAt || a.createdAt || 0;
+      const timeB = (b as any).lastOrderAt || b.createdAt || 0;
+      if (timeB !== timeA) return timeB - timeA;
+      return String(a.name || '').localeCompare(String(b.name || ''));
+    });
   }, [clients, orders]);
 
   const matchingClients = useMemo(() => {
-    const q = (clientInfo.name + ' ' + clientInfo.phone + ' ' + clientInfo.address).toLowerCase().trim();
-    if (!q) return [];
+    const rawPhone = String(clientInfo.phone || '').trim();
+    const cleanPhoneDigits = rawPhone.replace(/\D/g, '');
+    const rawName = String(clientInfo.name || '').trim().toLowerCase();
+    const isGenericName = rawName === 'consumidor final' || rawName === 'sin nombre' || rawName.startsWith('mesa #');
+    const searchName = isGenericName ? '' : rawName;
+    const searchAddress = String(clientInfo.address || '').trim().toLowerCase();
+
+    // If nothing typed yet, return top fresh/recent clients from DB
+    if (!cleanPhoneDigits && !searchName && !searchAddress) {
+      return allClients.slice(0, 8);
+    }
+
     return allClients.filter(c => {
-      const name = (c.name || '').toLowerCase();
-      const phone = (c.phone || '').toLowerCase();
-      const address = (c.address || '').toLowerCase();
-      return name.includes(q) || phone.includes(q) || address.includes(q);
-    }).slice(0, 6);
+      const cPhoneDigits = String(c.phone || '').trim().replace(/\D/g, '');
+      const cName = String(c.name || '').toLowerCase();
+      const cAddress = String(c.address || '').toLowerCase();
+      const cZone = String(c.zone || '').toLowerCase();
+
+      if (cleanPhoneDigits.length > 0) {
+        if (cPhoneDigits.includes(cleanPhoneDigits) || cleanPhoneDigits.includes(cPhoneDigits)) {
+          return true;
+        }
+      }
+
+      if (searchName.length > 1) {
+        if (cName.includes(searchName)) {
+          return true;
+        }
+      }
+
+      if (searchAddress.length > 2) {
+        if (cAddress.includes(searchAddress) || cZone.includes(searchAddress)) {
+          return true;
+        }
+      }
+
+      return false;
+    }).slice(0, 8);
   }, [allClients, clientInfo.name, clientInfo.phone, clientInfo.address]);
 
   const allMenuItems = useMemo(() => { 
@@ -682,10 +927,10 @@ export default function App() {
         methods: { Efectivo: 0, Débito: 0, Crédito: 0, Transferencia: 0, 'A confirmar': 0 } as Record<string, number>, 
         itemsSold: {} as Record<string, { qty: number; revenue: number }>, 
         physicalTotals: { metrosPizza: 0, porcionesPizza: 0, pizzetas: 0, fainas: 0, sandwiches: 0 }, 
-        delivery: currentOrders.filter(o => o.status === 'Pendiente' && ['envío', 'envio', 'delivery'].includes(sType(o.type))), 
-        mostrador: currentOrders.filter(o => o.status === 'Pendiente' && ['local', 'mostrador'].includes(sType(o.type))), 
-        mesas: currentOrders.filter(o => o.status === 'Pendiente' && sType(o.type) === 'mesa'), 
-        web: currentOrders.filter(o => o.status === 'Pendiente' && ['web', 'pedido web'].includes(sType(o.type))), 
+        delivery: currentOrders.filter(o => o.status !== 'Finalizado' && o.status !== 'Cancelado' && ['envío', 'envio', 'delivery', 'reparto'].includes(sType(o.type))), 
+        mostrador: currentOrders.filter(o => o.status !== 'Finalizado' && o.status !== 'Cancelado' && ['local', 'mostrador'].includes(sType(o.type))), 
+        mesas: currentOrders.filter(o => o.status !== 'Finalizado' && o.status !== 'Cancelado' && sType(o.type) === 'mesa'), 
+        web: currentOrders.filter(o => o.status !== 'Finalizado' && o.status !== 'Cancelado' && ['web', 'pedido web'].includes(sType(o.type))), 
         finishedTotal: currentOrders.filter(o => o.status === 'Finalizado').length, 
         kitchenTotal: currentOrders.filter(o => o.status === 'Preparando' || o.status === 'Pendiente').length 
     };
@@ -730,15 +975,33 @@ export default function App() {
     return stats;
   }, [orders]);
 
-  const badges = useMemo(() => ({ 
-    kitchen: reportData.kitchenTotal, 
-    mostrador: reportData.mostrador.length, 
-    mesas: reportData.mesas.length, 
-    delivery: reportData.delivery.length, 
-    web: reportData.web.length, 
-    finished: reportData.finishedTotal, 
-    stock: lowStockAlerts.length 
-  }), [reportData, lowStockAlerts.length]);
+  const badges = useMemo(() => {
+    let deliveryCount = reportData.delivery.length;
+    if (currentUser.role === 'delivery') {
+      const u = (currentUser.username || '').toLowerCase();
+      const d = (currentUser.displayName || '').toLowerCase();
+      let myName = 'Fefo';
+      if (u.includes('caetano') || d.includes('caetano') || u === 'delivery2') myName = 'Caetano';
+      else if (u.includes('samuel') || d.includes('samuel') || u === 'delivery3') myName = 'Samuel';
+      deliveryCount = reportData.delivery.filter(o => (o.assignedDriver || '').toLowerCase() === myName.toLowerCase()).length;
+    }
+
+    const cashierModifications = auditLogs.filter(l => 
+      (l.userRole === 'cajero' || (l.userRole !== 'admin' && l.userRole)) &&
+      (register.sessionId ? l.sessionId === register.sessionId : true)
+    ).length;
+
+    return { 
+      kitchen: reportData.kitchenTotal, 
+      mostrador: reportData.mostrador.length, 
+      mesas: reportData.mesas.length, 
+      delivery: deliveryCount, 
+      web: reportData.web.length, 
+      finished: reportData.finishedTotal, 
+      stock: lowStockAlerts.length,
+      audit: cashierModifications
+    };
+  }, [reportData, lowStockAlerts.length, currentUser, auditLogs, register.sessionId]);
 
   // Auto-dismiss active tab badge and persist in localStorage
   useEffect(() => {
@@ -750,10 +1013,46 @@ export default function App() {
     }
   }, [activeTab, badges, reportData.finishedTotal, lowStockAlerts.length]);
 
+  const activeShortages = useMemo(() => shortages.filter(s => s.active !== false), [shortages]);
+
   const addToCart = (item: MenuItem, selectedToppings: any[], initialQty = 1) => {
+    const blockingShortage = activeShortages.find(s => (s.affectedItemIds || []).includes(item.id));
+    if (blockingShortage) {
+      showMessage(`⚠️ NO DISPONIBLE: ${item.name}. Falta: ${blockingShortage.name}. Avisar al cliente antes de vender.`, 'error');
+      return;
+    }
     const toppingsCost = calculateToppingsCost(item, selectedToppings);
     const finalPrice = item.price + (toppingsCost / initialQty);
     setCart([...cart, { ...item, cartId: Math.random().toString(36).substr(2,9), selectedToppings, finalPrice, quantity: initialQty }]);
+  };
+
+  const saveShortage = async () => {
+    const name = shortageName.trim();
+    if (!name) return showMessage('Escribí el insumo o producto faltante', 'error');
+    if (shortageAffectedIds.length === 0) return showMessage('Seleccioná al menos un producto del menú afectado', 'error');
+    try {
+      await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'shortages'), {
+        name,
+        affectedItemIds: shortageAffectedIds,
+        active: true,
+        createdAt: Date.now(),
+        createdBy: currentUser.displayName || currentUser.username
+      });
+      setShortageName('');
+      setShortageAffectedIds([]);
+      showMessage(`Faltante activado: ${name}. Los productos relacionados quedaron bloqueados.`, 'success');
+    } catch (e: any) {
+      showMessage('Error al guardar faltante: ' + e.message, 'error');
+    }
+  };
+
+  const resolveShortage = async (shortage: ShortageRecord) => {
+    try {
+      await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'shortages', shortage.firestoreId), { active: false, resolvedAt: Date.now(), resolvedBy: currentUser.displayName || currentUser.username });
+      showMessage(`Faltante resuelto: ${shortage.name}`, 'success');
+    } catch (e: any) {
+      showMessage('Error al resolver faltante: ' + e.message, 'error');
+    }
   };
 
   const updateQuantity = (cartId: string, delta: number) => { 
@@ -768,11 +1067,15 @@ export default function App() {
 
   const cartTotal = Math.round(cart.reduce((a, b) => a + ((b.finalPrice || 0) * (b.quantity || 1)), 0));
 
-  const handleOpenRegister = async (skipStock = false) => {
-    const rawVal = String(initialCashInput).trim();
-    const amount = rawVal !== '' ? (parseFloat(rawVal) || 0) : 0;
-    if (isNaN(amount) || amount < 0) {
-      showMessage("Ingrese un monto de efectivo inicial válido (ej: 0 o más)", "error");
+  const handleOpenRegister = async (skipStock = false, overrideCash?: number) => {
+    const rawVal = overrideCash !== undefined ? String(overrideCash).trim() : String(initialCashInput).trim();
+    if (!rawVal || rawVal === '' || isNaN(parseFloat(rawVal))) {
+      showMessage("⚠️ Debe ingresar el monto de efectivo inicial para abrir la caja. No se permite abrir sin monto a ningún cajero ni administrador.", "error");
+      return;
+    }
+    const amount = parseFloat(rawVal);
+    if (amount <= 0) {
+      showMessage("⚠️ El monto de efectivo inicial debe ser mayor a $0. No se permite abrir caja sin declarar el fondo de caja a ningún cajero ni administrador.", "error");
       return;
     }
     
@@ -802,6 +1105,8 @@ export default function App() {
     setRegister(newRegisterState);
     setInitialCashInput(''); 
     setInitialStockInput({});
+    setAdminConsultationMode(false);
+    setOpenRegisterPromptModal({ isOpen: false, initialCash: '' });
     setActiveTab('pos');
     showMessage(skipStock ? `✅ Caja abierta con $${amount} (Stock iniciado en 0)` : `✅ Caja abierta con $${amount} e inventario cargado`, 'success');
 
@@ -841,6 +1146,14 @@ export default function App() {
         orderTypesBreakdown[type].total += o.total;
       });
 
+      const sessionAudit = auditLogs.filter(l => {
+        if (overrideSession.sessionId && l.sessionId === overrideSession.sessionId) return true;
+        if (overrideSession.openedAt && overrideSession.closedAt) {
+          return l.timestamp >= overrideSession.openedAt && l.timestamp <= (overrideSession.closedAt + 300000);
+        }
+        return false;
+      });
+
       dataToPrint = {
         sessionId: overrideSession.sessionId,
         openedAt: overrideSession.openedAt,
@@ -854,7 +1167,8 @@ export default function App() {
         physicalTotals: overrideSession.physicalTotals || reportData.physicalTotals,
         itemsSold: overrideSession.itemsSoldBreakdown || {},
         ordersList,
-        orderTypesBreakdown
+        orderTypesBreakdown,
+        auditLogs: sessionAudit
       };
     } else {
       const finishedOrders = orders.filter(o => o.status === 'Finalizado' && !o.isArchived);
@@ -876,6 +1190,12 @@ export default function App() {
         orderTypesBreakdown[type].total += o.total;
       });
 
+      const shiftAudit = auditLogs.filter(l => {
+        if (register.sessionId && l.sessionId === register.sessionId) return true;
+        if (register.openedAt && l.timestamp >= register.openedAt) return true;
+        return false;
+      });
+
       dataToPrint = {
         sessionId: register.sessionId || `SESSION-${Date.now()}`,
         openedAt: register.openedAt,
@@ -889,7 +1209,8 @@ export default function App() {
         physicalTotals: reportData.physicalTotals,
         itemsSold: reportData.itemsSold,
         ordersList,
-        orderTypesBreakdown
+        orderTypesBreakdown,
+        auditLogs: shiftAudit
       };
     }
 
@@ -946,10 +1267,29 @@ export default function App() {
     } catch (e: any) { showMessage("Error al cerrar caja: " + e.message, "error"); }
   };
 
+  const handleResolveAllAndClose = async () => {
+    try {
+      const activePending = orders.filter(o => !o.isArchived && o.status !== 'Finalizado');
+      for (const order of activePending) {
+        if (db && order.firestoreId) {
+          await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'orders', order.firestoreId), {
+            status: 'Finalizado',
+            deliveredAt: Date.now()
+          });
+        }
+      }
+      showMessage(`✅ Se finalizaron ${activePending.length} comandas pendientes`);
+      await handleCloseRegister(true);
+    } catch (e: any) {
+      showMessage("Error al resolver pedidos: " + e.message, "error");
+    }
+  };
+
   const clearForm = () => { 
     setCart([]); 
     setClientInfo({name:'', phone:'', address:'', zone:''}); 
     setCashProvided(''); 
+    setOrderTip('0');
     setIsScheduled(false); 
     setScheduledTime(''); 
     setEditingOrder(null); 
@@ -967,6 +1307,7 @@ export default function App() {
     setOrderType(order.type); 
     setPaymentMethod(order.paymentMethod); 
     setCashProvided(order.cashProvided ? order.cashProvided.toString() : ''); 
+    setOrderTip(String(order.tip || 0));
     setIsScheduled(order.isScheduled || false);
     if (order.isScheduled && order.scheduledTime) { 
       const d = new Date(order.scheduledTime); 
@@ -981,32 +1322,138 @@ export default function App() {
     showMessage("Comanda cargada para editar");
   };
 
+  // Centralized Audit Logger for order deletions and modifications/rectifications
+  const logOrderAudit = async (entry: {
+    orderId: string;
+    action: AuditActionType;
+    description: string;
+    orderType?: string;
+    clientName?: string;
+    tableNumber?: number | string | null;
+    previousTotal?: number;
+    newTotal?: number;
+    changesSummary?: string;
+    itemsBefore?: { name: string; quantity: number; price: number }[];
+    itemsAfter?: { name: string; quantity: number; price: number }[];
+  }) => {
+    try {
+      const fullEntry: Omit<OrderAuditEntry, 'firestoreId'> = {
+        ...entry,
+        timestamp: Date.now(),
+        userId: currentUser.id || 'admin',
+        userName: currentUser.displayName || (currentUser.role === 'admin' ? 'Dueño' : currentUser.role),
+        userRole: currentUser.role,
+        sessionId: register.sessionId || null,
+      };
+      if (db) {
+        await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'audit_logs'), fullEntry);
+      }
+      setAuditLogs(prev => [fullEntry as OrderAuditEntry, ...prev]);
+
+      // If action performed while admin is observing or if performed by cashier
+      if (fullEntry.userRole === 'cajero' || (fullEntry.userRole !== 'admin' && fullEntry.userRole)) {
+        if (currentUser.role === 'admin') {
+          if (adminAlertSoundEnabledRef.current) {
+            playAdminAlertTone();
+          }
+          setActiveAlertBanner(fullEntry as OrderAuditEntry);
+        }
+      }
+    } catch (e) {
+      console.warn("Error logging audit:", e);
+    }
+  };
+
+  // Direct Tip Allocation by Order ID / Comanda
+  const handleUpdateOrderTip = async (orderId: string, tipAmount: number, tipNotes?: string) => {
+    if (!db) {
+      showMessage("Error: No hay conexión a base de datos", "error");
+      return;
+    }
+    const cleanId = orderId.replace('#', '').trim();
+    const targetOrder = orders.find(o => 
+      o.id === orderId || 
+      o.id === cleanId || 
+      o.firestoreId === orderId ||
+      o.id.replace('#', '').padStart(4, '0') === cleanId.padStart(4, '0')
+    );
+
+    if (!targetOrder || !targetOrder.firestoreId) {
+      showMessage(`No se encontró la comanda #${orderId}`, "error");
+      return;
+    }
+
+    const previousTip = targetOrder.tip || 0;
+    try {
+      const orderDocRef = doc(db, 'artifacts', appId, 'public', 'data', 'orders', targetOrder.firestoreId);
+      await updateDoc(orderDocRef, {
+        tip: tipAmount,
+        tipNotes: tipNotes || targetOrder.tipNotes || null,
+        updatedAt: Date.now()
+      });
+
+      // Track in Audit Log for complete transparency
+      await logOrderAudit({
+        orderId: targetOrder.id,
+        action: 'UPDATE_ORDER',
+        description: `Propina asignada: $${tipAmount} (anterior: $${previousTip})`,
+        orderType: targetOrder.type,
+        clientName: targetOrder.client?.name,
+        tableNumber: targetOrder.tableNumber,
+        previousTotal: targetOrder.total,
+        newTotal: targetOrder.total,
+        changesSummary: `Propina registrada: $${tipAmount} para comanda #${targetOrder.id}${tipNotes ? ` (Nota: ${tipNotes})` : ''}`
+      });
+
+      showMessage(`Propina de $${tipAmount} asignada a comanda #${targetOrder.id}`, 'success');
+    } catch (e: any) {
+      console.error("Error updating order tip:", e);
+      showMessage("Error al guardar propina: " + e.message, "error");
+    }
+  };
+
   const handleCheckout = async (returnToKitchen = false) => {
-    if (!db || !user) return showMessage("Error: No hay conexión", "error");
-    if (register.isLoaded && !register.isOpen) { showMessage("Debe abrir la caja antes de procesar", "error"); setActiveTab('cash'); return; }
+    const currentAuthUser = user || auth?.currentUser;
+    if (!db || !currentAuthUser) return showMessage("Error: No hay conexión con la base de datos", "error");
+    // Todos los cajeros, usuarios admin y mozos pueden hacer toma de pedidos y enviarlos a cocina (KDS)
     if (cart.length === 0) return showMessage("El carrito está vacío", "error");
     if (isScheduled && !scheduledTime) return showMessage("Indique hora de entrega", "error");
     setIsSubmitting(true);
     try {
         const isMesa = orderType === 'Mesa';
-        if (!isMesa && ((clientInfo.name && clientInfo.name.trim() !== '') || (clientInfo.phone && clientInfo.phone.trim() !== ''))) {
+        const rawPhoneClean = String(clientInfo.phone || '').trim().replace(/\D/g, '');
+        const rawNameClean = String(clientInfo.name || '').trim().toLowerCase();
+        const isGenericName = rawNameClean === 'consumidor final' || rawNameClean === 'sin nombre' || rawNameClean === 'general';
+
+        if (!isMesa && (rawPhoneClean !== '' || (!isGenericName && rawNameClean !== ''))) {
             const existingClient = clients.find(c => { 
-              const infoP = String(clientInfo.phone || '').trim(); 
-              const infoN = String(clientInfo.name || '').trim().toLowerCase(); 
-              const cP = String(c.phone || '').trim(); 
+              const cP = String(c.phone || '').trim().replace(/\D/g, ''); 
               const cN = String(c.name || '').trim().toLowerCase(); 
-              return (infoP !== '' && infoP.toLowerCase() !== 'n/a' && cP === infoP) || (infoN !== '' && infoN.toLowerCase() !== 'sin nombre' && cN === infoN); 
+              const matchPhone = rawPhoneClean && cP && (rawPhoneClean === cP || (rawPhoneClean.length >= 8 && cP.includes(rawPhoneClean)) || (cP.length >= 8 && rawPhoneClean.includes(cP)));
+              const matchName = !isGenericName && rawNameClean && cN && cN === rawNameClean;
+              return matchPhone || matchName; 
             });
+
             if (existingClient) {
                 const updates: any = {}; 
-                if (clientInfo.name && existingClient.name !== clientInfo.name) updates.name = clientInfo.name; 
+                if (clientInfo.name && !isGenericName && existingClient.name !== clientInfo.name) updates.name = clientInfo.name; 
                 if (clientInfo.phone && existingClient.phone !== clientInfo.phone) updates.phone = clientInfo.phone; 
                 if (clientInfo.address && existingClient.address !== clientInfo.address) updates.address = clientInfo.address; 
                 if (clientInfo.zone && existingClient.zone !== clientInfo.zone) updates.zone = clientInfo.zone;
-                if (Object.keys(updates).length > 0) await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'clients', existingClient.firestoreId), updates);
-            } else { 
+                updates.updatedAt = Date.now();
+                updates.lastOrderAt = Date.now();
+                updates.orderCount = ((existingClient as any).orderCount || 0) + 1;
+                await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'clients', existingClient.firestoreId), updates);
+            } else if (!isGenericName || rawPhoneClean !== '') { 
               await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'clients'), { 
-                name: clientInfo.name || 'Sin Nombre', phone: clientInfo.phone || '', address: clientInfo.address || '', zone: clientInfo.zone || '', createdAt: Date.now() 
+                name: isGenericName ? 'Cliente' : (clientInfo.name || 'Cliente'), 
+                phone: clientInfo.phone || '', 
+                address: clientInfo.address || '', 
+                zone: clientInfo.zone || '', 
+                createdAt: Date.now(),
+                updatedAt: Date.now(),
+                lastOrderAt: Date.now(),
+                orderCount: 1
               }); 
             }
         }
@@ -1022,17 +1469,37 @@ export default function App() {
           ? (clientInfo.assignedWaiter || (currentUser.role === 'mozo' ? currentUser.displayName : 'Moza 1'))
           : null;
 
+        const finalDriver = clientInfo.assignedDriver || (editingOrder ? editingOrder.assignedDriver : null) || null;
+        let finalDriverId = clientInfo.assignedDriverId || (editingOrder ? editingOrder.assignedDriverId : null) || null;
+        if (finalDriver && !finalDriverId) {
+          const low = finalDriver.toLowerCase();
+          if (low.includes('fefo') || low.includes('1')) finalDriverId = 'delivery1';
+          else if (low.includes('caetano') || low.includes('2')) finalDriverId = 'delivery2';
+          else if (low.includes('samuel') || low.includes('3')) finalDriverId = 'delivery3';
+        }
+
+        const orderTakerName = editingOrder?.orderTaker || 
+          (isMesa ? waiterName : null) || 
+          currentUser.displayName || 
+          currentUser.username || 
+          'Caja';
+
+        const resolvedAddress = !isMesa ? extractBarrioAndAddress(clientInfo.address, clientInfo.zone) : null;
+        const finalZone = isMesa 
+          ? 'N/A' 
+          : (clientInfo.zone && clientInfo.zone !== 'N/A' ? clientInfo.zone : (resolvedAddress?.barrio || 'N/A'));
+
         const orderData: any = {
-          id: editingOrder ? editingOrder.id : `#${String(orders.length + 1).padStart(4, '0')}`, 
+          id: editingOrder ? editingOrder.id : getNextCorrelativeOrderId(orders), 
           type: orderType || 'Local', 
-          reference: orderType === 'Envío' ? 'ENVÍO' : (orderType === 'Web' ? 'PEDIDO WEB' : (orderType === 'Mesa' ? `MESA #${tableNum}` : 'LOCAL')), 
+          reference: orderType === 'Envío' ? 'ENVÍO' : (orderType === 'Mesa' ? `MESA #${tableNum}` : 'LOCAL'), 
           client: { 
             name: isMesa 
               ? (clientInfo.name ? `${clientInfo.name} (Mesa #${tableNum})` : `Mesa #${tableNum}`) 
               : (clientInfo.name || 'Sin Nombre'), 
             phone: isMesa ? 'N/A' : (clientInfo.phone || 'N/A'), 
             address: isMesa ? 'N/A' : (clientInfo.address || 'N/A'), 
-            zone: isMesa ? 'N/A' : (clientInfo.zone || 'N/A'),
+            zone: finalZone,
             tableNumber: tableNum,
             assignedWaiter: waiterName
           }, 
@@ -1044,6 +1511,7 @@ export default function App() {
           total: cartTotal, 
           paymentMethod: paymentMethod || 'Efectivo', 
           cashProvided: paymentMethod === 'Efectivo' ? (parseFloat(cashProvided) || 0) : 0, 
+          tip: parseFloat(orderTip) || 0,
           status: editingOrder ? (returnToKitchen ? 'Preparando' : editingOrder.status) : 'Preparando', 
           createdAt: editingOrder ? editingOrder.createdAt : Date.now(), 
           time: editingOrder ? editingOrder.time : new Date().toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}), 
@@ -1052,13 +1520,61 @@ export default function App() {
           isPaid: editingOrder ? editingOrder.isPaid : false, 
           isArchived: editingOrder ? editingOrder.isArchived : false, 
           notes: orderNotes, 
-          assignedDriver: editingOrder ? editingOrder.assignedDriver : null, 
-          assignedDriverId: editingOrder ? editingOrder.assignedDriverId : null,
+          assignedDriver: finalDriver, 
+          assignedDriverId: finalDriverId,
+          orderTaker: orderTakerName,
           sessionId: register.sessionId || null 
         };
         if (editingOrder) { 
+          // Audit Log: Record order modification / rectification
+          const prevTotal = editingOrder.total || 0;
+          const newTotal = cartTotal;
+          const addedItems: string[] = [];
+          const removedItems: string[] = [];
+          const changedItems: string[] = [];
+
+          cart.forEach(cItem => {
+            const oldItem = editingOrder.items.find(oi => oi.id === cItem.id || oi.name === cItem.name);
+            if (!oldItem) {
+              addedItems.push(`${cItem.quantity || 1}x ${cItem.name}`);
+            } else if (oldItem.quantity !== cItem.quantity) {
+              changedItems.push(`${cItem.name} (${oldItem.quantity} -> ${cItem.quantity})`);
+            }
+          });
+
+          editingOrder.items.forEach(oldItem => {
+            const stillThere = cart.find(cItem => cItem.id === oldItem.id || cItem.name === oldItem.name);
+            if (!stillThere) {
+              removedItems.push(`${oldItem.quantity || 1}x ${oldItem.name}`);
+            }
+          });
+
+          const diffParts: string[] = [];
+          if (addedItems.length > 0) diffParts.push(`Agregados: ${addedItems.join(', ')}`);
+          if (removedItems.length > 0) diffParts.push(`Eliminados: ${removedItems.join(', ')}`);
+          if (changedItems.length > 0) diffParts.push(`Cantidades: ${changedItems.join(', ')}`);
+          if (prevTotal !== newTotal) diffParts.push(`Total: $${prevTotal} -> $${newTotal}`);
+          if (editingOrder.tableNumber !== tableNum) diffParts.push(`Mesa: ${editingOrder.tableNumber || 'S/M'} -> ${tableNum || 'S/M'}`);
+          if (editingOrder.type !== orderType) diffParts.push(`Tipo: ${editingOrder.type} -> ${orderType}`);
+
+          const changesSummary = diffParts.length > 0 ? diffParts.join(' • ') : 'Rectificación de comanda sin alteración de monto';
+
+          await logOrderAudit({
+            orderId: editingOrder.id,
+            action: addedItems.length > 0 ? 'ADD_ITEM' : 'RECTIFY_ORDER',
+            description: `Comanda #${editingOrder.id} modificada/rectificada`,
+            orderType: orderType || 'Local',
+            clientName: clientInfo.name || editingOrder.client?.name,
+            tableNumber: tableNum,
+            previousTotal: prevTotal,
+            newTotal: newTotal,
+            changesSummary,
+            itemsBefore: editingOrder.items.map(i => ({ name: i.name, quantity: i.quantity || 1, price: i.price || 0 })),
+            itemsAfter: cart.map(i => ({ name: i.name, quantity: i.quantity || 1, price: i.price || 0 }))
+          });
+
           await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'orders', editingOrder.firestoreId), orderData); 
-          showMessage("Pedido actualizado"); 
+          showMessage("Pedido actualizado y registrado en auditoría"); 
         } else { 
           await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'orders'), orderData); 
           showMessage("Pedido enviado a COCINA"); 
@@ -1298,11 +1814,18 @@ export default function App() {
   };
 
   const handleDeleteStockItem = async (itemId: string) => {
-    if (!window.confirm("¿Está seguro de eliminar este artículo del inventario de stock?")) return;
-    try {
-      await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'stockItems', itemId));
-      showMessage("Artículo eliminado del stock");
-    } catch (e: any) { showMessage("Error al eliminar: " + e.message, "error"); }
+    showConfirm({
+      title: '¿Eliminar del inventario de stock?',
+      message: '¿Está seguro de eliminar este artículo del inventario de stock?',
+      confirmText: 'Eliminar Artículo',
+      confirmVariant: 'danger',
+      onConfirm: async () => {
+        try {
+          await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'stockItems', itemId));
+          showMessage("Artículo eliminado del stock");
+        } catch (e: any) { showMessage("Error al eliminar: " + e.message, "error"); }
+      }
+    });
   };
 
   // Client CRUD Operations
@@ -1337,11 +1860,18 @@ export default function App() {
   };
 
   const handleDeleteClient = async (firestoreId: string) => {
-    if (!window.confirm("¿Está seguro de eliminar este cliente del directorio?")) return;
-    try {
-      await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'clients', firestoreId));
-      showMessage("Cliente eliminado");
-    } catch (e: any) { showMessage("Error al eliminar cliente: " + e.message, "error"); }
+    showConfirm({
+      title: '¿Eliminar cliente?',
+      message: '¿Está seguro de eliminar este cliente del directorio permanente?',
+      confirmText: 'Eliminar Cliente',
+      confirmVariant: 'danger',
+      onConfirm: async () => {
+        try {
+          await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'clients', firestoreId));
+          showMessage("Cliente eliminado");
+        } catch (e: any) { showMessage("Error al eliminar cliente: " + e.message, "error"); }
+      }
+    });
   };
 
   const handleRestoreClientsFromHistory = async () => {
@@ -1524,27 +2054,34 @@ export default function App() {
   };
 
   const handleDeleteProduct = async (catKey: string, itemId: string) => {
-    if (!window.confirm("¿Está seguro de eliminar este producto del menú?")) return;
-    const cKey = catKey.toLowerCase();
-    const updatedMenu = { ...menu };
-    if (!updatedMenu[cKey]) return;
-    updatedMenu[cKey] = updatedMenu[cKey].filter(it => it.id !== itemId);
+    showConfirm({
+      title: '¿Eliminar producto del menú?',
+      message: '¿Está seguro de eliminar este producto del menú?',
+      confirmText: 'Eliminar Producto',
+      confirmVariant: 'danger',
+      onConfirm: async () => {
+        const cKey = catKey.toLowerCase();
+        const updatedMenu = { ...menu };
+        if (!updatedMenu[cKey]) return;
+        updatedMenu[cKey] = updatedMenu[cKey].filter(it => it.id !== itemId);
 
-    // Update local state immediately!
-    setMenu(updatedMenu);
-    try {
-      localStorage.setItem('nextcrm_menu', JSON.stringify(updatedMenu));
-    } catch (_) {}
+        // Update local state immediately!
+        setMenu(updatedMenu);
+        try {
+          localStorage.setItem('nextcrm_menu', JSON.stringify(updatedMenu));
+        } catch (_) {}
 
-    try {
-      if (db) {
-        await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'config', 'menu'), { data: updatedMenu });
+        try {
+          if (db) {
+            await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'config', 'menu'), { data: updatedMenu });
+          }
+          setEditProductModal({ isOpen: false, category: '', item: null, name: '', desc: '', price: '', isPortion: false, isMeter: false, hasToppings: false, maxToppings: 4 });
+          showMessage("Producto eliminado del menú correctamente", 'info');
+        } catch (e: any) {
+          showMessage("Producto eliminado localmente", 'info');
+        }
       }
-      setEditProductModal({ isOpen: false, category: '', item: null, name: '', desc: '', price: '', isPortion: false, isMeter: false, hasToppings: false, maxToppings: 4 });
-      showMessage("Producto eliminado del menú correctamente", 'info');
-    } catch (e: any) {
-      showMessage("Producto eliminado localmente", 'info');
-    }
+    });
   };
 
   // Sales History (Finished Orders) Handlers
@@ -1563,31 +2100,116 @@ export default function App() {
   const handleSaveEditSale = async () => {
     if (!editSaleModal.order) return;
     try {
+      const newTot = parseFloat(editSaleModal.total) || 0;
+      await logOrderAudit({
+        orderId: editSaleModal.order.id,
+        action: 'RECTIFY_ORDER',
+        description: `Venta #${editSaleModal.order.id} rectificada desde Historial de Ventas`,
+        orderType: editSaleModal.order.type || 'Local',
+        clientName: editSaleModal.order.client?.name,
+        tableNumber: editSaleModal.order.tableNumber,
+        previousTotal: editSaleModal.order.total,
+        newTotal: newTot,
+        changesSummary: `Monto: $${editSaleModal.order.total} -> $${newTot} • Forma de Pago: ${editSaleModal.order.paymentMethod} -> ${editSaleModal.paymentMethod}`,
+        itemsBefore: (editSaleModal.order.items || []).map(i => ({ name: i.name, quantity: i.quantity || 1, price: i.price || 0 }))
+      });
+
       await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'orders', editSaleModal.order.firestoreId), {
         paymentMethod: editSaleModal.paymentMethod,
-        total: parseFloat(editSaleModal.total) || 0,
+        total: newTot,
         tip: parseFloat(editSaleModal.tip) || 0,
         notes: editSaleModal.notes,
         status: editSaleModal.status
       });
       setEditSaleModal({ isOpen: false, order: null, paymentMethod: 'Efectivo', total: '', tip: '0', notes: '', status: 'Finalizado' });
-      showMessage("Venta actualizada correctamente");
+      showMessage("Venta actualizada correctamente y registrada en auditoría");
     } catch (e: any) {
       showMessage("Error al actualizar venta: " + e.message, "error");
     }
   };
 
-  const handleDeleteSale = async (firestoreId: string, orderId: string) => {
-    requireAdminAuth(`Eliminar Comanda #${orderId}`, async () => {
-      if (!window.confirm(`¿Está seguro de eliminar la comanda #${orderId} del historial?`)) return;
-      try {
-        await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'orders', firestoreId));
-        showMessage(`Comanda #${orderId} eliminada del registro`);
-      } catch (e: any) {
-        showMessage("Error al eliminar venta: " + e.message, "error");
+  const deleteOrderAsAdmin = async (order: OrderData) => {
+    if (currentUser.role !== 'admin') return;
+    showConfirm({
+      title: `¿Eliminar comanda #${order.id}?`,
+      message: `Se eliminará permanentemente. ${order.deleteRequestNote ? `Motivo informado: ${order.deleteRequestNote}` : 'La acción quedará registrada en auditoría.'}`,
+      confirmText: 'Eliminar Comanda',
+      confirmVariant: 'danger',
+      onConfirm: async () => {
+        try {
+          await logOrderAudit({
+            orderId: order.id,
+            action: 'DELETE_ORDER',
+            description: `Comanda #${order.id} eliminada por Administrador`,
+            orderType: order.type,
+            clientName: order.client?.name,
+            tableNumber: order.tableNumber,
+            previousTotal: order.total || 0,
+            newTotal: 0,
+            changesSummary: `${order.deleteRequestNote ? `Solicitud: ${order.deleteRequestNote} • ` : ''}Eliminación definitiva por admin`,
+            itemsBefore: (order.items || []).map(i => ({ name: i.name, quantity: i.quantity || 1, price: i.price || 0 }))
+          });
+          await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'orders', order.firestoreId));
+          showMessage(`Comanda #${order.id} eliminada por Administrador`, 'success');
+        } catch (e: any) {
+          showMessage('Error al eliminar pedido: ' + e.message, 'error');
+        }
       }
     });
   };
+
+  const handleOrderDeleteAction = (order: OrderData) => {
+    if (currentUser.role === 'admin') {
+      deleteOrderAsAdmin(order);
+      return;
+    }
+    if (!['cajero', 'mozo'].includes(currentUser.role)) {
+      showMessage('No tenés permisos para solicitar el borrado de esta comanda', 'error');
+      return;
+    }
+    setDeleteRequestModal({ isOpen: true, order, note: order.deleteRequestNote || '', confirmation: '' });
+  };
+
+  const submitDeleteRequest = async () => {
+    const order = deleteRequestModal.order;
+    if (!order) return;
+    if (deleteRequestModal.confirmation !== 'aceptado') {
+      showMessage('Para enviar la solicitud escribí exactamente: aceptado', 'error');
+      return;
+    }
+    try {
+      await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'orders', order.firestoreId), {
+        deleteRequested: true,
+        deleteRequestNote: deleteRequestModal.note.trim() || null,
+        deleteRequestedBy: currentUser.displayName || currentUser.username,
+        deleteRequestedRole: currentUser.role,
+        deleteRequestedAt: Date.now()
+      });
+      await logOrderAudit({
+        orderId: order.id,
+        action: 'REQUEST_DELETE',
+        description: `Solicitud de borrado para comanda #${order.id}`,
+        orderType: order.type,
+        clientName: order.client?.name,
+        tableNumber: order.tableNumber,
+        previousTotal: order.total || 0,
+        newTotal: order.total || 0,
+        changesSummary: deleteRequestModal.note.trim() ? `Motivo: ${deleteRequestModal.note.trim()}` : 'Solicitud de borrado sin nota',
+        itemsBefore: (order.items || []).map(i => ({ name: i.name, quantity: i.quantity || 1, price: i.price || 0 }))
+      });
+      setDeleteRequestModal({ isOpen: false, order: null, note: '', confirmation: '' });
+      showMessage('Solicitud enviada al Administrador. El pedido no fue borrado.', 'success');
+    } catch (e: any) {
+      showMessage('Error al solicitar borrado: ' + e.message, 'error');
+    }
+  };
+
+  const handleDeleteSale = async (firestoreId: string, orderId: string) => {
+    const targetOrder = orders.find(o => o.firestoreId === firestoreId || o.id === orderId);
+    if (!targetOrder) return showMessage('No se encontró la comanda', 'error');
+    handleOrderDeleteAction(targetOrder);
+  };
+
 
   // Closed Session History Handlers
   const handleOpenEditSession = (session: SessionData) => {
@@ -1621,13 +2243,20 @@ export default function App() {
 
   const handleDeleteSession = async (firestoreId: string) => {
     requireAdminAuth("Eliminar Turno Archivado", async () => {
-      if (!window.confirm("¿Está seguro de eliminar este registro de turno cerrado del historial?")) return;
-      try {
-        await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'sessions', firestoreId));
-        showMessage("Turno de caja eliminado del historial");
-      } catch (e: any) {
-        showMessage("Error al eliminar turno: " + e.message, "error");
-      }
+      showConfirm({
+        title: '¿Eliminar turno archivado?',
+        message: '¿Está seguro de eliminar este registro de turno cerrado del historial?',
+        confirmText: 'Eliminar Turno',
+        confirmVariant: 'danger',
+        onConfirm: async () => {
+          try {
+            await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'sessions', firestoreId));
+            showMessage("Turno de caja eliminado del historial");
+          } catch (e: any) {
+            showMessage("Error al eliminar turno: " + e.message, "error");
+          }
+        }
+      });
     });
   };
 
@@ -1646,6 +2275,57 @@ export default function App() {
     } catch (e: any) {
       showMessage("Error al ajustar caja: " + e.message, "error");
     }
+  };
+
+  // Depuración y Limpieza: Borrar pedidos y reportes creados antes de las 19:00 hs de hoy
+  const handlePurgeBefore19HoursToday = async () => {
+    requireAdminAuth("Borrar registros anteriores a las 19:00 hs de hoy", async () => {
+      const now = new Date();
+      let cutoff19 = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 19, 0, 0, 0).getTime();
+      if (now.getHours() < 19) {
+        const prevDay = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 1, 19, 0, 0, 0);
+        cutoff19 = prevDay.getTime();
+      }
+
+      // Solo depurar pedidos finalizados o archivados de turnos pasados; nunca borrar pedidos activos en preparación
+      const ordersToPurge = orders.filter(o => (o.createdAt || 0) < cutoff19 && (o.status === 'Finalizado' || o.isArchived));
+      const sessionsToPurge = sessions.filter(s => (s.openedAt || s.closedAt || 0) < cutoff19);
+
+      if (ordersToPurge.length === 0 && sessionsToPurge.length === 0) {
+        return showMessage("No hay pedidos ni reportes creados antes de las 19:00 hs de hoy para depurar.", "info");
+      }
+
+      showConfirm({
+        title: '⚠️ ACCIÓN DE LIMPIEZA',
+        message: `Se eliminarán de forma permanente:\n• ${ordersToPurge.length} pedidos de antes de las 19:00 hs\n• ${sessionsToPurge.length} reportes/turnos de antes de las 19:00 hs\n\n¿Desea continuar?`,
+        confirmText: 'Limpiar Registros',
+        confirmVariant: 'danger',
+        onConfirm: async () => {
+          try {
+            let deletedOrders = 0;
+            let deletedSessions = 0;
+
+            for (const ord of ordersToPurge) {
+              if (ord.firestoreId) {
+                await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'orders', ord.firestoreId));
+                deletedOrders++;
+              }
+            }
+
+            for (const sess of sessionsToPurge) {
+              if (sess.firestoreId) {
+                await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'sessions', sess.firestoreId));
+                deletedSessions++;
+              }
+            }
+
+            showMessage(`Depuración completada: Se eliminaron ${deletedOrders} pedidos y ${deletedSessions} reportes anteriores a las 19:00 hs.`, 'success');
+          } catch (e: any) {
+            showMessage("Error durante la depuración: " + e.message, "error");
+          }
+        }
+      });
+    });
   };
 
   
@@ -1720,29 +2400,43 @@ export default function App() {
 
   const handleClearAllMenu = async () => {
     requireAdminAuth("Vaciar Menú Completo", async () => {
-      if (!window.confirm("¿Está seguro de que desea vaciar todo el menú?")) return;
-      if (!db) return;
-      try {
-        await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'config', 'menu'), { data: {} });
-        setMenu({});
-        showMessage("El menú ha sido vaciado por completo");
-      } catch (err: any) {
-        showMessage(`Error al vaciar menú: ${err.message}`, 'error');
-      }
+      showConfirm({
+        title: '¿Vaciar menú completo?',
+        message: '¿Está seguro de que desea vaciar todo el menú?',
+        confirmText: 'Vaciar Menú',
+        confirmVariant: 'danger',
+        onConfirm: async () => {
+          if (!db) return;
+          try {
+            await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'config', 'menu'), { data: {} });
+            setMenu({});
+            showMessage("El menú ha sido vaciado por completo");
+          } catch (err: any) {
+            showMessage(`Error al vaciar menú: ${err.message}`, 'error');
+          }
+        }
+      });
     });
   };
 
   const handleRestoreDefaultMenu = async () => {
     requireAdminAuth("Restaurar Menú Sugerido", async () => {
-      if (!window.confirm("¿Desea restaurar el menú con los productos clásicos de muestra?")) return;
-      if (!db) return;
-      try {
-        await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'config', 'menu'), { data: DEFAULT_MENU });
-        setMenu(DEFAULT_MENU);
-        showMessage("Menú sugerido restaurado exitosamente");
-      } catch (err: any) {
-        showMessage(`Error al restaurar menú: ${err.message}`, 'error');
-      }
+      showConfirm({
+        title: '¿Restaurar menú sugerido?',
+        message: '¿Desea restaurar el menú con los productos clásicos de muestra?',
+        confirmText: 'Restaurar Menú',
+        confirmVariant: 'primary',
+        onConfirm: async () => {
+          if (!db) return;
+          try {
+            await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'config', 'menu'), { data: DEFAULT_MENU });
+            setMenu(DEFAULT_MENU);
+            showMessage("Menú sugerido restaurado exitosamente");
+          } catch (err: any) {
+            showMessage(`Error al restaurar menú: ${err.message}`, 'error');
+          }
+        }
+      });
     });
   };
 
@@ -1773,37 +2467,51 @@ export default function App() {
 
   const handleClearAllStock = async () => {
     requireAdminAuth("Vaciar Inventario / Stock", async () => {
-      if (!window.confirm("¿Está seguro de que desea eliminar todos los artículos de inventario / stock?")) return;
-      if (!db) return;
-      try {
-        for (const item of stockItems) {
-          if (item.firestoreId) {
-            await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'stockItems', item.firestoreId));
+      showConfirm({
+        title: '¿Vaciar inventario de stock?',
+        message: '¿Está seguro de que desea eliminar todos los artículos de inventario / stock?',
+        confirmText: 'Vaciar Stock',
+        confirmVariant: 'danger',
+        onConfirm: async () => {
+          if (!db) return;
+          try {
+            for (const item of stockItems) {
+              if (item.firestoreId) {
+                await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'stockItems', item.firestoreId));
+              }
+            }
+            setStockItems([]);
+            showMessage("Inventario de stock vaciado por completo");
+          } catch (err: any) {
+            showMessage(`Error al vaciar stock: ${err.message}`, 'error');
           }
         }
-        setStockItems([]);
-        showMessage("Inventario de stock vaciado por completo");
-      } catch (err: any) {
-        showMessage(`Error al vaciar stock: ${err.message}`, 'error');
-      }
+      });
     });
   };
 
   const handleClearAllOrders = async () => {
     requireAdminAuth("Vaciar Todos los Pedidos / Comandas", async () => {
-      if (!window.confirm("¿Está seguro de que desea vaciar todos los pedidos activos y finalizados (KDS, Comandas, Reportes)?")) return;
-      if (!db) return;
-      try {
-        for (const ord of orders) {
-          if (ord.firestoreId) {
-            await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'orders', ord.firestoreId));
+      showConfirm({
+        title: '¿Vaciar todos los pedidos?',
+        message: '¿Está seguro de que desea vaciar todos los pedidos activos y finalizados (KDS, Comandas, Reportes)?',
+        confirmText: 'Vaciar Pedidos',
+        confirmVariant: 'danger',
+        onConfirm: async () => {
+          if (!db) return;
+          try {
+            for (const ord of orders) {
+              if (ord.firestoreId) {
+                await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'orders', ord.firestoreId));
+              }
+            }
+            setOrders([]);
+            showMessage("Todos los pedidos y reportes de comandas han sido vaciados");
+          } catch (err: any) {
+            showMessage(`Error al vaciar pedidos: ${err.message}`, 'error');
           }
         }
-        setOrders([]);
-        showMessage("Todos los pedidos y reportes de comandas han sido vaciados");
-      } catch (err: any) {
-        showMessage(`Error al vaciar pedidos: ${err.message}`, 'error');
-      }
+      });
     });
   };
 
@@ -1811,174 +2519,216 @@ export default function App() {
     requireAdminAuth("Vaciar Comandas Finalizadas", async () => {
       const finished = orders.filter(o => o.status === 'Finalizado');
       if (finished.length === 0) return showMessage("No hay pedidos finalizados para eliminar", "info");
-      if (!window.confirm(`¿Está seguro de eliminar TODOS los ${finished.length} pedidos finalizados?`)) return;
-      if (!db) return;
-      try {
-        for (const ord of finished) {
-          if (ord.firestoreId) {
-            await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'orders', ord.firestoreId));
+      showConfirm({
+        title: '¿Vaciar comandas finalizadas?',
+        message: `¿Está seguro de eliminar TODOS los ${finished.length} pedidos finalizados?`,
+        confirmText: 'Eliminar Finalizados',
+        confirmVariant: 'danger',
+        onConfirm: async () => {
+          if (!db) return;
+          try {
+            for (const ord of finished) {
+              if (ord.firestoreId) {
+                await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'orders', ord.firestoreId));
+              }
+            }
+            setOrders(prev => prev.filter(o => o.status !== 'Finalizado'));
+            setSelectedFinishedOrders([]);
+            showMessage(`Se eliminaron ${finished.length} pedidos finalizados`);
+          } catch (e: any) {
+            showMessage(`Error al eliminar pedidos: ${e.message}`, 'error');
           }
         }
-        setOrders(prev => prev.filter(o => o.status !== 'Finalizado'));
-        setSelectedFinishedOrders([]);
-        showMessage(`Se eliminaron ${finished.length} pedidos finalizados`);
-      } catch (e: any) {
-        showMessage(`Error al eliminar pedidos: ${e.message}`, 'error');
-      }
+      });
     });
   };
 
   const handleDeleteSelectedFinishedOrders = async () => {
     requireAdminAuth("Eliminar Comandas Seleccionadas", async () => {
       if (selectedFinishedOrders.length === 0) return showMessage("Seleccione al menos una comanda para eliminar", "info");
-      if (!window.confirm(`¿Está seguro de eliminar las ${selectedFinishedOrders.length} comandas seleccionadas?`)) return;
-      if (!db) return;
-      try {
-        for (const id of selectedFinishedOrders) {
-          await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'orders', id));
+      showConfirm({
+        title: '¿Eliminar comandas seleccionadas?',
+        message: `¿Está seguro de eliminar las ${selectedFinishedOrders.length} comandas seleccionadas?`,
+        confirmText: 'Eliminar Seleccionadas',
+        confirmVariant: 'danger',
+        onConfirm: async () => {
+          if (!db) return;
+          try {
+            for (const id of selectedFinishedOrders) {
+              await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'orders', id));
+            }
+            setOrders(prev => prev.filter(o => !selectedFinishedOrders.includes(o.firestoreId)));
+            setSelectedFinishedOrders([]);
+            showMessage(`Se eliminaron ${selectedFinishedOrders.length} comandas`);
+          } catch (e: any) {
+            showMessage(`Error al eliminar: ${e.message}`, 'error');
+          }
         }
-        setOrders(prev => prev.filter(o => !selectedFinishedOrders.includes(o.firestoreId)));
-        setSelectedFinishedOrders([]);
-        showMessage(`Se eliminaron ${selectedFinishedOrders.length} comandas`);
-      } catch (e: any) {
-        showMessage(`Error al eliminar: ${e.message}`, 'error');
-      }
+      });
     });
   };
 
   const handleClearAllHistory = async () => {
     requireAdminAuth("Vaciar Historial de Turnos", async () => {
-      if (!window.confirm("¿Está seguro de que desea vaciar todo el historial de turnos de caja cerrados?")) return;
-      if (!db) return;
-      try {
-        for (const sess of sessions) {
-          if (sess.firestoreId) {
-            await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'sessions', sess.firestoreId));
+      showConfirm({
+        title: '¿Vaciar historial de turnos?',
+        message: '¿Está seguro de que desea vaciar todo el historial de turnos de caja cerrados?',
+        confirmText: 'Vaciar Historial',
+        confirmVariant: 'danger',
+        onConfirm: async () => {
+          if (!db) return;
+          try {
+            for (const sess of sessions) {
+              if (sess.firestoreId) {
+                await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'sessions', sess.firestoreId));
+              }
+            }
+            setSessions([]);
+            setSelectedSessionIds([]);
+            showMessage("Historial de turnos vaciado por completo");
+          } catch (err: any) {
+            showMessage(`Error al vaciar historial: ${err.message}`, 'error');
           }
         }
-        setSessions([]);
-        setSelectedSessionIds([]);
-        showMessage("Historial de turnos vaciado por completo");
-      } catch (err: any) {
-        showMessage(`Error al vaciar historial: ${err.message}`, 'error');
-      }
+      });
     });
   };
 
   const handleDeleteSelectedSessions = async () => {
     requireAdminAuth("Eliminar Turnos de Caja Seleccionados", async () => {
       if (selectedSessionIds.length === 0) return showMessage("Seleccione al menos un turno para eliminar", "info");
-      if (!window.confirm(`¿Está seguro de eliminar los ${selectedSessionIds.length} turnos seleccionados del historial?`)) return;
-      if (!db) return;
-      try {
-        for (const id of selectedSessionIds) {
-          await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'sessions', id));
+      showConfirm({
+        title: '¿Eliminar turnos seleccionados?',
+        message: `¿Está seguro de eliminar los ${selectedSessionIds.length} turnos seleccionados del historial?`,
+        confirmText: 'Eliminar Turnos',
+        confirmVariant: 'danger',
+        onConfirm: async () => {
+          if (!db) return;
+          try {
+            for (const id of selectedSessionIds) {
+              await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'sessions', id));
+            }
+            setSessions(prev => prev.filter(s => !selectedSessionIds.includes(s.firestoreId)));
+            setSelectedSessionIds([]);
+            showMessage(`Se eliminaron ${selectedSessionIds.length} turnos de caja`);
+          } catch (e: any) {
+            showMessage(`Error al eliminar: ${e.message}`, 'error');
+          }
         }
-        setSessions(prev => prev.filter(s => !selectedSessionIds.includes(s.firestoreId)));
-        setSelectedSessionIds([]);
-        showMessage(`Se eliminaron ${selectedSessionIds.length} turnos de caja`);
-      } catch (e: any) {
-        showMessage(`Error al eliminar: ${e.message}`, 'error');
-      }
+      });
     });
   };
 
   const handleClearRegister = async () => {
     requireAdminAuth("Restablecer Arqueo de Caja", async () => {
-      if (!window.confirm("¿Desea restablecer el arqueo a caja cerrada en $0?")) return;
-      if (!db) return;
-      try {
-        await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'config', 'register'), {
-          isOpen: false,
-          initialCash: 0,
-          currentCash: 0,
-          sessionId: null,
-          currentStock: {},
-          initialStock: {}
-        });
-        setRegister({
-          isOpen: false,
-          initialCash: 0,
-          currentCash: 0,
-          sessionId: null,
-          isLoaded: true,
-          currentStock: {},
-          initialStock: {}
-        });
-        showMessage("Arqueo restablecido a caja cerrada en $0");
-      } catch (err: any) {
-        showMessage(`Error al restablecer arqueo: ${err.message}`, 'error');
-      }
+      showConfirm({
+        title: '¿Restablecer arqueo de caja?',
+        message: '¿Desea restablecer el arqueo a caja cerrada en $0?',
+        confirmText: 'Restablecer a $0',
+        confirmVariant: 'danger',
+        onConfirm: async () => {
+          if (!db) return;
+          try {
+            await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'config', 'register'), {
+              isOpen: false,
+              initialCash: 0,
+              currentCash: 0,
+              sessionId: null,
+              currentStock: {},
+              initialStock: {}
+            });
+            setRegister({
+              isOpen: false,
+              initialCash: 0,
+              currentCash: 0,
+              sessionId: null,
+              isLoaded: true,
+              currentStock: {},
+              initialStock: {}
+            });
+            showMessage("Arqueo restablecido a caja cerrada en $0");
+          } catch (err: any) {
+            showMessage(`Error al restablecer arqueo: ${err.message}`, 'error');
+          }
+        }
+      });
     });
   };
 
   const handleFullSystemReset = async () => {
     requireAdminAuth("REINICIO TOTAL DEL SISTEMA", async () => {
-      if (!window.confirm("⚠️ ¿ESTÁ SEGURO DE REINICIAR TODO EL SISTEMA DE CERO?\n\nEsta acción vaciará:\n- KDS y comandas\n- Pedidos finalizados y reportes\n- Menú y productos\n- Artículos de stock\n- Directorio de clientes\n- Historial de turnos\n- Arqueo de caja\n\nTodo quedará en blanco listo para importar desde cero.")) return;
-      if (!db) return;
+      showConfirm({
+        title: '⚠️ ¿REINICIAR TODO EL SISTEMA?',
+        message: 'Esta acción vaciará permanentemente:\n- KDS y comandas\n- Pedidos finalizados y reportes\n- Menú y productos\n- Artículos de stock\n- Directorio de clientes\n- Historial de turnos\n- Arqueo de caja\n\nTodo quedará en blanco listo para importar desde cero.',
+        confirmText: 'Reiniciar Todo de Cero',
+        confirmVariant: 'danger',
+        onConfirm: async () => {
+          if (!db) return;
 
-    try {
-      // 1. Clear orders
-      for (const ord of orders) {
-        if (ord.firestoreId) {
-          await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'orders', ord.firestoreId));
+          try {
+            // 1. Clear orders
+            for (const ord of orders) {
+              if (ord.firestoreId) {
+                await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'orders', ord.firestoreId));
+              }
+            }
+            setOrders([]);
+
+            // 2. Clear sessions
+            for (const sess of sessions) {
+              if (sess.firestoreId) {
+                await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'sessions', sess.firestoreId));
+              }
+            }
+            setSessions([]);
+
+            // 3. Clear clients
+            for (const c of clients) {
+              if (c.firestoreId) {
+                await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'clients', c.firestoreId));
+              }
+            }
+            setClients([]);
+
+            // 4. Clear stock
+            for (const s of stockItems) {
+              if (s.firestoreId) {
+                await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'stockItems', s.firestoreId));
+              }
+            }
+            setStockItems([]);
+
+            // 5. Reset menu
+            await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'config', 'menu'), { data: {} });
+            setMenu({});
+
+            // 6. Reset register
+            await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'config', 'register'), {
+              isOpen: false,
+              initialCash: 0,
+              currentCash: 0,
+              sessionId: null,
+              currentStock: {},
+              initialStock: {}
+            });
+            setRegister({
+              isOpen: false,
+              initialCash: 0,
+              currentCash: 0,
+              sessionId: null,
+              isLoaded: true,
+              currentStock: {},
+              initialStock: {}
+            });
+
+            showMessage("✅ ¡Sistema reiniciado por completo! Todo listo y limpio para importar.", "info");
+          } catch (err: any) {
+            showMessage(`Error en reinicio: ${err.message}`, 'error');
+          }
         }
-      }
-      setOrders([]);
-
-      // 2. Clear sessions
-      for (const sess of sessions) {
-        if (sess.firestoreId) {
-          await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'sessions', sess.firestoreId));
-        }
-      }
-      setSessions([]);
-
-      // 3. Clear clients
-      for (const c of clients) {
-        if (c.firestoreId) {
-          await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'clients', c.firestoreId));
-        }
-      }
-      setClients([]);
-
-      // 4. Clear stock
-      for (const s of stockItems) {
-        if (s.firestoreId) {
-          await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'stockItems', s.firestoreId));
-        }
-      }
-      setStockItems([]);
-
-      // 5. Reset menu
-      await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'config', 'menu'), { data: {} });
-      setMenu({});
-
-      // 6. Reset register
-      await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'config', 'register'), {
-        isOpen: false,
-        initialCash: 0,
-        currentCash: 0,
-        sessionId: null,
-        currentStock: {},
-        initialStock: {}
       });
-      setRegister({
-        isOpen: false,
-        initialCash: 0,
-        currentCash: 0,
-        sessionId: null,
-        isLoaded: true,
-        currentStock: {},
-        initialStock: {}
-      });
-
-      showMessage("✅ ¡Sistema reiniciado por completo! Todo listo y limpio para importar.", "info");
-    } catch (err: any) {
-      showMessage(`Error en reinicio: ${err.message}`, 'error');
-    }
-  });
-};
+    });
+  };
 
   const kitchenOrders = orders.filter(o => o.status === 'Preparando' && !o.isArchived);
   const scheduledOrders = kitchenOrders.filter(o => o.isScheduled && o.scheduledTime && o.scheduledTime > Date.now());
@@ -1991,113 +2741,6 @@ export default function App() {
       {uiMessage && (
         <div className={`fixed top-4 left-1/2 -translate-x-1/2 z-[1000] px-8 py-3 text-white rounded-full font-black text-xs uppercase shadow-2xl animate-in slide-in-from-top-4 ${uiMessage.type === 'error' ? 'bg-red-600' : 'bg-slate-900 border border-purple-500/40 text-purple-300'}`}>
           {uiMessage.text}
-        </div>
-      )}
-
-      {/* Lock screen overlay if register closed (allow 'cash' & 'stock' tabs so user can see or open shift) */}
-      {register.isLoaded && !register.isOpen && activeTab !== 'cash' && activeTab !== 'stock' && (
-        <div className="fixed inset-0 z-[9995] bg-[#040108]/90 backdrop-blur-md flex items-center justify-center p-4">
-             <div className="bg-[#0c061a] p-6 sm:p-8 rounded-[40px] max-w-lg w-full shadow-2xl text-center space-y-4 border-2 border-purple-500/40 text-slate-100 animate-in zoom-in-95 max-h-[92vh] overflow-y-auto no-scrollbar">
-                 <div className="w-14 h-14 bg-purple-950/80 text-purple-300 rounded-2xl flex items-center justify-center mx-auto border-2 border-purple-500/50 shadow-inner">
-                   <Icon name="account_balance_wallet" size={28} />
-                 </div>
-                 <div>
-                   <h2 className="text-2xl font-black uppercase text-white tracking-tight">Apertura de Caja y Turno</h2>
-                   <p className="text-xs font-bold text-slate-400 mt-1">
-                     Ingresa el efectivo inicial obligatorio. El stock inicial es opcional.
-                   </p>
-                 </div>
-
-                 {/* 1. Input de Efectivo Inicial Obligatorio y Presets */}
-                 <div className="bg-[#06020e] p-4 rounded-2xl border border-purple-500/30 text-left space-y-2.5">
-                   <label className="text-[11px] font-black uppercase text-purple-300 flex items-center justify-between">
-                     <span className="flex items-center gap-1.5">
-                       <Icon name="monetization_on" size={15} className="text-emerald-400"/> 1. Efectivo Inicial en Caja ($) *
-                     </span>
-                     <span className="text-[9px] text-emerald-400 font-bold lowercase">requisito obligatorio</span>
-                   </label>
-                   <input
-                     type="number"
-                     placeholder="0"
-                     value={initialCashInput}
-                     onChange={e => setInitialCashInput(e.target.value)}
-                     className="w-full p-3 bg-[#0d061c] border-2 border-purple-500/40 text-purple-200 rounded-xl text-2xl font-black text-center outline-none focus:border-purple-400 font-mono"
-                     min="0"
-                     required
-                   />
-                   <div className="flex gap-1.5 flex-wrap justify-center pt-1">
-                     {[0, 1000, 2000, 3000, 5000].map(val => (
-                       <button
-                         key={val}
-                         type="button"
-                         onClick={() => setInitialCashInput(val.toString())}
-                         className={`px-3 py-1 rounded-xl text-[11px] font-black uppercase border transition-all cursor-pointer ${
-                           (initialCashInput === val.toString()) || (val === 0 && initialCashInput === '')
-                             ? 'bg-purple-600 text-slate-950 border-purple-400 shadow-md'
-                             : 'bg-[#160829] text-purple-300 border-purple-500/30 hover:bg-[#220c40]'
-                         }`}
-                       >
-                         ${val}
-                       </button>
-                     ))}
-                   </div>
-                 </div>
-
-                 {/* 2. Cantidades de Stock Inicial (Opcional) */}
-                 {stockItems.length > 0 && (
-                   <div className="bg-[#06020e] p-4 rounded-2xl border border-purple-500/20 text-left space-y-2">
-                     <div className="flex items-center justify-between">
-                       <label className="text-[10px] font-black uppercase text-slate-300 flex items-center gap-1.5">
-                         <Icon name="inventory_2" size={14} className="text-purple-400" />
-                         2. Cantidades de Stock Inicial (Opcional)
-                       </label>
-                       <span className="text-[9px] text-slate-500 font-bold lowercase">
-                         {stockItems.length} insumos
-                       </span>
-                     </div>
-                     <p className="text-[10px] text-slate-400 leading-tight">
-                       Si deseas registrar stock inicial ahora, ingresa las cantidades abajo. Si no, quedarán en 0.
-                     </p>
-
-                     <div className="max-h-40 overflow-y-auto space-y-1.5 pr-1 no-scrollbar pt-1">
-                       {stockItems.map(item => {
-                         const currentVal = initialStockInput[item.firestoreId] ?? '';
-                         return (
-                           <div
-                             key={item.firestoreId}
-                             className="flex items-center justify-between gap-2 p-2 bg-[#0b0518] rounded-xl border border-purple-500/15"
-                           >
-                             <div className="min-w-0 flex-1">
-                               <div className="text-xs font-black uppercase text-white truncate">{item.name}</div>
-                               <div className="text-[9px] text-purple-400 uppercase font-bold">{item.category} • {getItemUnit(item)}</div>
-                             </div>
-                             <input
-                               type="number"
-                               placeholder="0"
-                               value={currentVal}
-                               onChange={e => setInitialStockInput({ ...initialStockInput, [item.firestoreId]: e.target.value })}
-                               className="w-20 p-1.5 bg-[#040108] border border-purple-500/30 text-purple-200 rounded-lg text-xs font-mono font-black text-center outline-none focus:border-purple-400"
-                               min="0"
-                             />
-                           </div>
-                         );
-                       })}
-                     </div>
-                   </div>
-                 )}
-
-                 {/* Botones de Apertura */}
-                 <div className="pt-1">
-                   <button 
-                     type="button"
-                     onClick={() => handleOpenRegister(false)} 
-                     className="w-full py-4 bg-gradient-to-r from-purple-600 via-indigo-600 to-purple-600 hover:from-purple-500 hover:to-indigo-500 text-white rounded-2xl font-black uppercase text-xs shadow-lg shadow-purple-600/40 transition-all flex items-center justify-center gap-2 cursor-pointer"
-                   >
-                     <Icon name="bolt" size={18} />
-                     <span>Abrir Caja y Habilitar Turno (${initialCashInput || 0})</span>
-                   </button>
-                 </div>
-             </div>
         </div>
       )}
 
@@ -2184,16 +2827,7 @@ export default function App() {
                   }
                 } catch (firebaseErr: any) {
                   console.warn("Intento Firebase Auth:", firebaseErr.code);
-                  if (
-                    firebaseErr.code === 'auth/wrong-password' || 
-                    firebaseErr.code === 'auth/invalid-credential' || 
-                    firebaseErr.code === 'auth/user-not-found' ||
-                    firebaseErr.code === 'auth/invalid-email'
-                  ) {
-                    setLoginError('Correo o contraseña incorrectos en Firebase');
-                    setLoginLoading(false);
-                    return;
-                  }
+                  // Si falla la autenticación de Firebase, se continúa hacia la verificación local de credenciales del rol
                 }
               }
 
@@ -2203,10 +2837,10 @@ export default function App() {
               // 3. Password check if not authenticated via Firebase email
               if (!firebaseAuthSuccess) {
                 if (detected.role === 'admin') {
-                  const validAdminPass = ['admin', 'admin123', '1234', 'arbol2025', 'elarbol', 'pizzeria'];
+                  const validAdminPass = ['admin', 'admin123', '1234', 'arbol2025', 'elarbol', 'pizzeria', 'vicky', 'vicky123'];
                   // Accept known admin passwords or any custom password with 3+ characters
                   if (!validAdminPass.includes(p.toLowerCase()) && p.length < 3) {
-                    setLoginError('Contraseña incorrecta');
+                    setLoginError('Contraseña incorrecta de Administrador');
                     setLoginLoading(false);
                     return;
                   }
@@ -2237,6 +2871,15 @@ export default function App() {
                 setActiveTab('pos');
               } else if (detected.role === 'cajero' && ['reports', 'history', 'products', 'support'].includes(activeTab)) {
                 setActiveTab('pos');
+              }
+
+              hasCheckedRegisterOnLogin.current = false;
+              setAdminConsultationMode(false);
+              if (['admin', 'cajero'].includes(detected.role) && !register.isOpen) {
+                setOpenRegisterPromptModal({
+                  isOpen: true,
+                  initialCash: ''
+                });
               }
 
               showMessage(`¡Bienvenido/a ${detected.displayName}!`, 'success');
@@ -2299,15 +2942,15 @@ export default function App() {
         </div>
       )}
 
-      {/* Header - Deluxe Lila, White & Black Edition with RBAC Role Indicator */}
-      <header className="h-13 bg-[#040108] border-b border-purple-500/20 text-white flex items-center justify-between px-2.5 shrink-0 shadow-lg z-50 gap-2">
-        <div className="flex items-center gap-1.5 shrink-0 pr-2 border-r border-purple-500/20">
-          <div className="w-7 h-7 rounded-lg border border-purple-500/50 bg-[#0d061c] flex items-center justify-center font-black text-xs text-purple-300 shadow-xs">
+      {/* Header - Deluxe Compact Edition: Optimized spacing & button sizes */}
+      <header className="h-9 sm:h-10 bg-[#040108] border-b border-purple-500/20 text-white flex items-center justify-between px-2 shrink-0 shadow-lg z-50 gap-1.5">
+        <div className="flex items-center gap-1 shrink-0 pr-1.5 border-r border-purple-500/20">
+          <div className="w-6 h-6 rounded-md border border-purple-500/50 bg-[#0d061c] flex items-center justify-center font-black text-[11px] text-purple-300 shadow-xs">
             🌳
           </div>
-          <div className="font-black text-[11px] tracking-wider uppercase flex items-center gap-1">
+          <div className="font-black text-[10px] tracking-wider uppercase flex items-center gap-1">
             <span className="text-white font-extrabold hidden sm:inline">El Árbol</span>
-            <span className="text-[7.5px] bg-purple-950 text-purple-300 px-1 py-0.2 rounded font-black tracking-widest border border-purple-500/40">POS</span>
+            <span className="text-[7px] bg-purple-950 text-purple-300 px-1 py-0.2 rounded font-black tracking-widest border border-purple-500/40">POS</span>
           </div>
         </div>
 
@@ -2319,10 +2962,10 @@ export default function App() {
             onClick={() => {
               if (navRef.current) navRef.current.scrollBy({ left: -220, behavior: 'smooth' });
             }}
-            className="w-5 h-7 rounded-md bg-[#0d061c]/90 hover:bg-purple-950 text-purple-400 hover:text-white flex items-center justify-center transition-all border border-purple-500/20 shrink-0 mr-1 z-10 cursor-pointer shadow-sm"
+            className="w-4.5 h-6.5 rounded-md bg-[#0d061c]/90 hover:bg-purple-950 text-purple-400 hover:text-white flex items-center justify-center transition-all border border-purple-500/20 shrink-0 mr-0.5 z-10 cursor-pointer shadow-sm"
             title="Desplazar menú a la izquierda"
           >
-            <Icon name="chevron_left" size={13} />
+            <Icon name="chevron_left" size={12} />
           </button>
 
           <nav 
@@ -2332,39 +2975,37 @@ export default function App() {
                 navRef.current.scrollLeft += e.deltaY;
               }
             }}
-            className="flex-1 flex h-full gap-0.5 overflow-x-auto no-scrollbar items-center py-0.5 scroll-smooth"
+            className="flex-1 flex h-full gap-0.5 overflow-x-auto no-scrollbar items-center py-0 scroll-smooth"
           >
             {[ 
-              {id: 'delivery', label: 'Delivery', icon: 'two_wheeler', count: badges.delivery, roles: ['admin', 'cajero', 'delivery']}, 
-              {id: 'kitchen', label: 'KDS', icon: 'tv', count: badges.kitchen, roles: ['admin', 'cajero', 'mozo']}, 
               {id: 'pos', label: 'Toma de Pedido', icon: 'point_of_sale', roles: ['admin', 'cajero', 'mozo']}, 
-              {id: 'products', label: 'Menú', icon: 'menu_book', roles: ['admin']}, 
-              {id: 'web', label: 'Web', icon: 'public', count: badges.web, roles: ['admin', 'cajero']}, 
+              {id: 'kitchen', label: 'KDS', icon: 'tv', count: badges.kitchen, roles: ['admin', 'cajero', 'mozo']}, 
               {id: 'counter', label: 'Mostrador', icon: 'storefront', count: badges.mostrador, roles: ['admin', 'cajero', 'mozo']}, 
               {id: 'tables', label: 'Mesas', icon: 'table_restaurant', count: badges.mesas, roles: ['admin', 'cajero', 'mozo']}, 
+              {id: 'delivery', label: 'Deliverys', icon: 'two_wheeler', count: badges.delivery, roles: ['admin', 'cajero', 'delivery']}, 
               {id: 'finished', label: 'Finalizados', icon: 'check_circle', count: badges.finished, roles: ['admin', 'cajero']}, 
+              {id: 'products', label: 'Menú', icon: 'menu_book', roles: ['admin']}, 
               {id: 'staff', label: 'Propinas', icon: 'payments', roles: ['admin', 'cajero', 'mozo', 'delivery']},
               {id: 'clients', label: 'Clientes', icon: 'people', roles: ['admin', 'cajero']}, 
               {id: 'stock', label: 'Stock', icon: 'inventory_2', count: badges.stock, roles: ['admin', 'cajero']}, 
               {id: 'cash', label: 'Arqueo', icon: 'account_balance_wallet', roles: ['admin', 'cajero']}, 
               {id: 'reports', label: 'Reportes', icon: 'bar_chart', roles: ['admin']}, 
               {id: 'history', label: 'Historial', icon: 'history', roles: ['admin']}, 
+              {id: 'audit', label: 'Auditoría', icon: 'security', count: badges.audit, roles: ['admin']},
               {id: 'manual', label: 'Manual', icon: 'auto_stories', roles: ['admin', 'cajero', 'mozo', 'delivery']},
-              {id: 'support', label: 'Soporte', icon: 'support_agent', count: supportTickets.filter(t => t.status !== 'Resuelto').length, roles: ['admin'], highlight: true}
+              {id: 'support', label: '', icon: 'support_agent', title: 'Soporte Técnico', count: supportTickets.filter(t => t.status !== 'Resuelto').length, roles: ['admin'], highlight: true, iconOnly: true}
             ].filter(tab => tab.roles.includes(currentUser.role)).map(tab => {
               const isActive = activeTab === tab.id;
               const rawCount = tab.count !== undefined ? tab.count : 0;
-              const dismissed = dismissedBadges[tab.id] || 0;
-              const activeCount = Math.max(0, rawCount - dismissed);
 
               return (
                 <button 
                   key={tab.id} 
                   onClick={() => {
                     setActiveTab(tab.id);
-                    markTabBadgeDismissed(tab.id, rawCount);
                   }} 
-                  className={`relative px-2 py-1 h-8 rounded-lg flex items-center gap-1 font-black text-[9px] uppercase transition-all shrink-0 min-w-fit cursor-pointer ${
+                  title={tab.title || tab.label}
+                  className={`relative px-1.5 py-0.5 h-7 rounded-md flex items-center gap-1 font-black text-[8px] sm:text-[8.5px] uppercase transition-all shrink-0 min-w-fit cursor-pointer ${
                     isActive 
                       ? tab.id === 'support' 
                         ? 'bg-purple-600 text-white shadow-md shadow-purple-600/30'
@@ -2374,13 +3015,13 @@ export default function App() {
                       : 'text-slate-300 hover:text-white hover:bg-white/5 border border-transparent hover:border-purple-500/20'
                   }`}
                 >
-                  {activeCount > 0 && (
-                    <span className="absolute -top-1 right-0.5 bg-red-600 text-white text-[7.5px] font-black w-3.5 h-3.5 rounded-full flex items-center justify-center shadow-md animate-pulse z-10">
-                      {activeCount}
+                  {rawCount > 0 && (
+                    <span className="absolute -top-1 -right-0.5 bg-red-600 text-white text-[7.5px] font-black min-w-[13px] h-[13px] px-0.5 rounded-full flex items-center justify-center shadow-lg shadow-red-600/60 ring-1 ring-[#040108] animate-pulse z-20">
+                      {rawCount}
                     </span>
                   )}
-                  <Icon name={tab.icon} size={13} className={isActive ? 'text-purple-300' : 'text-slate-400'}/>
-                  <span className="leading-tight tracking-tight whitespace-nowrap">{tab.label}</span>
+                  <Icon name={tab.icon} size={tab.iconOnly ? 15 : 12} className={isActive ? 'text-purple-300' : 'text-slate-400'}/>
+                  {tab.label ? <span className="leading-tight tracking-tight whitespace-nowrap">{tab.label}</span> : null}
                 </button>
               );
             })}
@@ -2392,18 +3033,45 @@ export default function App() {
             onClick={() => {
               if (navRef.current) navRef.current.scrollBy({ left: 220, behavior: 'smooth' });
             }}
-            className="w-5 h-7 rounded-md bg-[#0d061c]/90 hover:bg-purple-950 text-purple-400 hover:text-white flex items-center justify-center transition-all border border-purple-500/20 shrink-0 ml-1 z-10 cursor-pointer shadow-sm"
+            className="w-4.5 h-6.5 rounded-md bg-[#0d061c]/90 hover:bg-purple-950 text-purple-400 hover:text-white flex items-center justify-center transition-all border border-purple-500/20 shrink-0 ml-0.5 z-10 cursor-pointer shadow-sm"
             title="Desplazar menú a la derecha"
           >
-            <Icon name="chevron_right" size={13} />
+            <Icon name="chevron_right" size={12} />
           </button>
         </div>
 
+        <div className="flex items-center gap-1 shrink-0">
+          {['admin', 'cajero', 'mozo'].includes(currentUser.role) && (
+            <button
+              type="button"
+              onClick={() => setShortagesModalOpen(true)}
+              className={`h-7 px-2 rounded-lg border text-[8px] sm:text-[8.5px] font-black uppercase flex items-center gap-1 cursor-pointer transition-all ${activeShortages.length ? 'bg-red-950/70 border-red-500/50 text-red-200' : 'bg-[#0d061c] border-purple-500/30 text-purple-200 hover:bg-purple-950'}`}
+              title="Marcar faltantes y bloquear productos relacionados"
+            >
+              <Icon name="production_quantity_limits" size={12} />
+              <span className="hidden md:inline">Faltantes</span>
+              {activeShortages.length > 0 && <span className="min-w-[14px] h-[14px] px-1 rounded-full bg-red-600 text-white flex items-center justify-center text-[7px]">{activeShortages.length}</span>}
+            </button>
+          )}
+          {currentUser.role === 'admin' && orders.some(o => o.deleteRequested) && (
+            <button
+              type="button"
+              onClick={() => setPendingDeleteModalOpen(true)}
+              className="h-7 px-2 rounded-lg bg-amber-950/70 border border-amber-500/50 text-amber-200 text-[8px] sm:text-[8.5px] font-black uppercase flex items-center gap-1 cursor-pointer"
+              title="Solicitudes de borrado pendientes"
+            >
+              <Icon name="pending_actions" size={12} />
+              <span className="hidden lg:inline">Borrados</span>
+              <span className="min-w-[14px] h-[14px] px-1 rounded-full bg-amber-500 text-slate-950 flex items-center justify-center text-[7px]">{orders.filter(o => o.deleteRequested).length}</span>
+            </button>
+          )}
+        </div>
+
         {/* User Role Badge & Logout */}
-        <div className="flex items-center gap-2 shrink-0 pl-2 sm:pl-3 border-l border-purple-500/20 bg-[#040108] z-30">
+        <div className="flex items-center gap-1.5 shrink-0 pl-1.5 sm:pl-2 border-l border-purple-500/20 bg-[#040108] z-30">
           {/* Active User Role Badge */}
-          <div className="flex items-center gap-1.5 px-2 py-1 rounded-xl bg-[#0c061a] border border-purple-500/30 text-[9px] sm:text-[10px] font-black uppercase text-purple-200">
-            <span className={`w-2 h-2 rounded-full ${
+          <div className="flex items-center gap-1 px-1.5 py-0.5 rounded-lg bg-[#0c061a] border border-purple-500/30 text-[8px] sm:text-[8.5px] font-black uppercase text-purple-200">
+            <span className={`w-1.5 h-1.5 rounded-full ${
               currentUser.role === 'admin' ? 'bg-purple-400' :
               currentUser.role === 'cajero' ? 'bg-cyan-400' :
               currentUser.role === 'delivery' ? 'bg-amber-400' : 'bg-indigo-400'
@@ -2415,38 +3083,141 @@ export default function App() {
             }</span>
           </div>
 
-          <div className="flex items-center gap-1.5">
+          <div className="flex items-center gap-1">
             <div 
-              className={`w-2.5 h-2.5 rounded-full transition-colors ${register.isOpen ? 'bg-emerald-400 shadow-sm shadow-emerald-400/50 animate-pulse' : 'bg-amber-500'}`} 
-              title={register.isOpen ? 'Caja Abierta' : 'Caja Cerrada'} 
+              className={`w-2 h-2 rounded-full transition-colors ${
+                register.isOpen 
+                  ? 'bg-emerald-400 shadow-sm shadow-emerald-400/50 animate-pulse' 
+                  : (currentUser.role === 'admin' && adminConsultationMode)
+                    ? 'bg-blue-400 animate-pulse'
+                    : 'bg-amber-500'
+              }`} 
+              title={
+                register.isOpen 
+                  ? 'Caja Abierta' 
+                  : (currentUser.role === 'admin' && adminConsultationMode)
+                    ? 'Caja Cerrada • Modo Consulta (Admin)' 
+                    : 'Caja Cerrada'
+              } 
             />
-            <span className="text-[9px] sm:text-[10px] font-black uppercase tracking-wider text-slate-300 hidden lg:inline">
-              {register.isOpen ? 'Caja Abierta' : 'Caja Cerrada'}
+            <span className={`text-[8px] sm:text-[8.5px] font-black uppercase tracking-wider hidden lg:inline ${
+              currentUser.role === 'admin' && adminConsultationMode ? 'text-blue-300' : 'text-slate-300'
+            }`}>
+              {register.isOpen ? 'Abierta' : (currentUser.role === 'admin' && adminConsultationMode ? 'Modo Consulta' : 'Cerrada')}
             </span>
           </div>
+
+          {['admin', 'cajero'].includes(currentUser.role) && (
+            register.isOpen ? (
+              <button
+                type="button"
+                onClick={() => {
+                  showConfirm({
+                    title: '¿Cerrar Caja y Archivar Turno?',
+                    message: 'Se generará el reporte de cierre contable y se archivarán las ventas del turno.',
+                    confirmText: 'Cerrar Caja',
+                    confirmVariant: 'danger',
+                    onConfirm: () => handleCloseRegister(false)
+                  });
+                }}
+                className="px-2 py-0.5 h-7 bg-red-950/60 hover:bg-red-900 border border-red-500/40 text-red-200 rounded-lg text-[8px] sm:text-[8.5px] font-black uppercase flex items-center gap-1 transition-all cursor-pointer shadow-xs"
+                title="Cerrar caja y finalizar turno"
+              >
+                <Icon name="lock" size={12} />
+                <span className="hidden sm:inline">Cerrar Caja</span>
+              </button>
+            ) : (
+              <button
+                type="button"
+                onClick={() => setOpenRegisterPromptModal({ isOpen: true, initialCash: '' })}
+                className="px-2 py-0.5 h-7 bg-purple-600 hover:bg-purple-500 text-slate-950 rounded-lg text-[8px] sm:text-[8.5px] font-black uppercase flex items-center gap-1 transition-all cursor-pointer shadow-md shadow-purple-600/30"
+                title="Abrir caja e ingresar monto inicial obligatorio"
+              >
+                <Icon name="key" size={12} />
+                <span className="hidden sm:inline">Abrir Caja</span>
+              </button>
+            )
+          )}
 
           {isAuthenticated && (
             <button
               type="button"
               onClick={() => {
-                if (window.confirm("¿Desea cerrar la sesión de NEXT CRM?")) {
-                  setIsAuthenticated(false);
-                  localStorage.removeItem('nextcrm_auth');
-                  showMessage("Sesión cerrada");
-                }
+                showConfirm({
+                  title: '¿Cerrar Sesión?',
+                  message: '¿Estás seguro de que deseas salir y cerrar tu sesión en NEXT CRM?',
+                  confirmText: 'Cerrar Sesión',
+                  confirmVariant: 'danger',
+                  onConfirm: () => {
+                    setIsAuthenticated(false);
+                    localStorage.removeItem('nextcrm_auth');
+                    localStorage.removeItem('nextcrm_user');
+                    localStorage.removeItem('nextcrm_role');
+                    hasCheckedRegisterOnLogin.current = false;
+                    setAdminConsultationMode(false);
+                    setOpenRegisterPromptModal({ isOpen: false, initialCash: '' });
+                    showMessage("Sesión cerrada");
+                  }
+                });
               }}
-              className="p-1.5 sm:p-2 hover:bg-red-950/50 text-slate-400 hover:text-red-300 rounded-xl transition-all border border-transparent hover:border-red-500/30 flex items-center gap-1 text-[9px] font-black uppercase cursor-pointer"
+              className="p-1 sm:p-1.5 hover:bg-red-950/50 text-slate-400 hover:text-red-300 rounded-lg transition-all border border-transparent hover:border-red-500/30 flex items-center gap-1 text-[8.5px] font-black uppercase cursor-pointer"
               title="Cerrar sesión NEXT CRM"
             >
-              <Icon name="logout" size={15} />
+              <Icon name="logout" size={13} />
               <span className="hidden xl:inline">Salir</span>
             </button>
           )}
         </div>
       </header>
 
+      {/* Real-time Admin Live Modification Alert Notification Banner */}
+      {currentUser.role === 'admin' && activeAlertBanner && (
+        <div className="fixed top-12 right-3 z-50 max-w-sm sm:max-w-md w-full bg-[#16062a] border-2 border-red-500 rounded-2xl p-3.5 shadow-2xl shadow-red-950/80 animate-in fade-in slide-in-from-top-3 duration-200 flex flex-col gap-2">
+          <div className="flex items-start justify-between gap-2">
+            <div className="flex items-center gap-2 text-red-300 font-black text-xs uppercase tracking-wider">
+              <span className="w-2.5 h-2.5 rounded-full bg-red-500 animate-ping" />
+              <span>🚨 Alerta de Modificación en Vivo</span>
+            </div>
+            <button 
+              type="button"
+              onClick={() => setActiveAlertBanner(null)}
+              className="text-slate-400 hover:text-white p-0.5 text-xs font-black cursor-pointer"
+              title="Cerrar alerta"
+            >
+              ✕
+            </button>
+          </div>
+          <div className="text-white text-xs font-bold">
+            <span className="font-black text-purple-300">{activeAlertBanner.userName || 'Cajera'}</span> modificó la comanda <span className="font-mono font-black text-amber-300">#{activeAlertBanner.orderId}</span>
+          </div>
+          <div className="text-[11px] text-slate-300 bg-black/50 p-2 rounded-xl border border-red-500/20 font-mono">
+            {activeAlertBanner.changesSummary || activeAlertBanner.description}
+          </div>
+          <div className="flex items-center justify-end gap-2 pt-0.5">
+            <button
+              type="button"
+              onClick={() => {
+                setActiveAlertBanner(null);
+                setActiveTab('audit');
+              }}
+              className="px-3 py-1.5 bg-purple-600 hover:bg-purple-500 text-slate-950 rounded-xl text-[10px] font-black uppercase flex items-center gap-1 shadow-md cursor-pointer"
+            >
+              <Icon name="security" size={13} />
+              <span>Ver en Auditoría</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => setActiveAlertBanner(null)}
+              className="px-2.5 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl text-[10px] font-black uppercase cursor-pointer"
+            >
+              <span>Entendido</span>
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* Main Container */}
-      <main className="flex-1 overflow-hidden relative bg-[#040108]">
+      <main className="flex-1 min-h-0 overflow-hidden relative bg-[#040108]">
         {/* POS Tab */}
         {activeTab === 'pos' && (
           <PosWizard
@@ -2467,6 +3238,8 @@ export default function App() {
             setPaymentMethod={setPaymentMethod}
             cashProvided={cashProvided}
             setCashProvided={setCashProvided}
+            orderTip={orderTip}
+            setOrderTip={setOrderTip}
             orderNotes={orderNotes}
             setOrderNotes={setOrderNotes}
             clientInfo={clientInfo}
@@ -2486,7 +3259,11 @@ export default function App() {
             setToppingModal={setToppingModal}
             setVoiceOrderModalOpen={setVoiceOrderModalOpen}
             showMessage={showMessage}
+            orders={orders}
+            currentUser={currentUser}
             th={th}
+            db={db}
+            appId={appId}
           />
         )}
 
@@ -2504,6 +3281,8 @@ export default function App() {
             setEditOrderModal={setEditOrderModal}
             handleDirectDispatch={handleDirectDispatch}
             showMessage={showMessage}
+            onDeleteOrder={handleOrderDeleteAction}
+            currentUserRole={currentUser.role}
           />
         )}
 
@@ -2516,25 +3295,28 @@ export default function App() {
               appId={appId}
               currentUser={currentUser}
               showMessage={showMessage}
+              setNotesModal={setNotesModal}
+              handleEditOrder={handleEditOrder}
+              setEditOrderModal={setEditOrderModal}
             />
           </div>
         )}
 
-        {/* Generic active orders tab (counter, tables, web) */}
-        {(['counter', 'tables', 'web'].includes(activeTab)) && (
+        {/* Generic active orders tab (counter, tables) */}
+        {(['counter', 'tables'].includes(activeTab)) && (
           <div className="p-8 h-full overflow-y-auto no-scrollbar bg-[#040108]">
              <div className="max-w-[1600px] mx-auto grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6 content-start">
                {orders.filter(o => !o.isArchived && o.status !== 'Finalizado' && o.status !== 'Cancelado').filter(o => { 
                    const safeType = String(o.type || '').trim().toLowerCase();
                    if (activeTab === 'counter') return ['local', 'mostrador'].includes(safeType); 
                    if (activeTab === 'tables') return safeType === 'mesa'; 
-                   if (activeTab === 'web') return ['web', 'pedido web'].includes(safeType); 
                    return false; 
                }).map(o => (
                   <OrderCard 
                     key={o.firestoreId} 
                     order={o} 
-                    db={db} appId={appId} WARNING_THRESHOLDS={WARNING_THRESHOLDS} setNotesModal={setNotesModal} handleEditOrder={handleEditOrder} notifyClientWhatsApp={notifyClientWhatsApp} setDeliveryShareModal={setDeliveryShareModal} setEditOrderModal={setEditOrderModal} handleDirectDispatch={handleDirectDispatch} showMessage={showMessage} 
+                    db={db} appId={appId} WARNING_THRESHOLDS={WARNING_THRESHOLDS} setNotesModal={setNotesModal} handleEditOrder={handleEditOrder} notifyClientWhatsApp={notifyClientWhatsApp} setDeliveryShareModal={setDeliveryShareModal} setEditOrderModal={setEditOrderModal} handleDirectDispatch={handleDirectDispatch} showMessage={showMessage}
+                    onDeleteOrder={handleOrderDeleteAction} currentUserRole={currentUser.role} collapsible={true}
                   />
                ))}
              </div>
@@ -2548,6 +3330,7 @@ export default function App() {
               orders={orders}
               currentUser={currentUser}
               showMessage={showMessage}
+              onUpdateOrderTip={handleUpdateOrderTip}
             />
           </div>
         )}
@@ -2586,6 +3369,13 @@ export default function App() {
                     </p>
                   </div>
                   <div className="flex flex-wrap gap-2">
+                    <button 
+                      onClick={handlePurgeBefore19HoursToday}
+                      className="px-4 py-3 bg-red-950/70 hover:bg-red-900/90 border border-red-500/50 text-red-200 rounded-[20px] font-black uppercase text-xs transition-all flex items-center gap-2 shadow-xs cursor-pointer"
+                      title="Borrar todos los pedidos y reportes creados antes de las 19:00 hs de hoy"
+                    >
+                      <Icon name="auto_delete" size={16} className="text-red-300"/> 🗑️ Borrar &lt; 19:00 hs de Hoy
+                    </button>
                     {finishedOrders.length > 0 && (
                       <button 
                         onClick={handleClearAllFinishedOrders}
@@ -2965,7 +3755,7 @@ export default function App() {
                 ].map(cat => {
                   const isSelected = menuActiveCategory.toLowerCase() === cat.id.toLowerCase();
                   const count = cat.id === 'TODAS' 
-                    ? Object.values(menu).reduce((acc, arr) => acc + (arr?.length || 0), 0)
+                    ? Object.values(menu).reduce((acc: number, arr: any) => acc + (arr?.length || 0), 0)
                     : (menu[cat.id]?.length || 0);
 
                   return (
@@ -3349,6 +4139,13 @@ export default function App() {
                 </div>
                 <div className="flex flex-wrap gap-2">
                   <button 
+                    onClick={handlePurgeBefore19HoursToday}
+                    className="px-4 py-3 bg-red-950/70 hover:bg-red-900/90 border border-red-500/50 text-red-200 rounded-[20px] font-black uppercase text-[10px] transition-all flex items-center gap-1.5 shadow-xs cursor-pointer"
+                    title="Borrar todos los pedidos y reportes creados antes de las 19:00 hs de hoy"
+                  >
+                    <Icon name="auto_delete" size={16} className="text-red-300"/> 🗑️ Borrar &lt; 19:00 hs de Hoy
+                  </button>
+                  <button 
                     onClick={() => setImportExcelModalOpen(true)}
                     className="px-4 py-3 bg-[#160829] border border-purple-500/40 text-purple-200 hover:bg-[#251046] hover:text-white rounded-[20px] font-black uppercase text-[10px] transition-all flex items-center gap-2 shadow-xs cursor-pointer"
                     title="Importar ventas y reportes históricos desde archivo Excel (.xlsx, .csv)"
@@ -3434,6 +4231,114 @@ export default function App() {
                        <span className="text-4xl font-black text-rose-300">{reportData.physicalTotals.sandwiches}</span>
                     </div>
                  </div>
+              </div>
+
+              {/* Shift Audit Section: Reflected directly in reports */}
+              <div className="bg-[#0b0518] p-6 sm:p-8 rounded-[35px] border border-purple-500/30 space-y-4">
+                <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 border-b border-purple-500/20 pb-4">
+                  <div className="flex items-center gap-3">
+                    <div className="p-3 bg-purple-600/20 text-purple-300 rounded-2xl border border-purple-500/30">
+                      <Icon name="security" size={24} />
+                    </div>
+                    <div>
+                      <h2 className="text-xl sm:text-2xl font-black uppercase text-white tracking-tight flex items-center gap-2">
+                        Auditoría del Turno: Modificaciones y Bajas
+                      </h2>
+                      <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">
+                        Control anti-fraude • Eliminaciones de tickets y rectificaciones de pedidos
+                      </p>
+                    </div>
+                  </div>
+                  {currentUser.role === 'admin' && (
+                    <button
+                      onClick={() => setActiveTab('audit')}
+                      className="px-4 py-2 bg-purple-600/20 hover:bg-purple-600/30 text-purple-300 border border-purple-500/40 rounded-xl text-xs font-black uppercase transition-all flex items-center gap-1.5 cursor-pointer"
+                    >
+                      <Icon name="visibility" size={14} /> Ver Auditoría Completa
+                    </button>
+                  )}
+                </div>
+
+                {(() => {
+                  const shiftAuditLogs = auditLogs.filter(l => {
+                    if (register.sessionId && l.sessionId === register.sessionId) return true;
+                    if (register.openedAt && l.timestamp >= register.openedAt) return true;
+                    return false;
+                  });
+
+                  if (shiftAuditLogs.length === 0) {
+                    return (
+                      <div className="text-center py-6 text-slate-500 text-xs font-bold uppercase tracking-wider">
+                        🛡️ No se registraron eliminaciones ni rectificaciones anómalas en este turno.
+                      </div>
+                    );
+                  }
+
+                  const deletions = shiftAuditLogs.filter(l => l.action === 'DELETE_ORDER');
+                  const rectifications = shiftAuditLogs.filter(l => l.action !== 'DELETE_ORDER');
+
+                  return (
+                    <div className="space-y-4">
+                      <div className="grid grid-cols-2 gap-4">
+                        <div className="p-4 bg-red-950/30 border border-red-500/30 rounded-2xl flex justify-between items-center">
+                          <span className="text-xs font-black uppercase text-red-200">Comandas Eliminadas</span>
+                          <span className="text-2xl font-black text-red-400">{deletions.length}</span>
+                        </div>
+                        <div className="p-4 bg-amber-950/30 border border-amber-500/30 rounded-2xl flex justify-between items-center">
+                          <span className="text-xs font-black uppercase text-amber-200">Modificaciones / Rectificaciones</span>
+                          <span className="text-2xl font-black text-amber-400">{rectifications.length}</span>
+                        </div>
+                      </div>
+
+                      <div className="overflow-x-auto">
+                        <table className="w-full text-left text-xs text-slate-300">
+                          <thead className="bg-[#120726] text-purple-300 font-black uppercase text-[10px] tracking-wider border-b border-purple-500/20">
+                            <tr>
+                              <th className="p-2.5">Hora</th>
+                              <th className="p-2.5">Comanda</th>
+                              <th className="p-2.5">Acción</th>
+                              <th className="p-2.5">Detalle / Alteración</th>
+                              <th className="p-2.5">Monto Antes/Después</th>
+                              <th className="p-2.5">Responsable</th>
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-purple-500/10">
+                            {shiftAuditLogs.slice(0, 10).map((log, idx) => (
+                              <tr key={log.firestoreId || idx} className="hover:bg-purple-950/20">
+                                <td className="p-2.5 font-mono text-slate-400">
+                                  {new Date(log.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                                </td>
+                                <td className="p-2.5 font-bold text-white">#{log.orderId}</td>
+                                <td className="p-2.5">
+                                  <span className={`px-2 py-0.5 rounded-full text-[9px] font-black uppercase tracking-wider ${
+                                    log.action === 'DELETE_ORDER' 
+                                      ? 'bg-red-950/80 border border-red-500/60 text-red-300' 
+                                      : 'bg-amber-950/80 border border-amber-500/60 text-amber-300'
+                                  }`}>
+                                    {log.action === 'DELETE_ORDER' ? 'Eliminado' : 'Modificado'}
+                                  </span>
+                                </td>
+                                <td className="p-2.5 text-slate-300 max-w-xs truncate" title={log.changesSummary || log.description}>
+                                  {log.changesSummary || log.description}
+                                </td>
+                                <td className="p-2.5 font-mono">
+                                  {log.previousTotal !== undefined && log.newTotal !== undefined ? (
+                                    <span>${log.previousTotal} → ${log.newTotal}</span>
+                                  ) : (
+                                    '-'
+                                  )}
+                                </td>
+                                <td className="p-2.5 text-slate-400 uppercase text-[10px]">
+                                  {log.userName || log.userRole}
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+                  );
+                })()}
               </div>
             </div>
           </div>
@@ -3528,11 +4433,11 @@ export default function App() {
                           className="w-full text-3xl md:text-4xl pl-12 pr-6 py-4 bg-[#040108] rounded-[22px] font-black text-white outline-none border-2 border-purple-500/30 focus:border-purple-400 transition-all" 
                           value={initialCashInput} 
                           onChange={e=>setInitialCashInput(e.target.value)} 
-                          placeholder="0"
+                          placeholder="Ej: 2000"
                         />
                       </div>
                       <div className="flex items-center gap-2 shrink-0 w-full overflow-x-auto no-scrollbar">
-                        {['0', '1000', '2000', '5000', '10000'].map(amount => (
+                        {['1000', '2000', '3000', '5000', '10000', '15000'].map(amount => (
                           <button
                             key={amount}
                             type="button"
@@ -3543,6 +4448,11 @@ export default function App() {
                           </button>
                         ))}
                       </div>
+                      {(!initialCashInput || parseFloat(initialCashInput) <= 0) && (
+                        <div className="text-[11px] font-bold text-amber-400 flex items-center gap-1.5">
+                          <span>⚠️ Obligatorio: Ingrese un monto de efectivo mayor a $0 para habilitar la apertura de caja.</span>
+                        </div>
+                      )}
                     </div>
                   </div>
 
@@ -3562,13 +4472,23 @@ export default function App() {
                     <div className="space-y-2 pt-2">
                       <button 
                         onClick={() => handleOpenRegister(false)} 
-                        className="w-full py-4.5 bg-purple-600 hover:bg-purple-400 text-slate-950 font-black uppercase text-xs sm:text-sm rounded-[22px] shadow-lg shadow-purple-500/20 transition-all flex items-center justify-center gap-2"
+                        disabled={!initialCashInput || parseFloat(initialCashInput) <= 0}
+                        className={`w-full py-4.5 rounded-[22px] shadow-lg font-black uppercase text-xs sm:text-sm transition-all flex items-center justify-center gap-2 ${
+                          initialCashInput && parseFloat(initialCashInput) > 0
+                            ? 'bg-purple-600 hover:bg-purple-400 text-slate-950 shadow-purple-500/20 cursor-pointer'
+                            : 'bg-slate-800 text-slate-500 border border-slate-700/50 cursor-not-allowed opacity-70'
+                        }`}
                       >
-                        <Icon name="key" size={20}/> Abrir Caja y Guardar Stock
+                        <Icon name="key" size={20}/> {initialCashInput && parseFloat(initialCashInput) > 0 ? `Abrir Caja ($${initialCashInput}) y Guardar Stock` : 'Ingrese Monto para Abrir Caja'}
                       </button>
                       <button 
                         onClick={() => handleOpenRegister(true)} 
-                        className="w-full py-3 bg-[#160829] hover:bg-[#220c40] text-slate-300 hover:text-white font-black uppercase text-[11px] rounded-[18px] transition-all flex items-center justify-center gap-1.5 border border-purple-500/30"
+                        disabled={!initialCashInput || parseFloat(initialCashInput) <= 0}
+                        className={`w-full py-3 rounded-[18px] transition-all flex items-center justify-center gap-1.5 font-black uppercase text-[11px] border ${
+                          initialCashInput && parseFloat(initialCashInput) > 0
+                            ? 'bg-[#160829] hover:bg-[#220c40] text-slate-300 hover:text-white border-purple-500/30 cursor-pointer'
+                            : 'bg-slate-900/60 text-slate-600 border-slate-800 cursor-not-allowed opacity-60'
+                        }`}
                         title="Abre la caja inmediatamente sin cargar stock de productos"
                       >
                         <Icon name="bolt" size={16} className="text-purple-300"/> Abrir Rápido (Sin Stock)
@@ -3756,8 +4676,16 @@ export default function App() {
                       <Icon name="receipt" size={18}/> 🖨️ Imprimir Ticket Resumen (80mm)
                     </button>
                     <button 
-                      onClick={() => handleCloseRegister(false)} 
-                      className="w-full py-5 bg-red-600 hover:bg-red-500 text-white rounded-[24px] font-black uppercase text-xs shadow-xl mt-2 transition-all"
+                      onClick={() => {
+                        showConfirm({
+                          title: '¿Cerrar Caja y Archivar Turno?',
+                          message: 'Se generará el reporte contable e imprimirá el informe de cierre.',
+                          confirmText: 'Cerrar Caja',
+                          confirmVariant: 'danger',
+                          onConfirm: () => handleCloseRegister(false)
+                        });
+                      }} 
+                      className="w-full py-5 bg-red-600 hover:bg-red-500 text-white rounded-[24px] font-black uppercase text-xs shadow-xl mt-2 transition-all cursor-pointer"
                     >
                       🔒 Cerrar Caja y Archivar Turno
                     </button>
@@ -3782,6 +4710,13 @@ export default function App() {
                    </p>
                  </div>
                  <div className="flex flex-wrap gap-2">
+                   <button 
+                     onClick={handlePurgeBefore19HoursToday} 
+                     className="px-4 py-3 bg-red-950/70 hover:bg-red-900/90 border border-red-500/50 text-red-200 rounded-[20px] font-black uppercase text-xs transition-all flex items-center gap-1.5 shadow-xs cursor-pointer"
+                     title="Borrar todos los pedidos y reportes creados antes de las 19:00 hs de hoy"
+                   >
+                     <Icon name="auto_delete" size={16} className="text-red-300"/> 🗑️ Borrar &lt; 19:00 hs de Hoy
+                   </button>
                    {sessions.length > 0 && (
                      <button 
                        onClick={handleClearAllHistory} 
@@ -3958,6 +4893,82 @@ export default function App() {
           <OperationsManualTab
             showMessage={showMessage}
             setActiveTab={setActiveTab}
+          />
+        )}
+
+        {/* Admin Audit History Tab (Audit log of ticket deletions and order rectifications) */}
+        {activeTab === 'audit' && currentUser.role === 'admin' && (
+          <AdminAuditHistoryTab
+            auditLogs={auditLogs}
+            currentUser={currentUser}
+            currentSessionId={register.sessionId}
+            showMessage={showMessage}
+            adminAlertSoundEnabled={adminAlertSoundEnabled}
+            onToggleAdminAlertSound={() => setAdminAlertSoundEnabled(prev => !prev)}
+            onTestAlertSound={playAdminAlertTone}
+            onDeleteAuditEntry={async (firestoreId: string) => {
+              requireAdminAuth('Eliminar Registro de Auditoría', async () => {
+                showConfirm({
+                  title: '¿Eliminar registro de auditoría?',
+                  message: '¿Está seguro de eliminar este registro histórico de auditoría?',
+                  confirmText: 'Eliminar Registro',
+                  confirmVariant: 'danger',
+                  onConfirm: async () => {
+                    try {
+                      if (db) {
+                        await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'audit_logs', firestoreId));
+                      }
+                      setAuditLogs(prev => prev.filter(l => l.firestoreId !== firestoreId));
+                      showMessage("Registro de auditoría eliminado");
+                    } catch (e: any) {
+                      showMessage("Error al eliminar: " + e.message, 'error');
+                    }
+                  }
+                });
+              });
+            }}
+            onClearAllAuditLogs={async () => {
+              requireAdminAuth('Vaciar Auditoría Completa', async () => {
+                showConfirm({
+                  title: '¿Vaciar todo el registro de auditoría?',
+                  message: 'Esta acción es irreversible y eliminará todos los registros de auditoría almacenados.',
+                  confirmText: 'Vaciar Auditoría',
+                  confirmVariant: 'danger',
+                  onConfirm: async () => {
+                    try {
+                      if (db) {
+                        const snap = await getDocs(collection(db, 'artifacts', appId, 'public', 'data', 'audit_logs'));
+                        const batch = writeBatch(db);
+                        snap.docs.forEach(d => batch.delete(d.ref));
+                        await batch.commit();
+                      }
+                      setAuditLogs([]);
+                      showMessage("Auditoría vaciada por completo");
+                    } catch (e: any) {
+                      showMessage("Error al vaciar auditoría: " + e.message, 'error');
+                    }
+                  }
+                });
+              });
+            }}
+            onPrintAuditTicket={() => {
+              printFullAccountingReport({
+                sessionId: register.sessionId || `AUDIT-${Date.now()}`,
+                openedAt: register.openedAt,
+                closedAt: Date.now(),
+                initialCash: register.initialCash || 0,
+                finalCash: register.currentCash || 0,
+                totalSales: reportData.totalSales,
+                totalTips: reportData.totalTips,
+                orderCount: reportData.finishedTotal,
+                methods: reportData.methods,
+                physicalTotals: reportData.physicalTotals,
+                itemsSold: reportData.itemsSold,
+                ordersList: [],
+                orderTypesBreakdown: {},
+                auditLogs: auditLogs
+              });
+            }}
           />
         )}
       </main>
@@ -4149,8 +5160,24 @@ export default function App() {
               </div>
             </div>
             <div className="p-6 border-t border-purple-500/20 bg-[#06020e] shrink-0 rounded-b-[40px]">
-              <button onClick={()=>{addToCart(toppingModal.item, toppingModal.selectedToppings, toppingModal.quantity); setToppingModal({isOpen:false, item:null, selectedToppings:[], quantity: 1});}} className={`w-full py-5 text-slate-950 rounded-[25px] font-black uppercase text-xs bg-purple-600 hover:bg-purple-400 shadow-md shadow-purple-500/20`}>
-                Agregar al Carrito - Total: ${Math.round((toppingModal.item.price * toppingModal.quantity) + calculateToppingsCost(toppingModal.item, toppingModal.selectedToppings))}
+              <button onClick={()=>{
+                if (toppingModal.editingCartId) {
+                  const toppingsCost = calculateToppingsCost(toppingModal.item, toppingModal.selectedToppings);
+                  const finalPrice = Math.round((toppingModal.item.price || 0) + toppingsCost);
+                  setCart(prev => prev.map(it => it.cartId === toppingModal.editingCartId ? {
+                    ...it,
+                    ...toppingModal.item,
+                    cartId: it.cartId,
+                    selectedToppings: toppingModal.selectedToppings,
+                    finalPrice,
+                    quantity: toppingModal.quantity
+                  } : it));
+                } else {
+                  addToCart(toppingModal.item, toppingModal.selectedToppings, toppingModal.quantity);
+                }
+                setToppingModal({isOpen:false, item:null, selectedToppings:[], quantity: 1});
+              }} className={`w-full py-5 text-slate-950 rounded-[25px] font-black uppercase text-xs bg-purple-600 hover:bg-purple-400 shadow-md shadow-purple-500/20`}>
+                {toppingModal.editingCartId ? 'Guardar cambios' : 'Agregar al Carrito'} - Total: ${Math.round((toppingModal.item.price * toppingModal.quantity) + calculateToppingsCost(toppingModal.item, toppingModal.selectedToppings))}
               </button>
             </div>
           </div>
@@ -4818,6 +5845,99 @@ export default function App() {
         onClose={() => setCustomerObjectionsModalOpen(false)}
       />
 
+      {/* Faltantes / productos no disponibles */}
+      {shortagesModalOpen && (
+        <div className="fixed inset-0 z-[11900] bg-black/85 backdrop-blur-md flex items-center justify-center p-4">
+          <div className="w-full max-w-3xl max-h-[88dvh] overflow-hidden bg-[#090314] border-2 border-red-500/40 rounded-[30px] shadow-2xl flex flex-col text-slate-100">
+            <div className="p-5 border-b border-red-500/25 flex items-center justify-between shrink-0">
+              <div>
+                <h3 className="font-black uppercase text-lg text-white flex items-center gap-2"><Icon name="production_quantity_limits" size={20} className="text-red-400"/> Faltantes / Sin stock</h3>
+                <p className="text-[10px] text-slate-400 font-bold uppercase mt-1">Marcá qué falta y qué productos del menú no se pueden vender.</p>
+              </div>
+              <button onClick={() => setShortagesModalOpen(false)} className="p-2 text-slate-400 hover:text-white"><Icon name="close" size={20}/></button>
+            </div>
+            <div className="p-5 overflow-y-auto custom-dark-scrollbar space-y-5">
+              {activeShortages.length > 0 && (
+                <div className="space-y-2">
+                  <div className="text-[10px] font-black uppercase text-red-300">Faltantes activos</div>
+                  {activeShortages.map(sh => (
+                    <div key={sh.firestoreId} className="p-3 rounded-2xl bg-red-950/35 border border-red-500/30 flex items-center justify-between gap-3">
+                      <div>
+                        <div className="font-black text-sm uppercase text-red-200">{sh.name}</div>
+                        <div className="text-[10px] text-slate-400 mt-1">Afecta {(sh.affectedItemIds || []).length} producto(s)</div>
+                      </div>
+                      <button onClick={() => resolveShortage(sh)} className="px-3 py-2 rounded-xl bg-emerald-950/60 border border-emerald-500/40 text-emerald-300 text-[10px] font-black uppercase">Ya hay stock</button>
+                    </div>
+                  ))}
+                </div>
+              )}
+              <div className="space-y-3 border-t border-purple-500/20 pt-4">
+                <input value={shortageName} onChange={e => setShortageName(e.target.value)} placeholder="Qué falta: ej. muzzarella, Coca 1.5L, jamón..." className="w-full p-3 bg-[#040108] border border-red-500/35 rounded-xl outline-none text-sm font-bold text-white"/>
+                <div className="text-[10px] font-black uppercase text-slate-300">Productos del menú afectados</div>
+                <div className="max-h-[330px] overflow-y-auto custom-dark-scrollbar grid grid-cols-1 sm:grid-cols-2 gap-2 pr-1">
+                  {allMenuItems.map(item => {
+                    const checked = shortageAffectedIds.includes(item.id);
+                    return (
+                      <label key={item.id} className={`p-2.5 rounded-xl border cursor-pointer flex items-center gap-2 ${checked ? 'bg-red-950/50 border-red-500/50 text-red-100' : 'bg-[#080411] border-purple-500/15 text-slate-300'}`}>
+                        <input type="checkbox" checked={checked} onChange={() => setShortageAffectedIds(prev => checked ? prev.filter(id => id !== item.id) : [...prev, item.id])} className="accent-red-500"/>
+                        <span className="text-[10px] font-black uppercase">{item.name}</span>
+                      </label>
+                    );
+                  })}
+                </div>
+                <button onClick={saveShortage} className="w-full py-3 bg-red-600 hover:bg-red-500 text-white rounded-2xl font-black uppercase text-xs">Activar faltante y bloquear esos productos</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Cajera / moza: solicitud de borrado, nunca elimina directamente */}
+      {deleteRequestModal.isOpen && deleteRequestModal.order && (
+        <div className="fixed inset-0 z-[11950] bg-black/85 backdrop-blur-md flex items-center justify-center p-4">
+          <div className="w-full max-w-md bg-[#090314] border-2 border-amber-500/50 rounded-[30px] p-6 shadow-2xl text-slate-100 space-y-4">
+            <div className="flex items-center justify-between">
+              <h3 className="font-black uppercase text-lg text-white">Solicitar borrado #{deleteRequestModal.order.id}</h3>
+              <button onClick={() => setDeleteRequestModal({ isOpen:false, order:null, note:'', confirmation:'' })} className="text-slate-400 hover:text-white"><Icon name="close" size={20}/></button>
+            </div>
+            <p className="text-xs text-slate-300">La comanda <strong>no se borrará ahora</strong>. Quedará marcada para que el Administrador la revise al cierre/conteo de caja.</p>
+            <textarea rows={3} value={deleteRequestModal.note} onChange={e => setDeleteRequestModal({ ...deleteRequestModal, note:e.target.value })} placeholder="Nota opcional: duplicado, cliente canceló, error de carga..." className="w-full p-3 bg-[#040108] border border-amber-500/30 rounded-xl text-sm outline-none resize-none"/>
+            <div>
+              <label className="text-[10px] font-black uppercase text-amber-300">Escribí aceptado para confirmar</label>
+              <input type="password" value={deleteRequestModal.confirmation} onChange={e => setDeleteRequestModal({ ...deleteRequestModal, confirmation:e.target.value })} placeholder="••••••••" className="w-full mt-1 p-3 bg-[#040108] border border-amber-500/35 rounded-xl text-center tracking-[0.35em] font-black outline-none"/>
+              <p className="text-[9px] text-slate-500 mt-1">Debe escribirse exactamente en minúscula: aceptado</p>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <button onClick={() => setDeleteRequestModal({ isOpen:false, order:null, note:'', confirmation:'' })} className="py-3 bg-slate-900 border border-slate-700 rounded-xl text-xs font-black uppercase">Cancelar</button>
+              <button onClick={submitDeleteRequest} className="py-3 bg-amber-500 text-slate-950 rounded-xl text-xs font-black uppercase">Enviar solicitud</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Solo Admin: solicitudes pendientes para resolver al cierre */}
+      {pendingDeleteModalOpen && currentUser.role === 'admin' && (
+        <div className="fixed inset-0 z-[11900] bg-black/85 backdrop-blur-md flex items-center justify-center p-4">
+          <div className="w-full max-w-3xl max-h-[85dvh] bg-[#090314] border-2 border-amber-500/40 rounded-[30px] overflow-hidden flex flex-col text-slate-100">
+            <div className="p-5 border-b border-amber-500/25 flex justify-between items-center shrink-0">
+              <div><h3 className="font-black uppercase text-lg text-white">Solicitudes de borrado</h3><p className="text-[10px] text-slate-400 uppercase font-bold">Revisar y eliminar al cierre de caja</p></div>
+              <button onClick={() => setPendingDeleteModalOpen(false)} className="text-slate-400 hover:text-white"><Icon name="close" size={20}/></button>
+            </div>
+            <div className="p-5 overflow-y-auto custom-dark-scrollbar space-y-3">
+              {orders.filter(o => o.deleteRequested).length === 0 ? <div className="text-center py-8 text-slate-500 font-bold">No hay solicitudes pendientes.</div> : orders.filter(o => o.deleteRequested).map(order => (
+                <div key={order.firestoreId} className="p-4 rounded-2xl bg-amber-950/25 border border-amber-500/30 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                  <div>
+                    <div className="font-black text-white">#{order.id} · {order.client?.name || 'General'} · ${order.total}</div>
+                    <div className="text-[10px] text-amber-200 mt-1">Solicitó: {order.deleteRequestedBy || 'Operador'} {order.deleteRequestNote ? `• ${order.deleteRequestNote}` : '• Sin nota'}</div>
+                  </div>
+                  <button onClick={() => deleteOrderAsAdmin(order)} className="px-4 py-2.5 bg-red-600 hover:bg-red-500 text-white rounded-xl text-[10px] font-black uppercase flex items-center gap-1"><Icon name="delete" size={14}/> Borrar</button>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Supervisor / Admin Authorization Override Modal */}
       {adminAuthModal.isOpen && (
         <div className="fixed inset-0 z-[12000] bg-black/85 backdrop-blur-md flex items-center justify-center p-4">
@@ -4886,6 +6006,277 @@ export default function App() {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* Modal: Apertura de Caja al Iniciar Sesión (Obligatorio con Monto, Modo Consulta exclusivo para Admin) */}
+      {openRegisterPromptModal.isOpen && (
+        <div className="fixed inset-0 z-[12000] bg-black/90 backdrop-blur-md flex items-center justify-center p-4">
+          <div className="relative max-w-lg w-full bg-[#090314] border-2 border-purple-500/50 rounded-[40px] p-7 sm:p-9 shadow-2xl shadow-purple-950/90 space-y-6 text-slate-100 text-center animate-in zoom-in-95">
+            <div className="w-16 h-16 rounded-3xl bg-purple-950/80 border-2 border-purple-500/40 text-purple-300 flex items-center justify-center mx-auto shadow-lg shadow-purple-950/50">
+              <Icon name="account_balance_wallet" size={32} />
+            </div>
+
+            {currentUser.role === 'admin' ? (
+              <div className="space-y-2">
+                <div className="inline-flex items-center gap-1.5 px-3 py-1 bg-purple-950/80 border border-purple-500/50 rounded-full text-purple-300 text-[10px] font-black uppercase tracking-wider">
+                  <Icon name="shield_person" size={13} />
+                  <span>Acceso Administrador / Dueño</span>
+                </div>
+                <h3 className="text-2xl font-black uppercase tracking-tight text-white">
+                  Apertura de Caja o Consulta
+                </h3>
+                <p className="text-xs font-medium text-slate-300 leading-relaxed max-w-md mx-auto">
+                  Como Administrador, ingresa el <strong className="text-white">monto de efectivo inicial</strong> para abrir el turno de ventas, o accede en <strong className="text-purple-300">Modo Consulta</strong> para auditar reportes, pedidos y configuración sin abrir caja.
+                </p>
+              </div>
+            ) : (
+              <div className="space-y-2">
+                <div className="inline-flex items-center gap-1.5 px-3 py-1 bg-amber-950/80 border border-amber-500/50 rounded-full text-amber-300 text-[10px] font-black uppercase tracking-wider">
+                  <Icon name="warning" size={13} />
+                  <span>Apertura Obligatoria de Turno</span>
+                </div>
+                <h3 className="text-2xl font-black uppercase tracking-tight text-white">
+                  Apertura de Turno de Caja
+                </h3>
+                <p className="text-xs font-medium text-slate-300 leading-relaxed max-w-md mx-auto">
+                  Para operar en el sistema, es obligatorio ingresar el <strong className="text-white">monto de efectivo inicial</strong>. Ningún cajero puede operar con la caja cerrada ni ingresar en modo consulta.
+                </p>
+              </div>
+            )}
+
+            {/* Quick cash presets */}
+            <div className="space-y-1.5">
+              <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Sugerencias rápidas:</span>
+              <div className="grid grid-cols-3 sm:grid-cols-6 gap-2">
+                {[1000, 2000, 3000, 5000, 10000, 15000].map(amount => (
+                  <button
+                    key={amount}
+                    type="button"
+                    onClick={() => setOpenRegisterPromptModal(prev => ({ ...prev, initialCash: String(amount) }))}
+                    className={`py-2 px-1 rounded-xl font-black text-xs transition-all border cursor-pointer ${
+                      openRegisterPromptModal.initialCash === String(amount)
+                        ? 'bg-purple-600 border-purple-400 text-slate-950 shadow-md shadow-purple-600/30'
+                        : 'bg-[#160829] border-purple-500/30 text-purple-200 hover:bg-[#251046]'
+                    }`}
+                  >
+                    ${amount}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <label className="text-[11px] font-black uppercase text-purple-300 flex items-center justify-center gap-1.5">
+                <Icon name="monetization_on" size={15} className="text-emerald-400" /> Monto en Efectivo Inicial ($)
+              </label>
+              <div className="relative">
+                <span className="absolute left-5 top-1/2 -translate-y-1/2 text-2xl font-black text-slate-500">$</span>
+                <input
+                  type="number"
+                  min="1"
+                  autoFocus
+                  placeholder="Ej: 2000"
+                  value={openRegisterPromptModal.initialCash}
+                  onChange={e => setOpenRegisterPromptModal({ ...openRegisterPromptModal, initialCash: e.target.value })}
+                  onKeyDown={e => {
+                    if (e.key === 'Enter') {
+                      const amount = parseFloat(openRegisterPromptModal.initialCash);
+                      if (isNaN(amount) || amount <= 0) {
+                        showMessage("⚠️ Debe ingresar el monto de efectivo inicial para abrir la caja. No se permite abrir sin monto a ningún cajero ni administrador.", "error");
+                        return;
+                      }
+                      handleOpenRegister(true, amount);
+                    }
+                  }}
+                  style={{ textAlign: 'center' }}
+                  className="w-full p-4 pl-10 bg-[#040108] border-2 border-purple-500/40 focus:border-purple-400 rounded-2xl text-2xl font-black text-center text-emerald-400 outline-none tracking-wider"
+                />
+              </div>
+              {(!openRegisterPromptModal.initialCash || parseFloat(openRegisterPromptModal.initialCash) <= 0) ? (
+                <p className="text-[10.5px] font-bold text-amber-400">
+                  ⚠️ Debe ingresar un monto mayor a $0 para poder abrir la caja.
+                </p>
+              ) : (
+                <p className="text-[10.5px] font-bold text-emerald-400 flex items-center justify-center gap-1">
+                  <Icon name="check_circle" size={13} /> Monto válido: ${parseFloat(openRegisterPromptModal.initialCash)}
+                </p>
+              )}
+            </div>
+
+            <div className="space-y-3 pt-2">
+              {(() => {
+                const amount = parseFloat(openRegisterPromptModal.initialCash);
+                const isValid = !isNaN(amount) && amount > 0;
+                return (
+                  <button
+                    type="button"
+                    disabled={!isValid}
+                    onClick={() => {
+                      if (!isValid) {
+                        showMessage("⚠️ Debe ingresar el monto de efectivo inicial para abrir la caja. No se permite abrir sin monto a ningún cajero ni administrador.", "error");
+                        return;
+                      }
+                      handleOpenRegister(true, amount);
+                    }}
+                    className={`w-full py-4 rounded-2xl font-black uppercase text-xs sm:text-sm tracking-wider shadow-lg transition-all flex items-center justify-center gap-2 ${
+                      isValid
+                        ? 'bg-gradient-to-r from-purple-600 via-indigo-600 to-purple-600 hover:from-purple-500 hover:to-indigo-500 text-white shadow-purple-600/40 cursor-pointer hover:scale-[1.01]'
+                        : 'bg-slate-800 text-slate-500 border border-slate-700/50 cursor-not-allowed opacity-75'
+                    }`}
+                  >
+                    <Icon name="bolt" size={18} />
+                    <span>{isValid ? `Abrir Caja e Iniciar Turno ($${amount})` : 'Ingrese el Monto para Abrir Caja'}</span>
+                  </button>
+                );
+              })()}
+
+              {/* Modo Consulta: DISPONIBLE ÚNICAMENTE PARA ADMINISTRADOR */}
+              {currentUser.role === 'admin' ? (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setAdminConsultationMode(true);
+                    setOpenRegisterPromptModal({ isOpen: false, initialCash: '' });
+                    showMessage("Modo Consulta activado para Administrador (Caja permanece cerrada)", "info");
+                  }}
+                  className="w-full py-3.5 bg-[#180a30] hover:bg-[#25104a] text-purple-300 hover:text-white border border-purple-500/40 rounded-2xl font-black uppercase text-xs transition-all flex items-center justify-center gap-2 cursor-pointer shadow-md"
+                >
+                  <Icon name="visibility" size={16} className="text-purple-400" />
+                  <span>Continuar en Modo Consulta (Solo Administrador)</span>
+                </button>
+              ) : (
+                <div className="py-1 px-3 bg-[#0a0514] border border-slate-800/80 rounded-xl text-[10px] text-slate-400 flex items-center justify-center gap-1.5">
+                  <Icon name="lock" size={12} className="text-amber-400" />
+                  <span>El modo consulta está restringido exclusivamente para el Administrador</span>
+                </div>
+              )}
+
+              <button
+                type="button"
+                onClick={() => {
+                  setIsAuthenticated(false);
+                  localStorage.removeItem('nextcrm_auth');
+                  localStorage.removeItem('nextcrm_user');
+                  localStorage.removeItem('nextcrm_role');
+                  hasCheckedRegisterOnLogin.current = false;
+                  setAdminConsultationMode(false);
+                  setOpenRegisterPromptModal({ isOpen: false, initialCash: '' });
+                  showMessage('Sesión cerrada');
+                }}
+                className="w-full py-2.5 text-slate-400 hover:text-red-300 text-xs font-bold uppercase tracking-wider flex items-center justify-center gap-1.5 transition-colors cursor-pointer"
+              >
+                <Icon name="logout" size={14} />
+                <span>Cerrar Sesión / Salir</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal: Resolver Pedidos Pendientes antes de Cerrar Caja */}
+      {resolvePendingModal.isOpen && (
+        <div className="fixed inset-0 z-[12000] bg-black/85 backdrop-blur-md flex items-center justify-center p-4">
+          <div className="relative max-w-md w-full bg-[#090314] border-2 border-purple-500/50 rounded-[36px] p-7 sm:p-8 shadow-2xl shadow-purple-950/90 space-y-5 text-slate-100 text-center animate-in zoom-in-95">
+            <div className="w-16 h-16 rounded-3xl bg-amber-950/80 border-2 border-amber-500/40 text-amber-300 flex items-center justify-center mx-auto shadow-lg shadow-amber-950/50">
+              <Icon name="pending_actions" size={32} />
+            </div>
+
+            <div className="space-y-1.5">
+              <h3 className="text-xl font-black uppercase tracking-tight text-white">
+                Comandas Pendientes Detectadas
+              </h3>
+              <p className="text-xs font-bold text-slate-300">
+                Hay <strong className="text-amber-300">{resolvePendingModal.pending.length} comanda(s)</strong> sin finalizar en el sistema.
+              </p>
+            </div>
+
+            <div className="bg-[#040108] p-3 rounded-2xl border border-purple-500/30 max-h-40 overflow-y-auto space-y-1.5 text-left text-xs font-bold text-slate-300">
+              {resolvePendingModal.pending.map((p, idx) => (
+                <div key={idx} className="flex justify-between items-center py-1 border-b border-purple-500/10 last:border-0">
+                  <span className="text-purple-300 font-black">#{p.id} - {p.type}</span>
+                  <span className="text-amber-400 font-black">${p.total} ({p.status})</span>
+                </div>
+              ))}
+            </div>
+
+            <div className="space-y-2.5 pt-2">
+              <button
+                type="button"
+                onClick={handleResolveAllAndClose}
+                className="w-full py-3.5 bg-gradient-to-r from-emerald-600 to-green-600 hover:from-emerald-500 hover:to-green-500 text-white rounded-2xl font-black uppercase text-xs shadow-lg shadow-emerald-600/30 transition-all flex items-center justify-center gap-2 cursor-pointer"
+              >
+                <Icon name="check_circle" size={16} />
+                <span>Finalizar Todas ({resolvePendingModal.pending.length}) y Cerrar Caja</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => handleCloseRegister(true)}
+                className="w-full py-3 bg-red-950 hover:bg-red-900 border border-red-500/40 text-red-200 rounded-2xl font-black uppercase text-xs transition-all flex items-center justify-center gap-2 cursor-pointer"
+              >
+                <Icon name="lock" size={16} />
+                <span>Forzar Cierre de Caja</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setResolvePendingModal({ isOpen: false, pending: [] })}
+                className="w-full py-2.5 bg-[#160829] hover:bg-[#220c40] text-purple-300 border border-purple-500/30 rounded-2xl font-black uppercase text-[11px] transition-all cursor-pointer"
+              >
+                Cancelar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Universal In-App Confirmation Modal (Non-blocking) */}
+      {confirmModal.isOpen && (
+        <div className="fixed inset-0 z-[13000] bg-black/85 backdrop-blur-md flex items-center justify-center p-4">
+          <div className="relative max-w-md w-full bg-[#090314] border-2 border-purple-500/50 rounded-[36px] p-7 sm:p-8 shadow-2xl shadow-purple-950/90 space-y-5 text-slate-100 text-center animate-in zoom-in-95">
+            <div className={`w-16 h-16 rounded-3xl border-2 flex items-center justify-center mx-auto shadow-lg ${
+              confirmModal.confirmVariant === 'danger'
+                ? 'bg-red-950/80 border-red-500/40 text-red-400 shadow-red-950/50'
+                : confirmModal.confirmVariant === 'success'
+                ? 'bg-emerald-950/80 border-emerald-500/40 text-emerald-400 shadow-emerald-950/50'
+                : 'bg-purple-950/80 border-purple-500/40 text-purple-300 shadow-purple-950/50'
+            }`}>
+              <Icon name={confirmModal.confirmVariant === 'danger' ? 'warning' : 'help_outline'} size={32} />
+            </div>
+
+            <div className="space-y-1.5">
+              <h3 className="text-xl font-black uppercase tracking-tight text-white">
+                {confirmModal.title}
+              </h3>
+              <p className="text-xs font-bold text-slate-300 leading-relaxed">
+                {confirmModal.message}
+              </p>
+            </div>
+
+            <div className="grid grid-cols-2 gap-3 pt-2">
+              <button
+                type="button"
+                onClick={() => setConfirmModal(prev => ({ ...prev, isOpen: false }))}
+                className="py-3.5 bg-[#160829] hover:bg-[#220c40] text-purple-300 border border-purple-500/30 rounded-2xl font-black uppercase text-xs transition-all cursor-pointer"
+              >
+                {confirmModal.cancelText || 'Cancelar'}
+              </button>
+              <button
+                type="button"
+                onClick={() => confirmModal.onConfirm()}
+                className={`py-3.5 rounded-2xl font-black uppercase text-xs shadow-lg transition-all cursor-pointer ${
+                  confirmModal.confirmVariant === 'danger'
+                    ? 'bg-red-600 hover:bg-red-500 text-white shadow-red-600/30'
+                    : confirmModal.confirmVariant === 'success'
+                    ? 'bg-emerald-600 hover:bg-emerald-500 text-white shadow-emerald-600/30'
+                    : 'bg-purple-600 hover:bg-purple-500 text-slate-950 shadow-purple-600/30'
+                }`}
+              >
+                {confirmModal.confirmText || 'Confirmar'}
+              </button>
+            </div>
           </div>
         </div>
       )}
