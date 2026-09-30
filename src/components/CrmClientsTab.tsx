@@ -1,8 +1,89 @@
 import React, { useState, useMemo } from 'react';
 import { ClientData, OrderData } from '../types';
 import { Icon } from './Icon';
-import { addDoc, collection, doc, deleteDoc } from 'firebase/firestore';
+import { addDoc, collection, doc, deleteDoc, updateDoc } from 'firebase/firestore';
 import { ImportClientsModal } from './ImportClientsModal';
+
+
+const normalizeClientPhone = (value: string = ''): string => {
+  let digits = String(value || '').replace(/\D/g, '');
+  if (digits.startsWith('00')) digits = digits.slice(2);
+  if (digits.startsWith('598')) {
+    digits = digits.slice(3);
+    if (digits.length === 8 && digits.startsWith('9')) digits = '0' + digits;
+  }
+  return digits;
+};
+
+const normalizeClientText = (value: string = ''): string =>
+  String(value || '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+
+const isGenericClientName = (value: string = ''): boolean => {
+  const name = normalizeClientText(value);
+  return !name || name === 'cliente' || name === 'sin nombre' || name === 'general';
+};
+
+const getSafeDuplicateClientGroups = (items: ClientData[]): ClientData[][] => {
+  const phoneGroups = new Map<string, ClientData[]>();
+  const fallbackGroups = new Map<string, ClientData[]>();
+
+  for (const client of items) {
+    if (!client.firestoreId) continue;
+
+    const phone = normalizeClientPhone(client.phone || '');
+    if (phone.length >= 8) {
+      const key = 'phone:' + phone;
+      if (!phoneGroups.has(key)) phoneGroups.set(key, []);
+      phoneGroups.get(key)!.push(client);
+      continue;
+    }
+
+    const name = normalizeClientText(client.name || '');
+    const address = normalizeClientText(client.address || '');
+    if (name && address) {
+      const key = 'name-address:' + name + '|' + address;
+      if (!fallbackGroups.has(key)) fallbackGroups.set(key, []);
+      fallbackGroups.get(key)!.push(client);
+    }
+  }
+
+  const safePhoneGroups = [...phoneGroups.values()].filter(group => {
+    if (group.length < 2) return false;
+    const realNames = new Set(
+      group
+        .map(client => isGenericClientName(client.name || '') ? '' : normalizeClientText(client.name || ''))
+        .filter(Boolean)
+    );
+    return realNames.size <= 1;
+  });
+
+  return [
+    ...safePhoneGroups,
+    ...[...fallbackGroups.values()].filter(group => group.length > 1)
+  ];
+};
+
+const bestClientText = (
+  group: ClientData[],
+  field: 'name' | 'phone' | 'address' | 'zone'
+): string => {
+  const values = group
+    .map(client => String((client as any)[field] || '').trim())
+    .filter(Boolean);
+
+  if (field === 'name') {
+    const realNames = values.filter(value => !isGenericClientName(value));
+    if (realNames.length) return realNames.sort((a, b) => b.length - a.length)[0];
+  }
+
+  return values.sort((a, b) => b.length - a.length)[0] || '';
+};
 
 interface CrmClientsTabProps {
   allClients: ClientData[];
@@ -95,6 +176,85 @@ export const CrmClientsTab: React.FC<CrmClientsTabProps> = ({
       showMessage("Directorio de clientes vaciado exitosamente");
     } catch (e: any) {
       showMessage("Error al vaciar clientes: " + e.message, "error");
+    }
+  };
+
+
+  const duplicateClientGroups = useMemo(
+    () => getSafeDuplicateClientGroups(clients),
+    [clients]
+  );
+
+  const duplicateClientsCount = useMemo(
+    () => duplicateClientGroups.reduce((sum, group) => sum + Math.max(0, group.length - 1), 0),
+    [duplicateClientGroups]
+  );
+
+  const handleCleanDuplicateClients = async () => {
+    if (!db || !appId) {
+      showMessage("Firebase no está disponible para limpiar contactos.", "error");
+      return;
+    }
+
+    if (duplicateClientsCount === 0) {
+      showMessage("No se encontraron contactos duplicados.");
+      return;
+    }
+
+    if (!window.confirm(
+      `Se encontraron ${duplicateClientsCount} contacto${duplicateClientsCount === 1 ? '' : 's'} duplicado${duplicateClientsCount === 1 ? '' : 's'}.\n\nSe conservará una sola ficha y se mantendrán los datos más completos. No se modifica el menú ni los pedidos. ¿Continuar?`
+    )) return;
+
+    let removed = 0;
+
+    try {
+      for (const group of duplicateClientGroups) {
+        const ranked = [...group].sort((a, b) => {
+          const score = (client: ClientData) =>
+            (!isGenericClientName(client.name || '') ? 5 : 0) +
+            (normalizeClientPhone(client.phone || '') ? 3 : 0) +
+            (String(client.address || '').trim() ? 4 : 0) +
+            (String(client.zone || '').trim() ? 2 : 0) +
+            (String((client as any).notes || '').trim() ? 1 : 0);
+
+          const scoreDiff = score(b) - score(a);
+          if (scoreDiff !== 0) return scoreDiff;
+          return Number((a as any).createdAt || 0) - Number((b as any).createdAt || 0);
+        });
+
+        const keeper = ranked[0];
+        if (!keeper?.firestoreId) continue;
+
+        const mergedNotes =
+          ranked
+            .map(client => String((client as any).notes || '').trim())
+            .filter(Boolean)
+            .sort((a, b) => b.length - a.length)[0] || '';
+
+        await updateDoc(
+          doc(db, 'artifacts', appId, 'public', 'data', 'clients', keeper.firestoreId),
+          {
+            name: bestClientText(ranked, 'name') || keeper.name || 'Cliente',
+            phone: bestClientText(ranked, 'phone') || keeper.phone || '',
+            address: bestClientText(ranked, 'address') || keeper.address || '',
+            zone: bestClientText(ranked, 'zone') || keeper.zone || '',
+            notes: mergedNotes
+          }
+        );
+
+        for (const duplicate of ranked.slice(1)) {
+          if (!duplicate.firestoreId) continue;
+          await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'clients', duplicate.firestoreId));
+          removed++;
+        }
+      }
+
+      showMessage(
+        `Limpieza terminada: ${removed} contacto${removed === 1 ? '' : 's'} duplicado${removed === 1 ? '' : 's'} eliminado${removed === 1 ? '' : 's'}.`,
+        "success"
+      );
+    } catch (e: any) {
+      showMessage("Error al limpiar contactos duplicados: " + e.message, "error");
     }
   };
 
@@ -214,6 +374,15 @@ export const CrmClientsTab: React.FC<CrmClientsTabProps> = ({
               title="Importar lista de clientes desde Excel (.xlsx, .csv) o texto"
             >
               <Icon name="upload_file" size={16} className="text-purple-300" /> 📥 Importar Clientes
+            </button>
+            <button
+              type="button"
+              onClick={handleCleanDuplicateClients}
+              className="h-9 px-3 bg-amber-950/40 hover:bg-amber-900/60 border border-amber-500/35 text-amber-300 rounded-xl font-black uppercase text-[9px] transition-all flex items-center shrink-0 gap-1.5"
+              title="Buscar y eliminar solamente contactos duplicados"
+            >
+              <Icon name="content_copy" size={15} />
+              Duplicados{duplicateClientsCount > 0 ? ` (${duplicateClientsCount})` : ''}
             </button>
             {clients.length > 0 && (
               <button

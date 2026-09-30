@@ -152,15 +152,6 @@ const canonicalMenuCategory = (value: string = ''): string => {
   return clean || 'pizzas';
 };
 
-const normalizeMenuProductName = (value: string = ''): string => value
-  .normalize('NFD')
-  .replace(/[\u0300-\u036f]/g, '')
-  .toLowerCase()
-  .replace(/&/g, ' y ')
-  .replace(/[^a-z0-9]+/g, ' ')
-  .replace(/\s+/g, ' ')
-  .trim();
-
 export default function App() {
   const [activeTab, setActiveTab] = useState(() => {
     if (typeof window !== 'undefined') {
@@ -752,12 +743,12 @@ export default function App() {
 
           const seen = new Set(
             cleaned[canonicalCat].map((it: MenuItem) =>
-              normalizeMenuProductName(it.name || '')
+              (it.name || '').trim().toLowerCase()
             )
           );
 
           list.forEach((it: MenuItem) => {
-            const nameNorm = normalizeMenuProductName(it.name || '');
+            const nameNorm = (it.name || '').trim().toLowerCase();
             if (!nameNorm || seen.has(nameNorm)) return;
             seen.add(nameNorm);
             cleaned[canonicalCat].push(it);
@@ -1881,69 +1872,36 @@ export default function App() {
 
   // Product / Menu CRUD Operations
   const handleCleanDuplicates = async () => {
-    if (!db) {
-      showMessage("Firebase no está disponible para guardar la limpieza.", "error");
-      return;
-    }
-
     const cleanedMenu: Record<string, MenuItem[]> = {};
-    const seenByCategory = new Map<string, Set<string>>();
     let duplicatesRemoved = 0;
-    let invalidRemoved = 0;
-
+    
     Object.keys(menu).forEach(cat => {
       const canonicalCat = canonicalMenuCategory(cat);
       if (!cleanedMenu[canonicalCat]) cleanedMenu[canonicalCat] = [];
-      if (!seenByCategory.has(canonicalCat)) seenByCategory.set(canonicalCat, new Set<string>());
 
-      const seen = seenByCategory.get(canonicalCat)!;
+      const seen = new Set(
+        cleanedMenu[canonicalCat].map(it => (it.name || '').trim().toLowerCase())
+      );
+
       (menu[cat] || []).forEach(it => {
-        const key = normalizeMenuProductName(it?.name || '');
-
-        if (!key) {
-          invalidRemoved++;
-          return;
-        }
-
-        if (seen.has(key)) {
+        const norm = (it.name || '').trim().toLowerCase();
+        if (!norm || seen.has(norm)) {
           duplicatesRemoved++;
           return;
         }
-
-        seen.add(key);
+        seen.add(norm);
         cleanedMenu[canonicalCat].push(it);
       });
     });
 
-    const totalRemoved = duplicatesRemoved + invalidRemoved;
-
-    if (totalRemoved === 0) {
-      showMessage("No se encontraron productos duplicados en el menú.");
-      return;
-    }
-
-    const detail = [
-      duplicatesRemoved > 0 ? `${duplicatesRemoved} duplicado${duplicatesRemoved === 1 ? '' : 's'}` : '',
-      invalidRemoved > 0 ? `${invalidRemoved} registro${invalidRemoved === 1 ? '' : 's'} sin nombre` : ''
-    ].filter(Boolean).join(' y ');
-
-    if (!window.confirm(
-      `Se encontraron ${detail}.\n\nLa limpieza conserva una sola copia por producto dentro de cada categoría y unifica categorías equivalentes. ¿Continuar?`
-    )) {
-      return;
-    }
-
     try {
       await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'config', 'menu'), { data: cleanedMenu });
       setMenu(cleanedMenu);
-      try {
-        localStorage.setItem('nextcrm_menu', JSON.stringify(cleanedMenu));
-      } catch (_) {}
-
-      showMessage(
-        `Limpieza terminada: se eliminaron ${totalRemoved} registro${totalRemoved === 1 ? '' : 's'} (${detail}).`,
-        "success"
-      );
+      if (duplicatesRemoved > 0) {
+        showMessage(`¡Se eliminaron ${duplicatesRemoved} productos duplicados del menú exitosamente!`);
+      } else {
+        showMessage("No se encontraron productos duplicados en el menú.");
+      }
     } catch (e: any) {
       showMessage("Error al limpiar duplicados: " + e.message, "error");
     }
@@ -1959,7 +1917,7 @@ export default function App() {
     
     // Check if name already exists in the same category
     const existsInCat = (menu[catKey] || []).some(
-      (it: MenuItem) => normalizeMenuProductName(it.name) === normalizeMenuProductName(trimmedName)
+      (it: MenuItem) => it.name.trim().toLowerCase() === trimmedName.toLowerCase()
     );
     if (existsInCat) {
       return showMessage(`Ya existe un producto llamado "${trimmedName}" en la categoría ${catKey}.`, "error");
@@ -2024,7 +1982,7 @@ export default function App() {
 
     // Check duplicate name on edit (excluding this item itself)
     const existsOther = allMenuItems.some(
-      (it: MenuItem) => it.id !== editProductModal.item!.id && normalizeMenuProductName(it.name) === normalizeMenuProductName(trimmedName)
+      (it: MenuItem) => it.id !== editProductModal.item!.id && it.name.trim().toLowerCase() === trimmedName.toLowerCase()
     );
     if (existsOther) {
       return showMessage(`Ya existe otro producto llamado "${trimmedName}" en el menú.`, "error");
