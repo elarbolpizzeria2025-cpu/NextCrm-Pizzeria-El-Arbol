@@ -1,4 +1,4 @@
-import { initializeApp, getApps, getApp } from 'firebase/app';
+import { initializeApp, getApps } from 'firebase/app';
 import { getAuth } from 'firebase/auth';
 import { getFirestore, initializeFirestore } from 'firebase/firestore';
 
@@ -10,29 +10,27 @@ declare global {
   }
 }
 
-// Canonical application ID for El Árbol Pizzería Firestore database
+// El Árbol original: Firebase fijo y aislado de cualquier otro proyecto/runtime.
 export const appId = 'el-arbol-pos-default';
 
-let app;
+const firebaseConfigObj = {
+  apiKey: "AIzaSyAcL_ud83T6jmDAPpfZE7G-XsoVbBbF5Mg",
+  authDomain: "el-arbol-pizzeria.firebaseapp.com",
+  projectId: "el-arbol-pizzeria",
+  storageBucket: "el-arbol-pizzeria.appspot.com",
+  messagingSenderId: "384832129676",
+  appId: "1:384832129676:web:b76e1e4ab0366be03489a9"
+};
+
+const firebaseAppName = 'el-arbol-pizzeria';
+let app: any;
 let auth: any = null;
 let db: any = null;
 let firebaseErrorMsg: string | null = null;
 
 try {
-  let firebaseConfigObj;
-  if (typeof window !== 'undefined' && window.__firebase_config) {
-    firebaseConfigObj = JSON.parse(window.__firebase_config);
-  } else {
-    firebaseConfigObj = {
-      apiKey: "AIzaSyAcL_ud83T6jmDAPpfZE7G-XsoVbBbF5Mg",
-      authDomain: "el-arbol-pizzeria.firebaseapp.com",
-      projectId: "el-arbol-pizzeria",
-      storageBucket: "el-arbol-pizzeria.appspot.com",
-      messagingSenderId: "384832129676",
-      appId: "1:384832129676:web:b76e1e4ab0366be03489a9"
-    };
-  }
-  app = !getApps().length ? initializeApp(firebaseConfigObj) : getApp();
+  app = getApps().find(existing => existing.name === firebaseAppName)
+    || initializeApp(firebaseConfigObj, firebaseAppName);
   auth = getAuth(app);
   try {
     db = initializeFirestore(app, {
