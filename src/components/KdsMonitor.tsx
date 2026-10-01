@@ -397,6 +397,16 @@ export const KdsMonitor: React.FC<KdsMonitorProps> = ({
             <span>LISTO</span>
           </button>
 
+          {/* Edit Full Order */}
+          <button
+            type="button"
+            onClick={() => handleEditOrder(order)}
+            className="p-2 bg-purple-950/50 hover:bg-purple-900/70 text-purple-300 hover:text-white rounded-xl border border-purple-500/40 transition-colors"
+            title="Editar pedido / comanda"
+          >
+            <Icon name="edit_square" size={15} />
+          </button>
+
           {/* Edit Notes */}
           <button
             type="button"
