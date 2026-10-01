@@ -604,13 +604,14 @@ export default function App() {
       return;
     }
 
-    // Cajera / moza solo solicitan borrado: la comanda queda visible hasta que el admin la elimine.
+    // Cajera puede eliminar directamente con confirmación; el borrado genera alerta persistente para el admin.
+    // Moza mantiene el flujo de solicitud de borrado.
     if (currentUser.role === 'cajero' || currentUser.role === 'mozo') {
       setDeleteOrderModal({ isOpen: true, order, password: '', note: '', error: '' });
       return;
     }
 
-    showMessage('No tenés permiso para solicitar el borrado de esta comanda', 'error');
+    showMessage('No tenés permiso para eliminar o solicitar el borrado de esta comanda', 'error');
   };
 
   const confirmDeleteOrder = async () => {
@@ -619,13 +620,36 @@ export default function App() {
 
     // Debe ser exactamente "aceptado" en minúscula. El input es password y solo muestra círculos.
     if (deleteOrderModal.password.trim() !== 'aceptado') {
-      setDeleteOrderModal(prev => ({ ...prev, error: 'Escribí aceptado en minúscula para enviar la solicitud' }));
+      setDeleteOrderModal(prev => ({
+        ...prev,
+        error: currentUser.role === 'cajero'
+          ? 'Escribí aceptado en minúscula para eliminar el pedido'
+          : 'Escribí aceptado en minúscula para enviar la solicitud'
+      }));
       return;
     }
 
     try {
       const requester = currentUser.displayName || (currentUser.role === 'cajero' ? 'Cajera' : 'Moza');
       const note = deleteOrderModal.note.trim();
+
+      if (currentUser.role === 'cajero') {
+        await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'orders', order.firestoreId));
+
+        await writeOrderAudit('PEDIDO_BORRADO_CAJERA', order, {
+          status: order.status,
+          type: order.type,
+          total: order.total,
+          note,
+          deletedBy: requester,
+          deletedAt: Date.now(),
+          alertAdmin: true
+        }, true);
+
+        setDeleteOrderModal({ isOpen: false, order: null, password: '', note: '', error: '' });
+        showMessage(`Comanda #${order.id} eliminada. El administrador recibió la alerta.`, 'success');
+        return;
+      }
 
       await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'orders', order.firestoreId), {
         deletionRequested: true,
@@ -645,7 +669,12 @@ export default function App() {
       setDeleteOrderModal({ isOpen: false, order: null, password: '', note: '', error: '' });
       showMessage(`Solicitud de borrado de la comanda #${order.id} enviada al administrador`, 'success');
     } catch (e: any) {
-      setDeleteOrderModal(prev => ({ ...prev, error: e?.message || 'No se pudo enviar la solicitud de borrado' }));
+      setDeleteOrderModal(prev => ({
+        ...prev,
+        error: e?.message || (currentUser.role === 'cajero'
+          ? 'No se pudo eliminar el pedido'
+          : 'No se pudo enviar la solicitud de borrado')
+      }));
     }
   };
 
@@ -5899,7 +5928,7 @@ export default function App() {
         onClose={() => setCustomerObjectionsModalOpen(false)}
       />
 
-      {/* Cajera/Moza: solicitud de borrado; el admin recibe la alerta y borra luego */}
+      {/* Cajera: elimina con alerta persistente. Moza: solicita borrado al administrador. */}
       {deleteOrderModal.isOpen && deleteOrderModal.order && (
         <div className="fixed inset-0 z-[12500] bg-black/90 backdrop-blur-md flex items-center justify-center p-4">
           <div className="max-w-md w-full bg-[#090314] border-2 border-red-500/50 rounded-[34px] p-7 shadow-2xl text-slate-100 space-y-5">
@@ -5907,9 +5936,13 @@ export default function App() {
               <div className="w-14 h-14 mx-auto rounded-2xl bg-red-950/70 border border-red-500/40 flex items-center justify-center text-red-300">
                 <Icon name="delete_forever" size={28}/>
               </div>
-              <h3 className="mt-3 text-xl font-black uppercase text-white">Solicitar Borrado #{deleteOrderModal.order.id}</h3>
+              <h3 className="mt-3 text-xl font-black uppercase text-white">
+                {currentUser.role === 'cajero' ? 'Eliminar Pedido' : 'Solicitar Borrado'} #{deleteOrderModal.order.id}
+              </h3>
               <p className="mt-1 text-xs font-bold text-slate-400">
-                El pedido NO se borra ahora. Queda marcado para que el administrador lo revise y lo elimine al cierre/conteo de caja.
+                {currentUser.role === 'cajero'
+                  ? 'El pedido se eliminará ahora y quedará un registro permanente de alerta en Auditoría para el administrador.'
+                  : 'El pedido NO se borra ahora. Queda marcado para que el administrador lo revise y lo elimine al cierre/conteo de caja.'}
               </p>
             </div>
 
@@ -5933,7 +5966,7 @@ export default function App() {
               </div>
               <div>
                 <label className="block text-center text-[10px] font-black uppercase text-red-300 mb-2">
-                  Para enviar la solicitud escribí aceptado
+                  {currentUser.role === 'cajero' ? 'Para eliminar el pedido escribí aceptado' : 'Para enviar la solicitud escribí aceptado'}
                 </label>
                 <input
                   type="password"
@@ -5957,7 +5990,7 @@ export default function App() {
                   type="submit"
                   className="py-3.5 rounded-2xl bg-red-600 hover:bg-red-500 text-white font-black uppercase text-xs shadow-lg shadow-red-950/40"
                 >
-                  Borrar
+                  {currentUser.role === 'cajero' ? 'Eliminar' : 'Enviar solicitud'}
                 </button>
               </div>
             </form>
