@@ -68,6 +68,7 @@ export interface OrderData {
   paymentMethod: string;
   cashProvided?: number;
   cashReceived?: number;
+  paymentAmount?: number;
   tip?: number;
   status: 'Preparando' | 'Pendiente' | 'Listo' | 'En Camino' | 'Finalizado' | 'Cancelado';
   createdAt: number;
