@@ -2085,6 +2085,10 @@ export default function App() {
 
   // Sales History (Finished Orders) Handlers
   const handleOpenEditSale = (order: OrderData) => {
+    if (currentUser.role !== 'admin') {
+      showMessage("Los pedidos finalizados son solo de consulta para Caja. Podés eliminarlos, pero no editarlos.", "error");
+      return;
+    }
     setEditSaleModal({
       isOpen: true,
       order,
@@ -2927,7 +2931,7 @@ export default function App() {
               {id: 'pos', label: 'Toma de Pedido', icon: 'point_of_sale', roles: ['admin', 'cajero', 'mozo']},
               {id: 'kitchen', label: 'KDS', icon: 'tv', count: badges.kitchen, roles: ['admin', 'cajero', 'mozo']},
               {id: 'ready', label: 'Pedidos Prontos', icon: 'task_alt', count: badges.ready, roles: ['admin', 'cajero', 'mozo', 'delivery']},
-              {id: 'management', label: 'Gestión', icon: 'dashboard', roles: ['admin', 'delivery']}
+              {id: 'management', label: 'Gestión', icon: 'dashboard', roles: ['admin', 'cajero', 'delivery']}
             ].filter(tab => tab.roles.includes(currentUser.role)).map(tab => {
               const isActive = activeTab === tab.id;
               const rawCount = tab.count !== undefined ? tab.count : 0;
@@ -3486,11 +3490,13 @@ export default function App() {
                       <Icon name="history" size={36} className="text-purple-400"/> Historial de Ventas
                     </h1>
                     <p className="text-slate-400 font-bold uppercase text-[10px] tracking-widest mt-1">
-                      Comandas cobradas del turno actual • Permite editar, borrar y exportar
+                      {currentUser.role === 'admin'
+                        ? 'Comandas cobradas del turno actual • Permite editar, borrar y exportar'
+                        : 'Comandas cobradas del turno actual • Permite ver, borrar y exportar'}
                     </p>
                   </div>
                   <div className="flex-1 min-w-0 flex items-center justify-end gap-1.5 flex-nowrap overflow-x-auto no-scrollbar whitespace-nowrap">
-                    {finishedOrders.length > 0 && (
+                    {currentUser.role === 'admin' && finishedOrders.length > 0 && (
                       <button 
                         onClick={handleClearAllFinishedOrders}
                         className="h-9 px-3 bg-red-950/50 hover:bg-red-900/70 border border-red-500/40 text-red-200 rounded-xl font-black uppercase text-[9px] transition-all flex items-center shrink-0 gap-2 shadow-xs cursor-pointer"
@@ -3524,7 +3530,7 @@ export default function App() {
                 </div>
 
                 {/* Multiselect Toolbar */}
-                {filteredOrders.length > 0 && (
+                {currentUser.role === 'admin' && filteredOrders.length > 0 && (
                   <div className="bg-[#0b0518] p-4 rounded-2xl border border-purple-500/20 flex flex-wrap items-center justify-between gap-3">
                     <label className="flex items-center gap-2.5 text-xs font-black uppercase text-purple-200 cursor-pointer select-none">
                       <input
@@ -3713,20 +3719,22 @@ export default function App() {
                             </button>
                           </div>
 
-                          {/* Action Buttons: Edit & Delete */}
+                          {/* Action Buttons: finalizados son editables solo por Admin; Caja puede eliminarlos */}
                           <div className="flex gap-2 pt-2 border-t border-purple-500/10">
-                            <button 
-                              onClick={() => handleOpenEditSale(order)} 
-                              className="flex-1 py-2.5 bg-blue-950/60 hover:bg-blue-900/80 border border-blue-500/30 text-blue-300 rounded-xl text-xs font-black uppercase transition-all flex items-center justify-center gap-1"
-                            >
-                              <Icon name="edit" size={10}/> Editar Venta
-                            </button>
+                            {currentUser.role === 'admin' && (
+                              <button 
+                                onClick={() => handleOpenEditSale(order)} 
+                                className="flex-1 py-2.5 bg-blue-950/60 hover:bg-blue-900/80 border border-blue-500/30 text-blue-300 rounded-xl text-xs font-black uppercase transition-all flex items-center justify-center gap-1"
+                              >
+                                <Icon name="edit" size={10}/> Editar Venta
+                              </button>
+                            )}
                             <button 
                               onClick={() => handleDeleteSale(order.firestoreId, order.id)} 
-                              className="px-4 py-2.5 bg-red-950/60 hover:bg-red-900/80 border border-red-500/30 text-red-300 rounded-xl text-xs font-black uppercase transition-all flex items-center justify-center gap-1"
+                              className={`${currentUser.role === 'admin' ? 'px-4' : 'flex-1 px-4'} py-2.5 bg-red-950/60 hover:bg-red-900/80 border border-red-500/30 text-red-300 rounded-xl text-xs font-black uppercase transition-all flex items-center justify-center gap-1`}
                               title="Eliminar comanda del registro"
                             >
-                              <Icon name="delete" size={10}/>
+                              <Icon name="delete" size={10}/> {currentUser.role === 'cajero' ? 'Eliminar' : ''}
                             </button>
                           </div>
                         </div>
@@ -5670,7 +5678,7 @@ export default function App() {
       )}
 
       {/* Edit Sale (Order) Modal */}
-      {editSaleModal.isOpen && editSaleModal.order && (
+      {currentUser.role === 'admin' && editSaleModal.isOpen && editSaleModal.order && (
         <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-[1100] p-4">
           <div className="bg-[#0b0518] border border-blue-500/40 rounded-[40px] p-8 max-w-lg w-full shadow-2xl space-y-6 text-slate-100">
             <div className="flex items-center justify-between border-b border-purple-500/20 pb-3">
