@@ -53,17 +53,9 @@ export const ClientContactLookup: React.FC<ClientContactLookupProps> = ({
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
-  // When dropdown opens, optionally focus the dropdown search input
+  // Keep focus on the field the cashier is typing in; only clear the extra filter when closing.
   useEffect(() => {
-    if (isOpen) {
-      setTimeout(() => {
-        if (searchInputRef.current) {
-          searchInputRef.current.focus();
-        }
-      }, 50);
-    } else {
-      setDropdownSearch('');
-    }
+    if (!isOpen) setDropdownSearch('');
   }, [isOpen]);
 
   // Clean values
@@ -177,6 +169,12 @@ export const ClientContactLookup: React.FC<ClientContactLookupProps> = ({
 
     if (!phoneToSave && !nameToSave) {
       if (showMessage) showMessage("Ingrese nombre o teléfono para guardar", "error");
+      return;
+    }
+
+    if (exactMatchedClient) {
+      handleSelect(exactMatchedClient);
+      if (showMessage) showMessage("Ese cliente ya existe. Se cargó la ficha existente sin duplicarla.", "success");
       return;
     }
 
