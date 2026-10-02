@@ -3072,7 +3072,7 @@ export default function App() {
                   }`}
                 >
                   {activeCount > 0 && (
-                    <span className="absolute -top-2 -right-1.5 bg-red-600 text-white text-[8px] font-black min-w-[18px] h-[18px] px-1 rounded-full flex items-center justify-center shadow-lg ring-2 ring-[#040108]">
+                    <span className="absolute top-0 right-0 bg-red-600 text-white text-[8px] font-black min-w-[18px] h-[18px] px-1 rounded-full flex items-center justify-center shadow-md shadow-red-950/60 ring-2 ring-[#090313] z-20">
                       {activeCount}
                     </span>
                   )}
