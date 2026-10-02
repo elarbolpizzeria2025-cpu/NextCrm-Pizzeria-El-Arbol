@@ -921,10 +921,26 @@ export default function App() {
     const clientList: ClientData[] = []; 
     const seenPhones = new Set<string>(); 
     const seenNames = new Set<string>();
-    clients.forEach(c => {
-        clientList.push(c);
-        if (c.phone && String(c.phone).trim() !== '') seenPhones.add(String(c.phone).trim().replace(/\D/g, ''));
-        if (c.name && String(c.name).trim() !== '') seenNames.add(String(c.name).trim().toLowerCase());
+    const persistentClients = [...clients].sort((a, b) => {
+      const score = (client: ClientData) =>
+        (String(client.phone || '').trim() ? 4 : 0) +
+        (String(client.address || '').trim() ? 3 : 0) +
+        (String(client.zone || '').trim() ? 2 : 0) +
+        (String(client.name || '').trim() ? 1 : 0);
+      return score(b) - score(a);
+    });
+
+    persistentClients.forEach(client => {
+      const cleanPhone = String(client.phone || '').trim().replace(/\D/g, '');
+      const cleanName = String(client.name || '').trim().toLowerCase();
+      const duplicatePhone = cleanPhone !== '' && seenPhones.has(cleanPhone);
+      const duplicateName = cleanName !== '' && cleanName !== 'sin nombre' && seenNames.has(cleanName);
+
+      if (duplicatePhone || duplicateName) return;
+
+      clientList.push(client);
+      if (cleanPhone) seenPhones.add(cleanPhone);
+      if (cleanName && cleanName !== 'sin nombre') seenNames.add(cleanName);
     });
     orders.forEach(o => {
         if (!o.client) return;
@@ -1543,11 +1559,12 @@ export default function App() {
         const isMesa = orderType === 'Mesa';
         if (!isMesa && ((clientInfo.name && clientInfo.name.trim() !== '') || (clientInfo.phone && clientInfo.phone.trim() !== ''))) {
             const existingClient = clients.find(c => { 
-              const infoP = String(clientInfo.phone || '').trim(); 
-              const infoN = String(clientInfo.name || '').trim().toLowerCase(); 
-              const cP = String(c.phone || '').trim(); 
-              const cN = String(c.name || '').trim().toLowerCase(); 
-              return (infoP !== '' && infoP.toLowerCase() !== 'n/a' && cP === infoP) || (infoN !== '' && infoN.toLowerCase() !== 'sin nombre' && cN === infoN); 
+              const infoP = String(clientInfo.phone || '').replace(/\D/g, '');
+              const infoN = String(clientInfo.name || '').trim().toLowerCase();
+              const cP = String(c.phone || '').replace(/\D/g, '');
+              const cN = String(c.name || '').trim().toLowerCase();
+              return (infoP !== '' && cP === infoP) ||
+                (infoN !== '' && infoN !== 'sin nombre' && infoN !== 'consumidor final' && cN === infoN);
             });
             if (existingClient) {
                 const updates: any = {}; 
@@ -1910,7 +1927,32 @@ export default function App() {
   // Client CRUD Operations
   const handleCreateClient = async () => {
     if (!newClientForm.name.trim()) return showMessage("Ingrese nombre del cliente", "error");
+
+    const cleanPhone = String(newClientForm.phone || '').replace(/\D/g, '');
+    const cleanName = String(newClientForm.name || '').trim().toLowerCase();
+
     try {
+      const existing = clients.find(client => {
+        const existingPhone = String(client.phone || '').replace(/\D/g, '');
+        const existingName = String(client.name || '').trim().toLowerCase();
+        return (cleanPhone && existingPhone === cleanPhone) ||
+          (cleanName && cleanName !== 'sin nombre' && existingName === cleanName);
+      });
+
+      if (existing?.firestoreId) {
+        await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'clients', existing.firestoreId), {
+          name: newClientForm.name.trim() || existing.name || 'Cliente',
+          phone: newClientForm.phone.trim() || existing.phone || '',
+          address: newClientForm.address.trim() || existing.address || '',
+          zone: newClientForm.zone.trim() || existing.zone || '',
+          updatedAt: Date.now()
+        });
+        setNewClientForm({ name: '', phone: '', address: '', zone: '' });
+        setNewClientModal(false);
+        showMessage("Ese cliente ya existía: se actualizó la misma ficha sin duplicarlo.");
+        return;
+      }
+
       await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'clients'), {
         name: newClientForm.name.trim(),
         phone: newClientForm.phone.trim(),
@@ -3304,6 +3346,8 @@ export default function App() {
             showMessage={showMessage}
             menuShortages={menuShortages}
             th={th}
+            db={db}
+            appId={appId}
           />
         )}
 
