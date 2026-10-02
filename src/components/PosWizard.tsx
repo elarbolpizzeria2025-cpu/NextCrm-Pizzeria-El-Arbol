@@ -294,7 +294,8 @@ export const PosWizard: React.FC<PosWizardProps> = ({
 
   // Calculate live change for cash
   const normalizedOrderType = String(orderType || 'Local').trim().toLowerCase();
-  const isDeferredPayment = ['local', 'mostrador', 'retiro', 'mesa', 'salon', 'salón', 'mesas'].includes(normalizedOrderType);
+  const canDeferPayment = ['local', 'mostrador', 'retiro', 'mesa', 'salon', 'salón', 'mesas'].includes(normalizedOrderType);
+  const isDeferredPayment = canDeferPayment && paymentMethod === 'A confirmar';
   const cashNum = parseFloat(cashProvided) || 0;
   const tipNum = isDeferredPayment ? 0 : Math.max(0, parseFloat(orderTip) || 0);
   const totalWithTip = cartTotal + tipNum;
@@ -913,6 +914,33 @@ export const PosWizard: React.FC<PosWizardProps> = ({
                   })}
                 </div>
 
+                <div className="pt-1 space-y-1.5">
+                  <div className="flex items-center justify-between gap-2">
+                    <label className="text-[10px] font-black uppercase text-slate-400">Forma de pago</label>
+                    <span className="text-[9px] font-black uppercase text-purple-300">
+                      {paymentMethod === 'A confirmar' ? 'Cobrar después' : 'Cobrar ahora'}
+                    </span>
+                  </div>
+                  <div className="grid grid-cols-3 sm:grid-cols-5 gap-1.5">
+                    {PAYMENT_METHODS.map(pm => {
+                      const selected = paymentMethod.toLowerCase() === pm.id.toLowerCase();
+                      const disabled = pm.id === 'A confirmar' && !['local', 'mostrador', 'retiro', 'mesa', 'salon', 'salón', 'mesas'].includes(String(orderType || '').trim().toLowerCase());
+                      return (
+                        <button
+                          key={pm.id}
+                          type="button"
+                          disabled={disabled}
+                          onClick={() => !disabled && setPaymentMethod(pm.id)}
+                          className={`h-11 rounded-xl border font-black uppercase text-[8px] flex flex-col items-center justify-center gap-0.5 transition-all ${disabled ? 'opacity-30 cursor-not-allowed bg-[#06020e] text-slate-600 border-slate-800' : selected ? 'bg-purple-600 text-white border-purple-300 ring-1 ring-purple-400/50 shadow-lg cursor-pointer' : 'bg-[#06020e] text-slate-300 border-purple-500/20 hover:border-purple-400/50 cursor-pointer'}`}
+                        >
+                          <span className="text-sm leading-none">{pm.badge}</span>
+                          <span className="leading-none">{pm.label}</span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+
                 <div className="space-y-2">
                   <label className="text-[10px] font-black uppercase text-slate-400">Nombre del cliente / referencia</label>
                   <input
@@ -1085,26 +1113,9 @@ export const PosWizard: React.FC<PosWizardProps> = ({
                     <div className="flex items-end justify-between gap-2">
                       <div>
                         <div className="text-[10px] font-black uppercase tracking-[0.18em] text-purple-400">4. Cobro</div>
-                        <h3 className="text-base font-black uppercase text-white">Forma de pago</h3>
+                        <h3 className="text-base font-black uppercase text-white">{paymentMethod}</h3>
                       </div>
-                      <span className="text-[9px] font-black uppercase text-slate-500">Elegí una opción</span>
-                    </div>
-
-                    <div className="grid grid-cols-3 sm:grid-cols-5 gap-1.5">
-                      {PAYMENT_METHODS.map(pm => {
-                        const selected = paymentMethod.toLowerCase() === pm.id.toLowerCase();
-                        return (
-                          <button
-                            key={pm.id}
-                            type="button"
-                            onClick={() => setPaymentMethod(pm.id)}
-                            className={`h-12 rounded-xl border font-black uppercase text-[8px] flex flex-col items-center justify-center gap-0.5 cursor-pointer transition-all ${selected ? 'bg-purple-600 text-white border-purple-300 ring-1 ring-purple-400/50 shadow-lg' : 'bg-[#06020e] text-slate-300 border-purple-500/20 hover:border-purple-400/50'}`}
-                          >
-                            <span className="text-base leading-none">{pm.badge}</span>
-                            <span className="leading-none">{pm.label}</span>
-                          </button>
-                        );
-                      })}
+                      <span className="text-[9px] font-black uppercase text-slate-500">Forma elegida al inicio</span>
                     </div>
 
                     <div className={`grid gap-2 ${paymentMethod === 'Efectivo' ? 'grid-cols-1 sm:grid-cols-2' : 'grid-cols-1'}`}>
