@@ -1084,7 +1084,10 @@ export const PosWizard: React.FC<PosWizardProps> = ({
                             <button
                               key={pm.id}
                               type="button"
-                              onClick={() => setPaymentMethod(pm.id)}
+                              onClick={() => {
+                                setPaymentMethod(pm.id);
+                                setCashProvided('');
+                              }}
                               className={`h-11 rounded-xl border font-black uppercase text-[8px] flex flex-col items-center justify-center gap-0.5 transition-all cursor-pointer ${selected ? 'bg-purple-600 text-white border-purple-300 ring-1 ring-purple-400/50 shadow-lg' : 'bg-[#06020e] text-slate-300 border-purple-500/20 hover:border-purple-400/50'}`}
                             >
                               <span className="text-sm leading-none">{pm.badge}</span>
@@ -1094,10 +1097,12 @@ export const PosWizard: React.FC<PosWizardProps> = ({
                         })}
                       </div>
 
-                      {paymentMethod === 'Efectivo' && (
-                        <div className="grid grid-cols-1 sm:grid-cols-[1fr_auto] gap-2 items-end pt-1">
+                      {['Efectivo', 'Débito'].includes(paymentMethod) && (
+                        <div className={`grid grid-cols-1 ${paymentMethod === 'Efectivo' ? 'sm:grid-cols-[1fr_auto]' : ''} gap-2 items-end pt-1`}>
                           <div className="space-y-1">
-                            <label className="text-[9px] font-black uppercase text-slate-400">Monto que entrega</label>
+                            <label className="text-[9px] font-black uppercase text-slate-400">
+                              {paymentMethod === 'Efectivo' ? 'Monto que entrega' : 'Monto débito'}
+                            </label>
                             <input
                               type="number"
                               inputMode="numeric"
@@ -1108,12 +1113,14 @@ export const PosWizard: React.FC<PosWizardProps> = ({
                               className="w-full h-10 px-3 bg-[#06020e] border border-amber-500/30 text-white rounded-xl text-sm font-black font-mono outline-none focus:border-amber-300"
                             />
                           </div>
-                          <div className={`h-10 min-w-[135px] px-3 rounded-xl border flex items-center justify-between gap-3 ${missingCash > 0 ? 'bg-red-950/30 border-red-500/30' : 'bg-emerald-950/30 border-emerald-500/30'}`}>
-                            <span className="text-[9px] font-black uppercase text-slate-300">{missingCash > 0 ? 'Falta' : 'Vuelto'}</span>
-                            <span className={`font-mono font-black text-base ${missingCash > 0 ? 'text-red-300' : 'text-emerald-300'}`}>
-                              ${missingCash > 0 ? missingCash : changeDue}
-                            </span>
-                          </div>
+                          {paymentMethod === 'Efectivo' && (
+                            <div className={`h-10 min-w-[135px] px-3 rounded-xl border flex items-center justify-between gap-3 ${missingCash > 0 ? 'bg-red-950/30 border-red-500/30' : 'bg-emerald-950/30 border-emerald-500/30'}`}>
+                              <span className="text-[9px] font-black uppercase text-slate-300">{missingCash > 0 ? 'Falta' : 'Vuelto'}</span>
+                              <span className={`font-mono font-black text-base ${missingCash > 0 ? 'text-red-300' : 'text-emerald-300'}`}>
+                                ${missingCash > 0 ? missingCash : changeDue}
+                              </span>
+                            </div>
+                          )}
                         </div>
                       )}
                     </div>
@@ -1135,27 +1142,58 @@ export const PosWizard: React.FC<PosWizardProps> = ({
                     <div className="flex items-end justify-between gap-2">
                       <div>
                         <div className="text-[10px] font-black uppercase tracking-[0.18em] text-purple-400">4. Cobro</div>
-                        <h3 className="text-base font-black uppercase text-white">{paymentMethod}</h3>
+                        <h3 className="text-base font-black uppercase text-white">Forma de pago</h3>
                       </div>
-                      <span className="text-[9px] font-black uppercase text-slate-500">Forma elegida al inicio</span>
+                      <span className="text-[9px] font-black uppercase text-purple-300">
+                        {paymentMethod === 'A confirmar' ? 'Elegí una opción' : `Seleccionado: ${paymentMethod}`}
+                      </span>
                     </div>
 
-                    <div className={`grid gap-2 ${paymentMethod === 'Efectivo' ? 'grid-cols-1 sm:grid-cols-2' : 'grid-cols-1'}`}>
-                      {paymentMethod === 'Efectivo' && (
+                    <div className="grid grid-cols-3 sm:grid-cols-5 gap-1.5">
+                      {PAYMENT_METHODS.map(pm => {
+                        const selected = paymentMethod.toLowerCase() === pm.id.toLowerCase();
+                        const disabled = pm.id === 'A confirmar';
+                        return (
+                          <button
+                            key={pm.id}
+                            type="button"
+                            disabled={disabled}
+                            onClick={() => {
+                              if (!disabled) {
+                                setPaymentMethod(pm.id);
+                                setCashProvided('');
+                              }
+                            }}
+                            className={`h-11 rounded-xl border font-black uppercase text-[8px] flex flex-col items-center justify-center gap-0.5 transition-all ${disabled ? 'opacity-30 cursor-not-allowed bg-[#06020e] text-slate-600 border-slate-800' : selected ? 'bg-purple-600 text-white border-purple-300 ring-1 ring-purple-400/50 shadow-lg cursor-pointer' : 'bg-[#06020e] text-slate-300 border-purple-500/20 hover:border-purple-400/50 cursor-pointer'}`}
+                          >
+                            <span className="text-sm leading-none">{pm.badge}</span>
+                            <span className="leading-none">{pm.label}</span>
+                          </button>
+                        );
+                      })}
+                    </div>
+
+                    <div className={`grid gap-2 ${['Efectivo', 'Débito'].includes(paymentMethod) ? 'grid-cols-1 sm:grid-cols-2' : 'grid-cols-1'}`}>
+                      {['Efectivo', 'Débito'].includes(paymentMethod) && (
                         <div className="p-2.5 bg-[#06020e] border border-purple-500/20 rounded-xl space-y-1.5">
-                          <label className="text-[9px] font-black uppercase text-slate-400">Monto que entrega</label>
+                          <label className="text-[9px] font-black uppercase text-slate-400">
+                            {paymentMethod === 'Efectivo' ? 'Monto que entrega' : 'Monto débito'}
+                          </label>
                           <input
                             type="number"
                             inputMode="numeric"
+                            min="0"
                             placeholder="Ej: 2000"
                             value={cashProvided}
                             onChange={e => setCashProvided(e.target.value)}
                             className="w-full h-9 px-3 bg-[#0c0519] border border-purple-500/30 text-white rounded-lg text-sm font-black font-mono outline-none focus:border-purple-400"
                           />
-                          <div className={`h-9 rounded-lg px-3 flex items-center justify-between border ${missingCash > 0 ? 'bg-red-950/30 border-red-500/30' : 'bg-emerald-950/30 border-emerald-500/30'}`}>
-                            <span className="text-[9px] font-black uppercase text-slate-300">{missingCash > 0 ? 'Falta' : 'Vuelto'}</span>
-                            <span className={`font-mono font-black text-base ${missingCash > 0 ? 'text-red-300' : 'text-emerald-300'}`}>${missingCash > 0 ? missingCash : changeDue}</span>
-                          </div>
+                          {paymentMethod === 'Efectivo' && (
+                            <div className={`h-9 rounded-lg px-3 flex items-center justify-between border ${missingCash > 0 ? 'bg-red-950/30 border-red-500/30' : 'bg-emerald-950/30 border-emerald-500/30'}`}>
+                              <span className="text-[9px] font-black uppercase text-slate-300">{missingCash > 0 ? 'Falta' : 'Vuelto'}</span>
+                              <span className={`font-mono font-black text-base ${missingCash > 0 ? 'text-red-300' : 'text-emerald-300'}`}>${missingCash > 0 ? missingCash : changeDue}</span>
+                            </div>
+                          )}
                         </div>
                       )}
 
