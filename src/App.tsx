@@ -1498,7 +1498,7 @@ export default function App() {
     setClientInfo({ name: displayName, phone: order.client?.phone || '', address: order.client?.address || '', zone: order.client?.zone || '' }); 
     setOrderType(order.type); 
     setPaymentMethod(order.paymentMethod); 
-    setCashProvided(order.cashProvided ? order.cashProvided.toString() : ''); 
+    setCashProvided((order as any).paymentAmount ? String((order as any).paymentAmount) : (order.cashProvided ? order.cashProvided.toString() : '')); 
     setIsScheduled(order.isScheduled || false);
     if (order.isScheduled && order.scheduledTime) { 
       const d = new Date(order.scheduledTime); 
@@ -1548,6 +1548,9 @@ export default function App() {
     const checkoutCashReceived = !deferPayment && paymentMethod === 'Efectivo'
       ? (parseFloat(cashProvided) || checkoutTotal)
       : 0;
+    const checkoutPaymentAmount = !deferPayment && ['Efectivo', 'Débito'].includes(paymentMethod)
+      ? (parseFloat(cashProvided) || checkoutTotal)
+      : (!deferPayment ? checkoutTotal : 0);
 
     if (!deferPayment && paymentMethod === 'Efectivo' && checkoutCashReceived < checkoutTotal) {
       showMessage(`Faltan ${checkoutTotal - checkoutCashReceived} para completar el cobro`, "error");
@@ -1614,8 +1617,9 @@ export default function App() {
           total: cartTotal,
           tip: checkoutTip,
           paymentMethod: deferPayment ? 'A confirmar' : (paymentMethod || 'Efectivo'),
-          cashProvided: deferPayment ? 0 : checkoutCashReceived,
-          cashReceived: deferPayment ? 0 : checkoutCashReceived,
+          cashProvided: !deferPayment && paymentMethod === 'Efectivo' ? checkoutCashReceived : 0,
+          cashReceived: !deferPayment && paymentMethod === 'Efectivo' ? checkoutCashReceived : 0,
+          paymentAmount: checkoutPaymentAmount,
           changeDue: !deferPayment && paymentMethod === 'Efectivo' ? Math.max(0, checkoutCashReceived - checkoutTotal) : 0,
           status: editingOrder ? (returnToKitchen ? 'Preparando' : editingOrder.status) : 'Preparando',
           createdAt: editingOrder ? editingOrder.createdAt : Date.now(),
