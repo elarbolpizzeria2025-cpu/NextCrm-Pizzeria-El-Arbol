@@ -2085,8 +2085,8 @@ export default function App() {
 
   // Sales History (Finished Orders) Handlers
   const handleOpenEditSale = (order: OrderData) => {
-    if (currentUser.role !== 'admin') {
-      showMessage("Los pedidos finalizados son solo de consulta para Caja. Podés eliminarlos, pero no editarlos.", "error");
+    if (!['admin', 'cajero'].includes(currentUser.role)) {
+      showMessage("No tenés permiso para editar pedidos finalizados.", "error");
       return;
     }
     setEditSaleModal({
@@ -3490,9 +3490,9 @@ export default function App() {
                       <Icon name="history" size={36} className="text-purple-400"/> Historial de Ventas
                     </h1>
                     <p className="text-slate-400 font-bold uppercase text-[10px] tracking-widest mt-1">
-                      {currentUser.role === 'admin'
+                      {['admin', 'cajero'].includes(currentUser.role)
                         ? 'Comandas cobradas del turno actual • Permite editar, borrar y exportar'
-                        : 'Comandas cobradas del turno actual • Permite ver, borrar y exportar'}
+                        : 'Comandas cobradas del turno actual • Permite ver y exportar'}
                     </p>
                   </div>
                   <div className="flex-1 min-w-0 flex items-center justify-end gap-1.5 flex-nowrap overflow-x-auto no-scrollbar whitespace-nowrap">
@@ -3721,7 +3721,7 @@ export default function App() {
 
                           {/* Action Buttons: finalizados son editables solo por Admin; Caja puede eliminarlos */}
                           <div className="flex gap-2 pt-2 border-t border-purple-500/10">
-                            {currentUser.role === 'admin' && (
+                            {['admin', 'cajero'].includes(currentUser.role) && (
                               <button 
                                 onClick={() => handleOpenEditSale(order)} 
                                 className="flex-1 py-2.5 bg-blue-950/60 hover:bg-blue-900/80 border border-blue-500/30 text-blue-300 rounded-xl text-xs font-black uppercase transition-all flex items-center justify-center gap-1"
@@ -5678,7 +5678,7 @@ export default function App() {
       )}
 
       {/* Edit Sale (Order) Modal */}
-      {currentUser.role === 'admin' && editSaleModal.isOpen && editSaleModal.order && (
+      {['admin', 'cajero'].includes(currentUser.role) && editSaleModal.isOpen && editSaleModal.order && (
         <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-[1100] p-4">
           <div className="bg-[#0b0518] border border-blue-500/40 rounded-[40px] p-8 max-w-lg w-full shadow-2xl space-y-6 text-slate-100">
             <div className="flex items-center justify-between border-b border-purple-500/20 pb-3">
