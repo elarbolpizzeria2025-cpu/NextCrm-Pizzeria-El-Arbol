@@ -914,33 +914,6 @@ export const PosWizard: React.FC<PosWizardProps> = ({
                   })}
                 </div>
 
-                <div className="pt-1 space-y-1.5">
-                  <div className="flex items-center justify-between gap-2">
-                    <label className="text-[10px] font-black uppercase text-slate-400">Forma de pago</label>
-                    <span className="text-[9px] font-black uppercase text-purple-300">
-                      {paymentMethod === 'A confirmar' ? 'Cobrar después' : 'Cobrar ahora'}
-                    </span>
-                  </div>
-                  <div className="grid grid-cols-3 sm:grid-cols-5 gap-1.5">
-                    {PAYMENT_METHODS.map(pm => {
-                      const selected = paymentMethod.toLowerCase() === pm.id.toLowerCase();
-                      const disabled = pm.id === 'A confirmar' && !['local', 'mostrador', 'retiro', 'mesa', 'salon', 'salón', 'mesas'].includes(String(orderType || '').trim().toLowerCase());
-                      return (
-                        <button
-                          key={pm.id}
-                          type="button"
-                          disabled={disabled}
-                          onClick={() => !disabled && setPaymentMethod(pm.id)}
-                          className={`h-11 rounded-xl border font-black uppercase text-[8px] flex flex-col items-center justify-center gap-0.5 transition-all ${disabled ? 'opacity-30 cursor-not-allowed bg-[#06020e] text-slate-600 border-slate-800' : selected ? 'bg-purple-600 text-white border-purple-300 ring-1 ring-purple-400/50 shadow-lg cursor-pointer' : 'bg-[#06020e] text-slate-300 border-purple-500/20 hover:border-purple-400/50 cursor-pointer'}`}
-                        >
-                          <span className="text-sm leading-none">{pm.badge}</span>
-                          <span className="leading-none">{pm.label}</span>
-                        </button>
-                      );
-                    })}
-                  </div>
-                </div>
-
                 <div className="space-y-2">
                   <label className="text-[10px] font-black uppercase text-slate-400">Nombre del cliente / referencia</label>
                   <input
@@ -1080,19 +1053,44 @@ export const PosWizard: React.FC<PosWizardProps> = ({
             <div className="flex flex-col gap-2 min-h-0 h-full">
               {isDeferredPayment ? (
                 <>
-                  <section className="bg-[#0c0519] border border-purple-500/25 rounded-[22px] p-4 shrink-0">
+                  <section className="bg-[#0c0519] border border-purple-500/25 rounded-[22px] p-4 shrink-0 space-y-3">
                     <div className="flex items-start gap-3">
                       <div className="w-11 h-11 rounded-2xl bg-amber-500/15 border border-amber-400/30 text-amber-300 flex items-center justify-center shrink-0">
                         <Icon name={normalizedOrderType === 'mesa' ? 'table_restaurant' : 'storefront'} size={22}/>
                       </div>
-                      <div>
+                      <div className="min-w-0 flex-1">
                         <div className="text-[10px] font-black uppercase tracking-[0.18em] text-amber-300">Cuenta abierta</div>
                         <h3 className="text-base font-black uppercase text-white mt-0.5">
                           {normalizedOrderType === 'mesa' ? 'Se cobra al cerrar la mesa' : 'Se cobra al entregar el pedido'}
                         </h3>
                         <p className="text-[10px] font-bold text-slate-400 mt-2 leading-relaxed">
-                          No necesitás elegir forma de pago ahora. El pedido va directo a cocina y el cobro se hace desde Pedidos Prontos.
+                          Podés dejar el pago a confirmar o elegir ahora cómo va a pagar el cliente.
                         </p>
+                      </div>
+                    </div>
+
+                    <div className="pt-2 border-t border-purple-500/15 space-y-2">
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="text-[10px] font-black uppercase text-slate-300">Método de pago</span>
+                        <span className="text-[9px] font-black uppercase text-amber-300">
+                          {paymentMethod === 'A confirmar' ? 'Pendiente' : paymentMethod}
+                        </span>
+                      </div>
+                      <div className="grid grid-cols-3 sm:grid-cols-5 gap-1.5">
+                        {PAYMENT_METHODS.map(pm => {
+                          const selected = paymentMethod.toLowerCase() === pm.id.toLowerCase();
+                          return (
+                            <button
+                              key={pm.id}
+                              type="button"
+                              onClick={() => setPaymentMethod(pm.id)}
+                              className={`h-11 rounded-xl border font-black uppercase text-[8px] flex flex-col items-center justify-center gap-0.5 transition-all cursor-pointer ${selected ? 'bg-purple-600 text-white border-purple-300 ring-1 ring-purple-400/50 shadow-lg' : 'bg-[#06020e] text-slate-300 border-purple-500/20 hover:border-purple-400/50'}`}
+                            >
+                              <span className="text-sm leading-none">{pm.badge}</span>
+                              <span className="leading-none">{pm.label}</span>
+                            </button>
+                          );
+                        })}
                       </div>
                     </div>
                   </section>
