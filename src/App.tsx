@@ -618,13 +618,11 @@ export default function App() {
     const order = deleteOrderModal.order;
     if (!order) return;
 
-    // Debe ser exactamente "aceptado" en minúscula. El input es password y solo muestra círculos.
-    if (deleteOrderModal.password.trim() !== 'aceptado') {
+    // La cajera confirma el borrado desde el botón. La moza mantiene confirmación escrita para enviar una solicitud.
+    if (currentUser.role !== 'cajero' && deleteOrderModal.password.trim() !== 'aceptado') {
       setDeleteOrderModal(prev => ({
         ...prev,
-        error: currentUser.role === 'cajero'
-          ? 'Escribí aceptado en minúscula para eliminar el pedido'
-          : 'Escribí aceptado en minúscula para enviar la solicitud'
+        error: 'Escribí aceptado en minúscula para enviar la solicitud'
       }));
       return;
     }
@@ -5949,7 +5947,7 @@ export default function App() {
               </h3>
               <p className="mt-1 text-xs font-bold text-slate-400">
                 {currentUser.role === 'cajero'
-                  ? 'El pedido se eliminará ahora y quedará un registro permanente de alerta en Auditoría para el administrador.'
+                  ? 'El pedido se eliminará al confirmar. Quedará una notificación y un registro permanente en Auditoría para el administrador.'
                   : 'El pedido NO se borra ahora. Queda marcado para que el administrador lo revise y lo elimine al cierre/conteo de caja.'}
               </p>
             </div>
@@ -5972,20 +5970,22 @@ export default function App() {
                   className="w-full min-h-[88px] p-3 bg-[#040108] border border-slate-700 focus:border-red-400 rounded-2xl text-sm text-white outline-none resize-none"
                 />
               </div>
-              <div>
-                <label className="block text-center text-[10px] font-black uppercase text-red-300 mb-2">
-                  {currentUser.role === 'cajero' ? 'Para eliminar el pedido escribí aceptado' : 'Para enviar la solicitud escribí aceptado'}
-                </label>
-                <input
-                  type="password"
-                  autoFocus
-                  value={deleteOrderModal.password}
-                  onChange={e => setDeleteOrderModal(prev => ({ ...prev, password: e.target.value, error: '' }))}
-                  placeholder="••••••••"
-                  className="w-full p-4 bg-[#040108] border-2 border-red-500/30 focus:border-red-400 rounded-2xl text-base font-black text-center text-white outline-none"
-                  required
-                />
-              </div>
+              {currentUser.role !== 'cajero' && (
+                <div>
+                  <label className="block text-center text-[10px] font-black uppercase text-red-300 mb-2">
+                    Para enviar la solicitud escribí aceptado
+                  </label>
+                  <input
+                    type="password"
+                    autoFocus
+                    value={deleteOrderModal.password}
+                    onChange={e => setDeleteOrderModal(prev => ({ ...prev, password: e.target.value, error: '' }))}
+                    placeholder="••••••••"
+                    className="w-full p-4 bg-[#040108] border-2 border-red-500/30 focus:border-red-400 rounded-2xl text-base font-black text-center text-white outline-none"
+                    required
+                  />
+                </div>
+              )}
               <div className="grid grid-cols-2 gap-3">
                 <button
                   type="button"
