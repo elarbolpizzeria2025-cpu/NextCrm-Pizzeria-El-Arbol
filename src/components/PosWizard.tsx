@@ -914,16 +914,17 @@ export const PosWizard: React.FC<PosWizardProps> = ({
                   })}
                 </div>
 
-                <div className="space-y-2">
-                  <label className="text-[10px] font-black uppercase text-slate-400">Nombre del cliente / referencia</label>
-                  <input
-                    type="text"
-                    placeholder={orderType === 'Mesa' ? 'Ej: Familia Pérez' : 'Nombre del cliente'}
-                    value={clientInfo.name}
-                    onChange={e => setClientInfo((prev: any) => ({ ...prev, name: e.target.value.toUpperCase() }))}
-                    className="w-full h-10 px-3 bg-[#06020e] border border-purple-500/30 text-white rounded-xl text-sm font-black uppercase outline-none focus:border-purple-400 focus:ring-2 focus:ring-purple-500/20"
-                  />
-                </div>
+                <ClientContactLookup
+                  allClients={allClients}
+                  clientInfo={clientInfo}
+                  setClientInfo={setClientInfo}
+                  orderType={orderType}
+                  setOrderType={setOrderType}
+                  mode={orderType === 'Envío' ? 'delivery' : 'counter'}
+                  showMessage={showMessage}
+                  db={db}
+                  appId={appId}
+                />
 
                 <div className="flex flex-col sm:flex-row sm:items-center gap-2 p-2 rounded-xl bg-[#06020e] border border-purple-500/20">
                   <button
@@ -1051,7 +1052,7 @@ export const PosWizard: React.FC<PosWizardProps> = ({
 
             {/* Columna derecha: cobro inmediato para Delivery; cuenta abierta para Mesa/Local */}
             <div className="flex flex-col gap-2 min-h-0 h-full">
-              {isDeferredPayment ? (
+              {canDeferPayment ? (
                 <>
                   <section className="bg-[#0c0519] border border-purple-500/25 rounded-[22px] p-4 shrink-0 space-y-3">
                     <div className="flex items-start gap-3">
@@ -1092,6 +1093,29 @@ export const PosWizard: React.FC<PosWizardProps> = ({
                           );
                         })}
                       </div>
+
+                      {paymentMethod === 'Efectivo' && (
+                        <div className="grid grid-cols-1 sm:grid-cols-[1fr_auto] gap-2 items-end pt-1">
+                          <div className="space-y-1">
+                            <label className="text-[9px] font-black uppercase text-slate-400">Monto que entrega</label>
+                            <input
+                              type="number"
+                              inputMode="numeric"
+                              min="0"
+                              placeholder="Ej: 2000"
+                              value={cashProvided}
+                              onChange={e => setCashProvided(e.target.value)}
+                              className="w-full h-10 px-3 bg-[#06020e] border border-amber-500/30 text-white rounded-xl text-sm font-black font-mono outline-none focus:border-amber-300"
+                            />
+                          </div>
+                          <div className={`h-10 min-w-[135px] px-3 rounded-xl border flex items-center justify-between gap-3 ${missingCash > 0 ? 'bg-red-950/30 border-red-500/30' : 'bg-emerald-950/30 border-emerald-500/30'}`}>
+                            <span className="text-[9px] font-black uppercase text-slate-300">{missingCash > 0 ? 'Falta' : 'Vuelto'}</span>
+                            <span className={`font-mono font-black text-base ${missingCash > 0 ? 'text-red-300' : 'text-emerald-300'}`}>
+                              ${missingCash > 0 ? missingCash : changeDue}
+                            </span>
+                          </div>
+                        </div>
+                      )}
                     </div>
                   </section>
 
