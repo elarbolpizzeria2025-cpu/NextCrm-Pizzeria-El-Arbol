@@ -170,6 +170,7 @@ export default function App() {
   const [user, setUser] = useState<any>(null);
   const [orders, setOrders] = useState<OrderData[]>([]);
   const [clients, setClients] = useState<ClientData[]>([]);
+  const clientRecoverySignatureRef = useRef<string>('');
   const [sessions, setSessions] = useState<SessionData[]>([]);
   const [register, setRegister] = useState<RegisterConfig>({ 
     isOpen: false, initialCash: 0, currentCash: 0, sessionId: null, isLoaded: false, currentStock: {}, initialStock: {} 
@@ -221,7 +222,7 @@ export default function App() {
   });
   const [orderType, setOrderType] = useState('Local');
   const [clientInfo, setClientInfo] = useState({ phone: '', name: '', address: '', zone: '' });
-  const [paymentMethod, setPaymentMethod] = useState('Efectivo');
+  const [paymentMethod, setPaymentMethod] = useState('A confirmar');
   const [cashProvided, setCashProvided] = useState(''); 
   const [orderTip, setOrderTip] = useState('0');
   const [orderNotes, setOrderNotes] = useState(''); 
@@ -953,6 +954,75 @@ export default function App() {
     return clientList.sort((a, b) => String(a.name || '').localeCompare(String(b.name || '')));
   }, [clients, orders]);
 
+  // Recupera automáticamente contactos que siguen presentes en pedidos históricos
+  // pero faltan de la colección permanente de clientes.
+  useEffect(() => {
+    if (!db || orders.length === 0) return;
+
+    const missing = allClients.filter(client => client.isVirtual);
+    if (missing.length === 0) {
+      clientRecoverySignatureRef.current = '';
+      return;
+    }
+
+    const normalizePhone = (value: string = '') => String(value || '').replace(/\D/g, '');
+    const normalizeName = (value: string = '') => String(value || '').trim().toLowerCase();
+
+    const signature = missing
+      .map(client => `${normalizePhone(client.phone || '')}|${normalizeName(client.name || '')}`)
+      .sort()
+      .join('::');
+
+    if (!signature || clientRecoverySignatureRef.current === signature) return;
+    clientRecoverySignatureRef.current = signature;
+
+    let cancelled = false;
+
+    const restoreMissingClients = async () => {
+      try {
+        const clientsCol = collection(db, 'artifacts', appId, 'public', 'data', 'clients');
+        let restored = 0;
+
+        for (const client of missing) {
+          if (cancelled) return;
+
+          const cleanPhone = normalizePhone(client.phone || '');
+          const cleanName = normalizeName(client.name || '');
+
+          const alreadyExists = clients.some(existing => {
+            const existingPhone = normalizePhone(existing.phone || '');
+            const existingName = normalizeName(existing.name || '');
+            return (cleanPhone && existingPhone === cleanPhone) ||
+              (cleanName && cleanName !== 'sin nombre' && existingName === cleanName);
+          });
+
+          if (alreadyExists) continue;
+
+          await addDoc(clientsCol, {
+            name: client.name || 'Sin Nombre',
+            phone: client.phone || '',
+            address: client.address || '',
+            zone: client.zone || '',
+            recoveredFromHistory: true,
+            recoveredAt: Date.now(),
+            createdAt: Date.now()
+          });
+          restored++;
+        }
+
+        if (!cancelled && restored > 0) {
+          showMessage(`Se recuperaron ${restored} cliente${restored === 1 ? '' : 's'} desde el historial.`, 'success');
+        }
+      } catch (error) {
+        console.error('No se pudieron recuperar clientes históricos:', error);
+        clientRecoverySignatureRef.current = '';
+      }
+    };
+
+    restoreMissingClients();
+    return () => { cancelled = true; };
+  }, [allClients, clients, orders, db, appId]);
+
   const matchingClients = useMemo(() => {
     const q = (clientInfo.name + ' ' + clientInfo.phone + ' ' + clientInfo.address).toLowerCase().trim();
     if (!q) return [];
@@ -1391,7 +1461,9 @@ export default function App() {
   const clearForm = () => { 
     setCart([]); 
     setClientInfo({name:'', phone:'', address:'', zone:''}); 
-    setCashProvided(''); 
+    setCashProvided('');
+    setPaymentMethod('A confirmar');
+    setOrderTip('0');
     setIsScheduled(false); 
     setScheduledTime(''); 
     setEditingOrder(null); 
@@ -1447,9 +1519,10 @@ export default function App() {
       return false;
     }
     const normalizedOrderType = String(orderType || 'Local').trim().toLowerCase();
-    const deferPayment = ['local', 'mostrador', 'retiro', 'mesa', 'salon', 'salón', 'mesas'].includes(normalizedOrderType);
+    const canDeferPayment = ['local', 'mostrador', 'retiro', 'mesa', 'salon', 'salón', 'mesas'].includes(normalizedOrderType);
+    const deferPayment = canDeferPayment && paymentMethod === 'A confirmar';
 
-    if (!deferPayment && paymentMethod === 'A confirmar') {
+    if (!canDeferPayment && paymentMethod === 'A confirmar') {
       showMessage("Elegí una forma de pago para cobrar", "error");
       return false;
     }
