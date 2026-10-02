@@ -38,6 +38,7 @@ export const ClientContactLookup: React.FC<ClientContactLookupProps> = ({
 }) => {
   const [isOpen, setIsOpen] = useState(false);
   const [dropdownSearch, setDropdownSearch] = useState('');
+  const [searchField, setSearchField] = useState<'name' | 'phone' | 'all'>('all');
   const [isSavingDirect, setIsSavingDirect] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
   const searchInputRef = useRef<HTMLInputElement>(null);
@@ -69,49 +70,59 @@ export const ClientContactLookup: React.FC<ClientContactLookupProps> = ({
     return n;
   }, [clientInfo.name]);
 
-  // Combined search term: dropdownSearch has priority if user types in it, otherwise fields
+  const normalizeSearchText = (value: string = '') =>
+    String(value || '')
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .toLowerCase()
+      .trim();
+
+  // El campo que la cajera está escribiendo define qué se busca.
+  // Nombre busca SOLO nombres; teléfono busca SOLO teléfonos.
   const activeSearchTerm = useMemo(() => {
-    if (dropdownSearch.trim()) return dropdownSearch.trim().toLowerCase();
-    if (cleanPhoneDigits) return cleanPhoneDigits;
-    if (cleanNameQuery) return cleanNameQuery;
-    return '';
-  }, [dropdownSearch, cleanPhoneDigits, cleanNameQuery]);
+    if (searchField === 'name') return cleanNameQuery;
+    if (searchField === 'phone') return cleanPhoneDigits;
+    return dropdownSearch.trim().toLowerCase();
+  }, [searchField, dropdownSearch, cleanPhoneDigits, cleanNameQuery]);
 
-  // Filter clients based on search across all 500+ database records
   const filteredClients = useMemo(() => {
-    const term = activeSearchTerm.trim().toLowerCase();
-    const termDigits = term.replace(/\D/g, '');
+    const term = normalizeSearchText(activeSearchTerm);
+    const termDigits = String(activeSearchTerm || '').replace(/\D/g, '');
 
-    if (!term) {
-      // Return top 150 clients when no query is typed
+    if (!term && !termDigits) {
       return allClients.slice(0, 150);
     }
 
     return allClients.filter(c => {
-      const cPhoneRaw = c.phone && c.phone !== 'N/A' ? String(c.phone).trim() : '';
-      const cPhoneDigits = cPhoneRaw.replace(/\D/g, '');
-      const cName = c.name && c.name !== 'Sin Nombre' ? String(c.name).toLowerCase() : '';
-      const cAddress = c.address && c.address !== 'N/A' ? String(c.address).toLowerCase() : '';
-      const cZone = c.zone && c.zone !== 'N/A' ? String(c.zone).toLowerCase() : '';
+      const cPhoneDigits = c.phone && c.phone !== 'N/A'
+        ? String(c.phone).replace(/\D/g, '')
+        : '';
+      const cName = c.name && c.name !== 'Sin Nombre'
+        ? normalizeSearchText(String(c.name))
+        : '';
+      const cAddress = c.address && c.address !== 'N/A'
+        ? normalizeSearchText(String(c.address))
+        : '';
+      const cZone = c.zone && c.zone !== 'N/A'
+        ? normalizeSearchText(String(c.zone))
+        : '';
 
-      // Match phone digits
-      if (termDigits.length > 0 && cPhoneDigits.includes(termDigits)) {
-        return true;
+      if (searchField === 'name') {
+        return !!term && cName.includes(term);
       }
 
-      // Match name
-      if (cName.includes(term)) {
-        return true;
+      if (searchField === 'phone') {
+        return !!termDigits && cPhoneDigits.includes(termDigits);
       }
 
-      // Match address or zone
-      if (cAddress.includes(term) || cZone.includes(term)) {
-        return true;
-      }
-
-      return false;
+      return (
+        (!!termDigits && cPhoneDigits.includes(termDigits)) ||
+        (!!term && cName.includes(term)) ||
+        (!!term && cAddress.includes(term)) ||
+        (!!term && cZone.includes(term))
+      );
     }).slice(0, 150);
-  }, [allClients, activeSearchTerm]);
+  }, [allClients, activeSearchTerm, searchField]);
 
   // Check if current phone or name exactly matches an existing client in DB
   const exactMatchedClient = useMemo(() => {
@@ -238,7 +249,11 @@ export const ClientContactLookup: React.FC<ClientContactLookupProps> = ({
             </span>
             <button
               type="button"
-              onClick={() => setIsOpen(!isOpen)}
+              onClick={() => {
+                setSearchField('all');
+                setDropdownSearch('');
+                setIsOpen(!isOpen);
+              }}
               className="text-purple-400 hover:text-purple-300 text-[8.5px] font-bold flex items-center gap-1 px-1.5 py-0.5 bg-purple-950/60 border border-purple-500/30 rounded cursor-pointer transition-colors"
               title="Abrir base de datos de clientes"
             >
@@ -251,9 +266,13 @@ export const ClientContactLookup: React.FC<ClientContactLookupProps> = ({
               type="text"
               placeholder="098356320"
               value={clientInfo.phone}
-              onFocus={() => setIsOpen(true)}
+              onFocus={() => {
+                setSearchField('phone');
+                setIsOpen(true);
+              }}
               onChange={e => {
                 setClientInfo((prev: any) => ({ ...prev, phone: e.target.value }));
+                setSearchField('phone');
                 setIsOpen(true);
               }}
               className="w-full p-2 pr-7 bg-[#06020e] border border-purple-500/30 text-white rounded-xl text-xs font-black font-mono outline-none focus:border-purple-400 transition-colors"
@@ -298,9 +317,13 @@ export const ClientContactLookup: React.FC<ClientContactLookupProps> = ({
               type="text"
               placeholder={mode === 'counter' ? 'CONSUMIDOR FINAL' : 'Nombre del cliente'}
               value={clientInfo.name}
-              onFocus={() => setIsOpen(true)}
+              onFocus={() => {
+                setSearchField('name');
+                setIsOpen(true);
+              }}
               onChange={e => {
                 setClientInfo((prev: any) => ({ ...prev, name: e.target.value.toUpperCase() }));
+                setSearchField('name');
                 setIsOpen(true);
               }}
               className="w-full p-2 pr-7 bg-[#06020e] border border-purple-500/30 text-white rounded-xl text-xs font-black uppercase outline-none focus:border-purple-400 transition-colors"
@@ -348,7 +371,10 @@ export const ClientContactLookup: React.FC<ClientContactLookupProps> = ({
                 ref={searchInputRef}
                 type="text"
                 value={dropdownSearch}
-                onChange={e => setDropdownSearch(e.target.value)}
+                onChange={e => {
+                  setSearchField('all');
+                  setDropdownSearch(e.target.value);
+                }}
                 placeholder="🔍 Buscar por nombre, teléfono, zona o dirección..."
                 className="w-full py-1.5 px-2.5 pr-7 bg-[#17092e] border border-purple-500/40 rounded-xl text-xs text-white placeholder-slate-400 font-medium outline-none focus:border-purple-300 transition-colors"
               />
