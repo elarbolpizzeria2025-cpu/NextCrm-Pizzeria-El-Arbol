@@ -690,7 +690,7 @@ export const PosWizard: React.FC<PosWizardProps> = ({
       {/* PEDIDOS: PANTALLA PRINCIPAL DE MENÚ                              */}
       {/* La navegación superior general vive en App.tsx y no se modifica. */}
       {/* ================================================================ */}
-      <div className="h-full w-full flex flex-col bg-[#05020c] overflow-hidden">
+      <div className="pizzeria-pos-inner h-full w-full flex flex-col bg-[#05020c] overflow-hidden">
         {/* Barra propia de Pedidos: herramientas a la derecha y acceso a Cobrar */}
         <div className="px-3 sm:px-4 py-1.5 bg-[#080314] border-b border-purple-500/20 flex items-center justify-end gap-1.5 shrink-0 shadow-md">
           <div className="hidden md:flex items-center gap-1.5 shrink-0 ml-auto">
