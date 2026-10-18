@@ -2714,7 +2714,7 @@ export default function App() {
   const normalOrders = normalAndDelayed.filter(o => !delayedOrders.includes(o));
 
   return (
-    <div className="fixed inset-0 flex flex-col bg-[#040108] font-sans text-slate-100 overflow-hidden">
+    <div className="pizzeria-shell fixed inset-0 flex flex-col bg-[#040108] font-sans text-slate-100 overflow-hidden">
       {uiMessage && (
         <div className={`fixed top-4 left-1/2 -translate-x-1/2 z-[1000] px-8 py-3 text-white rounded-full font-black text-xs uppercase shadow-2xl animate-in slide-in-from-top-4 ${uiMessage.type === 'error' ? 'bg-red-600' : 'bg-slate-900 border border-purple-500/40 text-purple-300'}`}>
           {uiMessage.text}
@@ -2830,7 +2830,7 @@ export default function App() {
 
       {/* NEXT CRM Login Screen with 4-Tier Security Roles & Smart Auto-Detection */}
       {!isAuthenticated && (
-        <div className="fixed inset-0 z-[10000] bg-[#040108] flex items-center justify-center p-4 min-h-screen">
+        <div className="pizzeria-login-backdrop fixed inset-0 z-[10000] bg-[#040108] flex items-center justify-center p-4 min-h-screen">
           <div className="relative max-w-[460px] w-full bg-[#080212] border-2 border-purple-500/40 rounded-[40px] p-7 sm:p-9 shadow-2xl shadow-purple-950/80 space-y-5 text-slate-100 text-center animate-in zoom-in-95">
             {/* NEXT CRM Branding - Perfectly Centered */}
             <div className="flex flex-col items-center justify-center space-y-2.5">
@@ -3030,7 +3030,7 @@ export default function App() {
       )}
 
       {/* Header - Deluxe Lila, White & Black Edition with RBAC Role Indicator */}
-      <header className="min-h-14 md:h-14 bg-[#040108] border-b border-purple-500/20 text-white flex flex-wrap md:flex-nowrap items-center px-2 sm:px-3 py-1.5 md:py-0 shrink-0 shadow-lg z-50 gap-2 md:gap-3">
+      <header className="pizzeria-header min-h-14 md:h-14 bg-[#040108] border-b border-purple-500/20 text-white flex flex-wrap md:flex-nowrap items-center px-2 sm:px-3 py-1.5 md:py-0 shrink-0 shadow-lg z-50 gap-2 md:gap-3">
         <div className="w-auto md:w-[170px] flex items-center gap-1.5 shrink-0 pr-1 md:pr-3 border-r-0 md:border-r border-purple-500/20">
           <div className="w-7 h-7 rounded-lg border border-purple-500/50 bg-[#0d061c] flex items-center justify-center font-black text-xs text-purple-300 shadow-xs">
             N
@@ -3306,7 +3306,7 @@ export default function App() {
       </header>
 
       {/* Main Container */}
-      <main className="flex-1 overflow-hidden relative bg-[#040108]">
+      <main className="pizzeria-workspace flex-1 overflow-hidden relative bg-[#040108]">
         {/* POS Tab */}
         {activeTab === 'pos' && (
           <PosWizard
