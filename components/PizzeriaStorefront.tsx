@@ -1,14 +1,11 @@
-import React,{useEffect,useMemo,useState} from 'react';
-import {collection,onSnapshot} from 'firebase/firestore';
-import {db,appId} from '../firebase';
+import React,{useMemo,useState} from 'react';
 import {MenuItem} from '../types';
 import {DEFAULT_MENU} from '../data/defaultMenu';
 type Entry={item:MenuItem;quantity:number};
 const money=(n:number)=>'$ '+n.toLocaleString('es-UY');
 export default function PizzeriaStorefront(){
- const [menu,setMenu]=useState<MenuItem[]>(DEFAULT_MENU);const [cart,setCart]=useState<Entry[]>([]);const [name,setName]=useState('');const [phone,setPhone]=useState('');const [address,setAddress]=useState('');const [notes,setNotes]=useState('');const [delivery,setDelivery]=useState('Retiro');const [search,setSearch]=useState('');
- useEffect(()=>{const stop=onSnapshot(collection(db,'artifacts',appId,'public','data','menu'),snap=>{if(!snap.empty)setMenu(snap.docs.map(d=>({id:d.id,...d.data()} as MenuItem)).filter(x=>x.name&&Number.isFinite(Number(x.price))))},()=>{});return stop},[]);
- 
+ const [menu]=useState<MenuItem[]>(DEFAULT_MENU);const [cart,setCart]=useState<Entry[]>([]);const [name,setName]=useState('');const [phone,setPhone]=useState('');const [address,setAddress]=useState('');const [notes,setNotes]=useState('');const [delivery,setDelivery]=useState('Retiro');const [search,setSearch]=useState('');
+
  const total=useMemo(()=>cart.reduce((s,x)=>s+x.item.price*x.quantity,0),[cart]);
  const add=(item:MenuItem)=>setCart(rows=>{const old=rows.find(x=>x.item.id===item.id);return old?rows.map(x=>x.item.id===item.id?{...x,quantity:x.quantity+1}:x):[...rows,{item,quantity:1}]});
  const qty=(id:string,delta:number)=>setCart(rows=>rows.map(x=>x.item.id===id?{...x,quantity:x.quantity+delta}:x).filter(x=>x.quantity>0));
