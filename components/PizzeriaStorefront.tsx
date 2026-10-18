@@ -1,6 +1,6 @@
 import React,{useMemo,useState} from 'react';
 import {MenuItem} from '../types';
-import {DEFAULT_MENU} from '../data/defaultMenu';
+import {DEFAULT_MENU} from '../storefrontDemoMenu';
 type Entry={item:MenuItem;quantity:number};
 const money=(n:number)=>'$ '+n.toLocaleString('es-UY');
 export default function PizzeriaStorefront(){
