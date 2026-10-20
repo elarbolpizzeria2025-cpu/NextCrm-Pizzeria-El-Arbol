@@ -18,19 +18,5 @@
         }
       ]
     }
-  ],
-  "rewrites": [
-    {
-      "source": "/pizzeria",
-      "destination": "/index.html"
-    },
-    {
-      "source": "/presentacion",
-      "destination": "/index.html"
-    },
-    {
-      "source": "/landing-pizzeria",
-      "destination": "/index.html"
-    }
   ]
 }
