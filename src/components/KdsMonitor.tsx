@@ -25,6 +25,7 @@ interface KdsMonitorProps {
   handleDirectDispatch: (order: OrderData) => void;
   requestDeleteOrder?: (order: OrderData) => void;
   showMessage: (msg: string, type?: string) => void;
+  onReprintTicket?: (order: OrderData) => void;
   onCloseFullScreen?: () => void;
   isStandalone?: boolean;
 }
@@ -42,6 +43,7 @@ export const KdsMonitor: React.FC<KdsMonitorProps> = ({
   handleDirectDispatch,
   requestDeleteOrder,
   showMessage,
+  onReprintTicket,
   onCloseFullScreen,
   isStandalone = false
 }) => {
@@ -420,7 +422,7 @@ export const KdsMonitor: React.FC<KdsMonitorProps> = ({
           {/* Print Ticket */}
           <button
             type="button"
-            onClick={() => printOrderTicket(order)}
+            onClick={() => onReprintTicket ? onReprintTicket(order) : printOrderTicket(order)}
             className="p-2 bg-[#0e1724] hover:bg-[#142236] text-slate-300 hover:text-white rounded-xl border border-slate-700 transition-colors"
             title="Imprimir comanda"
           >
