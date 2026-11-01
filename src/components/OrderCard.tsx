@@ -20,6 +20,7 @@ interface OrderCardProps {
   handleDirectDispatch: (order: OrderData) => void;
   requestDeleteOrder?: (order: OrderData) => void;
   finalizeOrder?: (order: OrderData, cash: string, tipAmount: string, chosenPaymentMethod?: string) => void;
+  onReprintTicket?: (order: OrderData) => void;
   showMessage: (msg: string, type?: string) => void;
 }
 
@@ -38,6 +39,7 @@ export const OrderCard: React.FC<OrderCardProps> = ({
   handleDirectDispatch,
   requestDeleteOrder,
   finalizeOrder,
+  onReprintTicket,
   showMessage,
 }) => {
   const isDanger = variant === 'danger';
@@ -201,7 +203,7 @@ export const OrderCard: React.FC<OrderCardProps> = ({
             )}
             <button 
               type="button"
-              onClick={() => printOrderTicket(order)} 
+              onClick={() => onReprintTicket ? onReprintTicket(order) : printOrderTicket(order)} 
               className="p-2 text-slate-400 hover:text-white hover:bg-slate-800 rounded-xl transition-all" 
               title="Imprimir Ticket"
             >
