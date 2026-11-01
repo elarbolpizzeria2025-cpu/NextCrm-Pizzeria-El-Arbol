@@ -447,6 +447,10 @@ export default function App() {
   // Stock Alerts
   const [dismissedStockAlerts, setDismissedStockAlerts] = useState<string[]>([]);
   const [showStockAlertModal, setShowStockAlertModal] = useState(false);
+  const [stockAlertMinimized, setStockAlertMinimized] = useState(false);
+  const [nextStockAlertAt, setNextStockAlertAt] = useState<number>(0);
+  const [stockAlertClock, setStockAlertClock] = useState(() => Date.now());
+  const previousLowStockIdsRef = useRef<Set<string>>(new Set());
 
   // Theme State: Fixed to 'dark-deluxe' (Black Deluxe)
   const isDarkDeluxe = true;
@@ -856,25 +860,62 @@ export default function App() {
     return 'u';
   };
 
+  const STOCK_LOW_THRESHOLD = 10;
+  const STOCK_ALERT_REPEAT_MS = 10 * 60 * 1000;
+
   const lowStockAlerts = useMemo(() => {
-      if (!register.isOpen) return [];
-      return stockItems.filter(item => {
-          const current = register.currentStock?.[item.firestoreId] ?? 0;
-          const unit = getItemUnit(item);
-          if (unit === 'Metros') return current <= 2;
-          if (unit === 'Porciones') return current <= 5;
-          return current <= 3;
-      }).map(item => ({...item, currentQty: register.currentStock?.[item.firestoreId] ?? 0}));
+    if (!register.isOpen) return [];
+    return stockItems
+      .map(item => ({
+        ...item,
+        currentQty: Number(register.currentStock?.[item.firestoreId] ?? 0),
+        alertThreshold: STOCK_LOW_THRESHOLD
+      }))
+      .filter(item => item.currentQty <= item.alertThreshold);
   }, [stockItems, register.currentStock, register.isOpen]);
 
   useEffect(() => {
-      if (lowStockAlerts.length > 0) {
-          const hasNewAlerts = lowStockAlerts.some(alert => !dismissedStockAlerts.includes(alert.firestoreId));
-          if (hasNewAlerts) setShowStockAlertModal(true);
-      } else {
-          setShowStockAlertModal(false);
-      }
-  }, [lowStockAlerts, dismissedStockAlerts]);
+    const timer = window.setInterval(() => setStockAlertClock(Date.now()), 30000);
+    return () => window.clearInterval(timer);
+  }, []);
+
+  useEffect(() => {
+    const currentIds = new Set(lowStockAlerts.map(item => item.firestoreId));
+    const hasNewLowStock = lowStockAlerts.some(item => !previousLowStockIdsRef.current.has(item.firestoreId));
+
+    if (lowStockAlerts.length === 0) {
+      setShowStockAlertModal(false);
+      setStockAlertMinimized(false);
+      setNextStockAlertAt(0);
+      setDismissedStockAlerts([]);
+      previousLowStockIdsRef.current = currentIds;
+      return;
+    }
+
+    if (hasNewLowStock || nextStockAlertAt === 0) {
+      setShowStockAlertModal(true);
+      setStockAlertMinimized(false);
+      setNextStockAlertAt(Date.now() + STOCK_ALERT_REPEAT_MS);
+    } else if (!showStockAlertModal && stockAlertClock >= nextStockAlertAt) {
+      setShowStockAlertModal(true);
+      setStockAlertMinimized(false);
+      setNextStockAlertAt(Date.now() + STOCK_ALERT_REPEAT_MS);
+    }
+
+    previousLowStockIdsRef.current = currentIds;
+  }, [lowStockAlerts, stockAlertClock, nextStockAlertAt, showStockAlertModal]);
+
+  const snoozeStockAlert = (minimize = false) => {
+    setShowStockAlertModal(false);
+    setStockAlertMinimized(minimize);
+    setDismissedStockAlerts(lowStockAlerts.map(item => item.firestoreId));
+    setNextStockAlertAt(Date.now() + STOCK_ALERT_REPEAT_MS);
+  };
+
+  const openStockAlert = () => {
+    setStockAlertMinimized(false);
+    setShowStockAlertModal(true);
+  };
 
   const scheduledReminderSeen = useRef<Set<string>>(new Set());
   useEffect(() => {
@@ -3231,6 +3272,21 @@ export default function App() {
           </button>
         )}
 
+        {lowStockAlerts.length > 0 && ['admin', 'cajero'].includes(currentUser.role) && (
+          <button
+            type="button"
+            onClick={openStockAlert}
+            className="h-9 px-2.5 rounded-lg bg-red-950/70 hover:bg-red-900/80 border border-red-500/60 text-red-200 font-black uppercase text-[8.5px] flex items-center gap-1.5 shrink-0"
+            title="Stock bajo: abrir advertencia"
+          >
+            <Icon name="inventory_2" size={13}/>
+            <span>Stock bajo</span>
+            <span className="min-w-[18px] h-[18px] px-1 rounded-full bg-red-500 text-white text-[8px] flex items-center justify-center animate-pulse">
+              {lowStockAlerts.length}
+            </span>
+          </button>
+        )}
+
         {/* Fecha y hora en vivo */}
         <div className="hidden xl:flex items-center gap-2 shrink-0 px-3 h-10 rounded-xl bg-[#090313] border border-purple-500/25">
           <Icon name="schedule" size={16} className="text-purple-300"/>
@@ -3304,6 +3360,78 @@ export default function App() {
         </div>
         </div>
       </header>
+
+      {showStockAlertModal && lowStockAlerts.length > 0 && (
+        <div className="fixed inset-0 z-[9998] bg-black/70 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="w-full max-w-3xl max-h-[82vh] bg-[#0b0518] border-2 border-red-500/50 rounded-[28px] shadow-2xl shadow-red-950/40 overflow-hidden flex flex-col">
+            <div className="px-5 py-4 bg-red-950/60 border-b border-red-500/30 flex items-center justify-between gap-3 shrink-0">
+              <div className="flex items-center gap-3">
+                <div className="w-11 h-11 rounded-xl bg-red-500/15 border border-red-500/30 text-red-300 flex items-center justify-center">
+                  <Icon name="inventory_2" size={23}/>
+                </div>
+                <div>
+                  <div className="text-[10px] font-black uppercase tracking-[0.18em] text-red-300">Advertencia de inventario</div>
+                  <h2 className="text-xl font-black uppercase text-white">Stock bajo</h2>
+                  <p className="text-[10px] font-bold text-slate-400 mt-0.5">
+                    {lowStockAlerts.length} {lowStockAlerts.length === 1 ? 'artículo llegó' : 'artículos llegaron'} a 10 o menos. El aviso se repite cada 10 minutos hasta corregirlo.
+                  </p>
+                </div>
+              </div>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => snoozeStockAlert(true)}
+                  className="h-9 px-3 rounded-xl border border-amber-500/30 bg-amber-950/40 text-amber-200 hover:bg-amber-900/60 text-[9px] font-black uppercase"
+                >
+                  Minimizar
+                </button>
+                <button
+                  type="button"
+                  onClick={() => snoozeStockAlert(false)}
+                  className="w-9 h-9 rounded-xl border border-red-500/30 bg-red-950/40 text-red-200 hover:bg-red-900/60 flex items-center justify-center"
+                  title="Cerrar por 10 minutos"
+                >
+                  ✕
+                </button>
+              </div>
+            </div>
+
+            <div className="p-4 overflow-y-auto custom-dark-scrollbar space-y-2">
+              {lowStockAlerts.map(item => (
+                <div key={item.firestoreId} className="p-3 rounded-xl bg-[#06020e] border border-red-500/20 flex items-center justify-between gap-3">
+                  <div className="min-w-0">
+                    <div className="font-black text-sm uppercase text-white truncate">{item.name}</div>
+                    <div className="text-[9px] font-bold uppercase text-slate-500 mt-0.5">
+                      {item.category || 'Stock'} • aviso a 10 {getItemUnitSymbol(item)}
+                    </div>
+                  </div>
+                  <div className="text-right shrink-0">
+                    <div className="font-mono text-2xl font-black text-red-300">{item.currentQty}</div>
+                    <div className="text-[9px] font-black uppercase text-slate-500">{getItemUnit(item)}</div>
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            <div className="p-4 border-t border-red-500/20 flex flex-wrap items-center justify-between gap-2 shrink-0">
+              <div className="text-[9px] font-bold text-slate-500">
+                Si minimizás o cerrás, la advertencia permanece en el header y vuelve a abrirse en 10 minutos si el stock sigue bajo.
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  setShowStockAlertModal(false);
+                  setStockAlertMinimized(false);
+                  setActiveTab('stock');
+                }}
+                className="h-10 px-4 rounded-xl bg-red-600 hover:bg-red-500 text-white text-[10px] font-black uppercase flex items-center gap-2"
+              >
+                <Icon name="inventory_2" size={14}/> Ir a Stock
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Main Container */}
       <main className="pizzeria-workspace flex-1 overflow-hidden relative bg-[#040108]">
@@ -3507,7 +3635,7 @@ export default function App() {
                   {id:'history', label:'Historial', icon:'history', roles:['admin'], note:'Turnos cerrados'},
                   {id:'finished', label:'Finalizados', icon:'check_circle', roles:['admin','cajero'], note:'Ventas cobradas'},
                   {id:'clients', label:'Clientes', icon:'people', roles:['admin'], note:'Directorio de clientes'},
-                  {id:'stock', label:'Stock', icon:'inventory_2', roles:['admin'], note:'Inventario'},
+                  {id:'stock', label:'Stock', icon:'inventory_2', roles:['admin','cajero'], note:'Inventario y alertas'},
                   {id:'products', label:'Menú', icon:'menu_book', roles:['admin'], note:'Productos y precios'},
                   {id:'web', label:'Pedidos Web', icon:'public', roles:['admin','cajero'], note:'Pedidos online'},
                   {id:'staff', label:'Propinas', icon:'payments', roles:['admin','cajero','mozo','delivery'], note:'Personal y propinas'},
@@ -4154,6 +4282,53 @@ export default function App() {
                   )}
                 </div>
               </div>
+
+              {lowStockAlerts.length > 0 && (
+                <div className="bg-red-950/35 border border-red-500/45 rounded-[24px] p-4 space-y-3 shadow-lg shadow-red-950/20">
+                  <div className="flex items-center justify-between gap-3">
+                    <div className="flex items-center gap-3">
+                      <div className="w-10 h-10 rounded-xl bg-red-500/15 border border-red-500/30 text-red-300 flex items-center justify-center">
+                        <Icon name="warning" size={20}/>
+                      </div>
+                      <div>
+                        <div className="text-xs font-black uppercase text-red-200">Stock bajo</div>
+                        <div className="text-[10px] font-bold text-slate-400">
+                          Aviso automático al llegar a 10 o menos. Tocá un artículo para corregirlo.
+                        </div>
+                      </div>
+                    </div>
+                    <span className="px-3 py-1 rounded-full bg-red-500 text-white text-[10px] font-black uppercase">
+                      {lowStockAlerts.length} {lowStockAlerts.length === 1 ? 'alerta' : 'alertas'}
+                    </span>
+                  </div>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-2">
+                    {lowStockAlerts.map(item => (
+                      <button
+                        key={item.firestoreId}
+                        type="button"
+                        onClick={() => setEditStockModal({
+                          isOpen: true,
+                          item,
+                          form: {
+                            name: item.name || '',
+                            category: item.category || '',
+                            qty: Number(register.currentStock?.[item.firestoreId] ?? 0)
+                          }
+                        })}
+                        className="text-left p-3 rounded-xl bg-[#090313] border border-red-500/25 hover:border-red-400/60 transition-colors"
+                      >
+                        <div className="font-black text-[10px] uppercase text-white truncate">{item.name}</div>
+                        <div className="mt-1 flex items-end justify-between gap-2">
+                          <span className="text-[9px] font-bold uppercase text-slate-500">{getItemUnit(item)}</span>
+                          <span className="font-mono font-black text-lg text-red-300">
+                            {item.currentQty} {getItemUnitSymbol(item)}
+                          </span>
+                        </div>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
 
               {stockItems.length === 0 ? (
                 <div className="bg-[#0b0518] p-12 rounded-[40px] border border-purple-500/20 text-center space-y-4 max-w-xl mx-auto">
