@@ -83,6 +83,17 @@ export const printOrderTicket = (order: OrderData) => {
       
   const watermarkText = "EL ÁRBOL PIZZERÍA ".repeat(15);
 
+  const normalizedTicketType = String(order.type || 'Local').trim().toLowerCase();
+  const ticketPrefix = ['mesa', 'salon', 'salón', 'mesas'].includes(normalizedTicketType)
+    ? 'M'
+    : ['envío', 'envio', 'delivery'].includes(normalizedTicketType)
+    ? 'D'
+    : ['web', 'pedido web'].includes(normalizedTicketType)
+    ? 'W'
+    : 'L';
+  const ticketBaseId = String(order.id || '').replace(/^#/, '');
+  const ticketCode = `${ticketPrefix}-${ticketBaseId}`;
+
   const deliveryTypeLabel = order.type === 'Envío' 
     ? '🛵 ENVÍO A DOMICILIO' 
     : order.type === 'Mesa' 
@@ -101,7 +112,7 @@ export const printOrderTicket = (order: OrderData) => {
               <div class="via-title">${titleCopy}</div>
            </div>
            
-           <div class="order-id">ORDEN ${order.id}</div>
+           <div class="order-id">TICKET ${ticketCode}</div>
 
            <!-- TIPO DE ENVÍO DESTACADO EN GRANDE Y NEGRITA -->
            <div class="delivery-type-banner">${deliveryTypeLabel}</div>
@@ -153,7 +164,7 @@ export const printOrderTicket = (order: OrderData) => {
   `;
 
   printWindow.document.write(`
-    <html><head><title>Ticket ${order.id}</title>
+    <html><head><title>Ticket ${ticketCode}</title>
     <style>
       @page { margin: 0; size: 80mm auto; } 
       * { box-sizing: border-box; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
