@@ -590,6 +590,30 @@ export default function App() {
     }
   };
 
+  const getTicketCode = (order: Pick<OrderData, 'id' | 'type'>) => {
+    const normalizedType = String(order.type || 'Local').trim().toLowerCase();
+    const prefix = ['mesa', 'salon', 'salón', 'mesas'].includes(normalizedType)
+      ? 'M'
+      : ['envío', 'envio', 'delivery'].includes(normalizedType)
+      ? 'D'
+      : ['web', 'pedido web'].includes(normalizedType)
+      ? 'W'
+      : 'L';
+    return `${prefix}-${String(order.id || '').replace(/^#/, '')}`;
+  };
+
+  const handleReprintOrderTicket = async (order: OrderData) => {
+    printOrderTicket(order);
+    await writeOrderAudit('TICKET_REIMPRESO', order, {
+      type: order.type,
+      status: order.status,
+      total: order.total,
+      ticketCode: getTicketCode(order),
+      sessionId: register.sessionId || null
+    }, currentUser.role === 'cajero' || currentUser.role === 'mozo');
+    showMessage(`Ticket ${getTicketCode(order)} reimpreso y registrado`, 'success');
+  };
+
   const requestDeleteOrder = async (order: OrderData) => {
     // El administrador borra directamente (con confirmación visual), sin clave.
     if (currentUser.role === 'admin') {
@@ -1194,6 +1218,36 @@ export default function App() {
     return stats;
   }, [orders]);
 
+  const ticketControlEvents = useMemo(() => {
+    const shiftStart = Number(register.openedAt || 0);
+    const trackedActions = new Set([
+      'TICKET_REIMPRESO',
+      'PEDIDO_EDITADO',
+      'PEDIDO_EDITADO_DESDE_FINALIZADOS'
+    ]);
+
+    return auditLogs
+      .filter(log => trackedActions.has(String(log.action || '')))
+      .filter(log => !shiftStart || Number(log.createdAt || 0) >= shiftStart)
+      .map(log => {
+        const details = log.details || {};
+        const order = orders.find(o =>
+          o.firestoreId === log.orderFirestoreId ||
+          String(o.id) === String(log.orderId)
+        );
+        const type = details.type || order?.type || 'Local';
+        const ticketCode = details.ticketCode || getTicketCode({ id: log.orderId, type } as any);
+        return {
+          ...log,
+          type,
+          ticketCode,
+          isReprint: log.action === 'TICKET_REIMPRESO',
+          isEdit: log.action === 'PEDIDO_EDITADO' || log.action === 'PEDIDO_EDITADO_DESDE_FINALIZADOS'
+        };
+      })
+      .sort((a, b) => Number(b.createdAt || 0) - Number(a.createdAt || 0));
+  }, [auditLogs, orders, register.openedAt]);
+
   const badges = useMemo(() => ({ 
     kitchen: reportData.kitchenTotal,
     ready: reportData.mostrador.length + reportData.mesas.length + reportData.delivery.length,
@@ -1684,6 +1738,7 @@ export default function App() {
           ));
           await writeOrderAudit('PEDIDO_EDITADO', editingOrder, {
             type: orderData.type,
+            ticketCode: getTicketCode({ id: editingOrder.id, type: orderData.type }),
             total: orderData.total,
             status: orderData.status,
             notes: orderData.notes || ''
@@ -2269,6 +2324,8 @@ export default function App() {
         status: editSaleModal.status
       });
       await writeOrderAudit('PEDIDO_EDITADO_DESDE_FINALIZADOS', editSaleModal.order, {
+        type: editSaleModal.order.type,
+        ticketCode: getTicketCode(editSaleModal.order),
         paymentMethod: editSaleModal.paymentMethod,
         total: parseFloat(editSaleModal.total) || 0,
         tip: parseFloat(editSaleModal.tip) || 0,
@@ -3476,6 +3533,7 @@ export default function App() {
             isSubmitting={isSubmitting}
             setToppingModal={setToppingModal}
             showMessage={showMessage}
+            onReprintTicket={handleReprintOrderTicket}
             menuShortages={menuShortages}
             th={th}
             db={db}
@@ -3498,6 +3556,7 @@ export default function App() {
             handleDirectDispatch={handleDirectDispatch}
             requestDeleteOrder={requestDeleteOrder}
             showMessage={showMessage}
+            onReprintTicket={handleReprintOrderTicket}
           />
         )}
 
@@ -3605,6 +3664,7 @@ export default function App() {
                               handleDirectDispatch={handleDirectDispatch}
                               requestDeleteOrder={requestDeleteOrder}
                               finalizeOrder={finalizeOrder}
+                              onReprintTicket={handleReprintOrderTicket}
                               showMessage={showMessage}
                             />
                           ))
@@ -3958,7 +4018,7 @@ export default function App() {
                               {order.tip ? <div className="text-[10px] font-black text-purple-300 mt-1">+ ${order.tip} Propina</div> : null}
                             </div>
                             <button 
-                              onClick={() => printOrderTicket(order)} 
+                              onClick={() => handleReprintOrderTicket(order)} 
                               className="p-3 bg-[#160829] hover:bg-[#220c40] text-purple-300 border border-purple-500/30 rounded-2xl text-xs font-black uppercase transition-all flex items-center gap-1.5 shadow-xs"
                               title="Reimprimir ticket de la comanda"
                             >
@@ -4995,6 +5055,55 @@ export default function App() {
                       </div>
                     </div>
                   </div>
+                  <div className="bg-[#0b0518] border border-amber-500/30 rounded-[28px] p-4 space-y-3">
+                    <div className="flex items-center justify-between gap-3">
+                      <div>
+                        <div className="text-[10px] font-black uppercase tracking-[0.18em] text-amber-300">Control de tickets del turno</div>
+                        <h3 className="text-lg font-black uppercase text-white">Cambios y reimpresiones</h3>
+                        <p className="text-[9px] font-bold text-slate-500 mt-1">
+                          Revisá estas operaciones antes de cerrar la caja.
+                        </p>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <span className="px-2.5 py-1 rounded-full bg-blue-950/60 border border-blue-500/30 text-blue-300 text-[9px] font-black uppercase">
+                          {ticketControlEvents.filter(e => e.isEdit).length} cambios
+                        </span>
+                        <span className="px-2.5 py-1 rounded-full bg-amber-950/60 border border-amber-500/30 text-amber-300 text-[9px] font-black uppercase">
+                          {ticketControlEvents.filter(e => e.isReprint).length} reimp.
+                        </span>
+                      </div>
+                    </div>
+
+                    {ticketControlEvents.length === 0 ? (
+                      <div className="p-3 rounded-xl bg-[#06020e] border border-purple-500/15 text-[10px] font-bold text-slate-500 uppercase text-center">
+                        Sin cambios ni reimpresiones registradas en este turno
+                      </div>
+                    ) : (
+                      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-2">
+                        {ticketControlEvents.map((event: any, idx: number) => (
+                          <div key={event.firestoreId || `${event.createdAt}-${idx}`} className="p-3 rounded-xl bg-[#06020e] border border-purple-500/20 flex items-center justify-between gap-3">
+                            <div className="min-w-0">
+                              <div className="flex items-center gap-2">
+                                <span className="font-mono font-black text-sm text-white">{event.ticketCode}</span>
+                                <span className={`px-2 py-0.5 rounded-full text-[8px] font-black uppercase border ${event.isReprint ? 'bg-amber-950/50 border-amber-500/30 text-amber-300' : 'bg-blue-950/50 border-blue-500/30 text-blue-300'}`}>
+                                  {event.isReprint ? 'Reimpreso' : 'Modificado'}
+                                </span>
+                              </div>
+                              <div className="mt-1 text-[9px] font-bold text-slate-500 truncate">
+                                {event.actorDisplayName || event.actorUsername || 'Usuario'} • {event.type}
+                              </div>
+                            </div>
+                            <div className="text-right shrink-0">
+                              <div className="text-[10px] font-black text-slate-300">
+                                {new Date(Number(event.createdAt || Date.now())).toLocaleTimeString('es-UY', { hour: '2-digit', minute: '2-digit' })}
+                              </div>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+
                   <div className="max-w-md mx-auto flex flex-col gap-3">
                     <button 
                       onClick={() => handlePrintClosureReport(undefined, 'full')} 
