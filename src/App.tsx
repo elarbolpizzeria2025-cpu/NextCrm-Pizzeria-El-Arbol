@@ -602,6 +602,25 @@ export default function App() {
     return `${prefix}-${String(order.id || '').replace(/^#/, '')}`;
   };
 
+  const CARD_PROCESSING_RATES: Record<string, number> = {
+    'Débito': 0.0225,
+    'Crédito': 0.0599
+  };
+
+  const getPaymentProcessorNet = (method: string, amount: number) => {
+    const safeAmount = Math.max(0, Number(amount) || 0);
+    const rate = CARD_PROCESSING_RATES[String(method || '').trim()] || 0;
+    const feeAmount = Math.round((safeAmount * rate) * 100) / 100;
+    const netAmount = Math.round((safeAmount - feeAmount) * 100) / 100;
+    return {
+      rate,
+      ratePercent: Math.round(rate * 10000) / 100,
+      feeAmount,
+      netAmount,
+      provider: rate > 0 ? 'Mercado Pago / Handy' : null
+    };
+  };
+
   const handleReprintOrderTicket = async (order: OrderData) => {
     printOrderTicket(order);
     await writeOrderAudit('TICKET_REIMPRESO', order, {
@@ -1167,7 +1186,11 @@ export default function App() {
     const stats = { 
         totalSales: 0, 
         totalTips: 0, 
-        methods: { Efectivo: 0, Débito: 0, Crédito: 0, Transferencia: 0, 'A confirmar': 0 } as Record<string, number>, 
+        methods: { Efectivo: 0, Débito: 0, Crédito: 0, Transferencia: 0, 'A confirmar': 0 } as Record<string, number>,
+        paymentFees: { Débito: 0, Crédito: 0 } as Record<string, number>,
+        paymentNet: { Débito: 0, Crédito: 0 } as Record<string, number>,
+        totalProcessorFees: 0,
+        totalNetReceipts: 0,
         itemsSold: {} as Record<string, { qty: number; revenue: number }>, 
         physicalTotals: { metrosPizza: 0, porcionesPizza: 0, pizzetas: 0, fainas: 0, sandwiches: 0 }, 
         delivery: currentOrders.filter(o => o.status === 'Listo' && ['envío', 'envio', 'delivery'].includes(sType(o.type))), 
@@ -1182,7 +1205,16 @@ export default function App() {
       stats.totalSales += (o.total || 0); 
       stats.totalTips += (o.tip || 0);
       const method = o.paymentMethod || 'Efectivo';
-      stats.methods[method] = (stats.methods[method] || 0) + (o.total || 0) + (o.tip || 0);
+      const grossPaid = (o.total || 0) + (o.tip || 0);
+      stats.methods[method] = (stats.methods[method] || 0) + grossPaid;
+
+      const processor = getPaymentProcessorNet(method, grossPaid);
+      if (processor.rate > 0) {
+        stats.paymentFees[method] = (stats.paymentFees[method] || 0) + processor.feeAmount;
+        stats.paymentNet[method] = (stats.paymentNet[method] || 0) + processor.netAmount;
+      }
+      stats.totalProcessorFees += processor.feeAmount;
+      stats.totalNetReceipts += processor.netAmount;
       
       if (o.items && Array.isArray(o.items)) {
           o.items.forEach(it => {
@@ -1640,6 +1672,7 @@ export default function App() {
 
     const checkoutTip = deferPayment ? 0 : (parseFloat(orderTip) || 0);
     const checkoutTotal = cartTotal + checkoutTip;
+    const checkoutProcessor = getPaymentProcessorNet(deferPayment ? 'A confirmar' : paymentMethod, checkoutTotal);
     const checkoutCashReceived = !deferPayment && paymentMethod === 'Efectivo'
       ? (parseFloat(cashProvided) || checkoutTotal)
       : 0;
@@ -1712,6 +1745,10 @@ export default function App() {
           total: cartTotal,
           tip: checkoutTip,
           paymentMethod: deferPayment ? 'A confirmar' : (paymentMethod || 'Efectivo'),
+          processorFeeProvider: checkoutProcessor.provider,
+          processorFeeRate: checkoutProcessor.rate,
+          processorFeeAmount: checkoutProcessor.feeAmount,
+          processorNetAmount: checkoutProcessor.netAmount,
           cashProvided: !deferPayment && paymentMethod === 'Efectivo' ? checkoutCashReceived : 0,
           cashReceived: !deferPayment && paymentMethod === 'Efectivo' ? checkoutCashReceived : 0,
           paymentAmount: checkoutPaymentAmount,
@@ -1747,6 +1784,16 @@ export default function App() {
           const createdRef = await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'orders'), orderData);
           const localOrder = { ...orderData, firestoreId: createdRef.id } as OrderData;
           setOrders(prev => [localOrder, ...prev.filter(o => o.firestoreId !== createdRef.id)]);
+
+          if (isMesa) {
+            printOrderTicket(localOrder, { auto: true });
+            await writeOrderAudit('TICKET_IMPRESO_AUTOMATICO', localOrder, {
+              type: localOrder.type,
+              ticketCode: getTicketCode(localOrder),
+              automatic: true,
+              sessionId: register.sessionId || null
+            }, false);
+          }
         }
 
         // Si la caja está abierta, reflejar inmediatamente el cobro en efectivo.
@@ -1797,6 +1844,7 @@ export default function App() {
 
     const tip = parseFloat(tipAmount) || 0; 
     const finalTotal = (order.total || 0) + tip;
+    const processor = getPaymentProcessorNet(paymentMethodToUse, finalTotal);
     
     const newCurrentStock = { ...(register.currentStock || {}) };
     order.items.forEach(it => {
@@ -1869,13 +1917,17 @@ export default function App() {
           cashReceived: parseFloat(cash) || 0, 
           tip: tip, 
           paymentMethod: paymentMethodToUse,
+          processorFeeProvider: processor.provider,
+          processorFeeRate: processor.rate,
+          processorFeeAmount: processor.feeAmount,
+          processorNetAmount: processor.netAmount,
           cfeDoc: createdCfe || undefined,
         });
         const registerUpdates: any = { currentStock: newCurrentStock };
         if (!order.isPaid && paymentMethodToUse === 'Efectivo') registerUpdates.currentCash = (register.currentCash || 0) + finalTotal;
         await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'config', 'register'), registerUpdates);
         setEditOrderModal({ isOpen: false, order: null, cashReceived: '', tip: '0', voucherDelivered: true, transferConfirmed: true, selectedPaymentMethod: 'Efectivo' }); 
-        showMessage(`Venta cobrada (${paymentMethodToUse})${createdCfe ? ' • e-Ticket DGI Emitido' : ''}`);
+        showMessage(`Venta cobrada (${paymentMethodToUse})${processor.rate > 0 ? ` • Comisión ${processor.ratePercent}%: -${processor.feeAmount.toFixed(2)} • Neto: ${processor.netAmount.toFixed(2)}` : ''}${createdCfe ? ' • e-Ticket DGI Emitido' : ''}`);
     } catch (e: any) { showMessage("Error: " + e.message, "error"); }
   };
 
@@ -2315,11 +2367,18 @@ export default function App() {
 
   const handleSaveEditSale = async () => {
     if (!editSaleModal.order) return;
+    const editedTotal = parseFloat(editSaleModal.total) || 0;
+    const editedTip = parseFloat(editSaleModal.tip) || 0;
+    const editedProcessor = getPaymentProcessorNet(editSaleModal.paymentMethod, editedTotal + editedTip);
     try {
       await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'orders', editSaleModal.order.firestoreId), {
         paymentMethod: editSaleModal.paymentMethod,
-        total: parseFloat(editSaleModal.total) || 0,
-        tip: parseFloat(editSaleModal.tip) || 0,
+        total: editedTotal,
+        tip: editedTip,
+        processorFeeProvider: editedProcessor.provider,
+        processorFeeRate: editedProcessor.rate,
+        processorFeeAmount: editedProcessor.feeAmount,
+        processorNetAmount: editedProcessor.netAmount,
         notes: editSaleModal.notes,
         status: editSaleModal.status
       });
@@ -2327,8 +2386,11 @@ export default function App() {
         type: editSaleModal.order.type,
         ticketCode: getTicketCode(editSaleModal.order),
         paymentMethod: editSaleModal.paymentMethod,
-        total: parseFloat(editSaleModal.total) || 0,
-        tip: parseFloat(editSaleModal.tip) || 0,
+        total: editedTotal,
+        tip: editedTip,
+        processorFeeRate: editedProcessor.rate,
+        processorFeeAmount: editedProcessor.feeAmount,
+        processorNetAmount: editedProcessor.netAmount,
         status: editSaleModal.status
       }, currentUser.role === 'cajero' || currentUser.role === 'mozo');
       setEditSaleModal({ isOpen: false, order: null, paymentMethod: 'Efectivo', total: '', tip: '0', notes: '', status: 'Finalizado' });
@@ -5014,8 +5076,8 @@ export default function App() {
                     {[
                       {label:'Efectivo en caja', value: register.currentCash || 0, icon:'payments', accent:'text-emerald-300'},
                       {label:'Ventas efectivo', value: reportData.methods['Efectivo'] || 0, icon:'local_atm', accent:'text-emerald-200'},
-                      {label:'Débito', value: reportData.methods['Débito'] || 0, icon:'credit_card', accent:'text-cyan-300'},
-                      {label:'Crédito', value: reportData.methods['Crédito'] || 0, icon:'credit_card', accent:'text-blue-300'},
+                      {label:'Débito', value: reportData.methods['Débito'] || 0, icon:'credit_card', accent:'text-cyan-300', feeRate:2.25, fee:reportData.paymentFees['Débito'] || 0, net:reportData.paymentNet['Débito'] || 0},
+                      {label:'Crédito', value: reportData.methods['Crédito'] || 0, icon:'credit_card', accent:'text-blue-300', feeRate:5.99, fee:reportData.paymentFees['Crédito'] || 0, net:reportData.paymentNet['Crédito'] || 0},
                       {label:'Transferencia', value: reportData.methods['Transferencia'] || 0, icon:'account_balance', accent:'text-purple-300'},
                       {label:'Otros / confirmar', value: reportData.methods['A confirmar'] || 0, icon:'pending_actions', accent:'text-amber-300'}
                     ].map(item => (
@@ -5024,7 +5086,19 @@ export default function App() {
                           <div className="text-[9px] font-black uppercase text-slate-400 leading-tight">{item.label}</div>
                           <Icon name={item.icon} size={10} className={item.accent}/>
                         </div>
-                        <div className={`text-2xl font-black font-mono ${item.accent}`}>${item.value}</div>
+                        <div>
+                          <div className={`text-2xl font-black font-mono ${item.accent}`}>${item.value}</div>
+                          {item.feeRate ? (
+                            <div className="mt-1 space-y-0.5">
+                              <div className="text-[8px] font-black uppercase text-rose-300">
+                                Comisión {item.feeRate}%: -${Number(item.fee || 0).toFixed(2)}
+                              </div>
+                              <div className="text-[10px] font-black uppercase text-emerald-300">
+                                Neto: ${Number(item.net || 0).toFixed(2)}
+                              </div>
+                            </div>
+                          ) : null}
+                        </div>
                       </div>
                     ))}
                   </div>
@@ -5050,6 +5124,8 @@ export default function App() {
                       <h3 className="font-black uppercase text-center mb-6 text-sm text-slate-200">Resumen Rápido</h3>
                       <div className="space-y-3">
                         <div className="flex justify-between border-b border-purple-500/10 pb-2"><span className="font-black text-xs uppercase text-slate-400">Ventas Totales:</span><span className="font-black text-lg text-white">${reportData.totalSales}</span></div>
+                        <div className="flex justify-between border-b border-purple-500/10 pb-2"><span className="font-black text-xs uppercase text-slate-400">Comisiones MP / Handy:</span><span className="font-black text-lg text-rose-300">-${reportData.totalProcessorFees.toFixed(2)}</span></div>
+                        <div className="flex justify-between border-b border-purple-500/10 pb-2"><span className="font-black text-xs uppercase text-slate-400">Neto estimado cobros:</span><span className="font-black text-lg text-emerald-300">${reportData.totalNetReceipts.toFixed(2)}</span></div>
                         <div className="flex justify-between border-b border-purple-500/10 pb-2"><span className="font-black text-xs uppercase text-slate-400">Metros de Pizza:</span><span className="font-black text-lg text-blue-400">{reportData.physicalTotals.metrosPizza} m</span></div>
                         <div className="flex justify-between border-b border-purple-500/10 pb-2"><span className="font-black text-xs uppercase text-slate-400">Fainás Totales:</span><span className="font-black text-lg text-purple-300">{reportData.physicalTotals.fainas}</span></div>
                       </div>
