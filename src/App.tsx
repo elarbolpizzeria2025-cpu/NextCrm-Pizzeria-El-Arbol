@@ -1810,7 +1810,7 @@ export default function App() {
         showMessage(
           deferPayment
             ? `Pedido enviado a KDS • cuenta abierta para ${normalizedOrderType === 'mesa' ? 'cerrar la mesa' : 'cobrar al entregar'}`
-            : `Pedido cobrado (${paymentMethod}) y enviado a KDS`,
+            : `Pedido cobrado (${paymentMethod}) y enviado a KDS${checkoutProcessor.rate > 0 ? ` • Comisión ${checkoutProcessor.ratePercent.toLocaleString('es-UY')}%: -${checkoutProcessor.feeAmount.toFixed(2)} • Neto: ${checkoutProcessor.netAmount.toFixed(2)}` : ''}`,
           "success"
         );
         clearForm();
@@ -5076,8 +5076,8 @@ export default function App() {
                     {[
                       {label:'Efectivo en caja', value: register.currentCash || 0, icon:'payments', accent:'text-emerald-300'},
                       {label:'Ventas efectivo', value: reportData.methods['Efectivo'] || 0, icon:'local_atm', accent:'text-emerald-200'},
-                      {label:'Débito', value: reportData.methods['Débito'] || 0, icon:'credit_card', accent:'text-cyan-300', feeRate:2.25, fee:reportData.paymentFees['Débito'] || 0, net:reportData.paymentNet['Débito'] || 0},
-                      {label:'Crédito', value: reportData.methods['Crédito'] || 0, icon:'credit_card', accent:'text-blue-300', feeRate:5.99, fee:reportData.paymentFees['Crédito'] || 0, net:reportData.paymentNet['Crédito'] || 0},
+                      {label:'Débito', value: reportData.methods['Débito'] || 0, icon:'credit_card', accent:'text-cyan-300', feeRateLabel:'2,25', fee:reportData.paymentFees['Débito'] || 0, net:reportData.paymentNet['Débito'] || 0},
+                      {label:'Crédito', value: reportData.methods['Crédito'] || 0, icon:'credit_card', accent:'text-blue-300', feeRateLabel:'5,99', fee:reportData.paymentFees['Crédito'] || 0, net:reportData.paymentNet['Crédito'] || 0},
                       {label:'Transferencia', value: reportData.methods['Transferencia'] || 0, icon:'account_balance', accent:'text-purple-300'},
                       {label:'Otros / confirmar', value: reportData.methods['A confirmar'] || 0, icon:'pending_actions', accent:'text-amber-300'}
                     ].map(item => (
@@ -5088,10 +5088,10 @@ export default function App() {
                         </div>
                         <div>
                           <div className={`text-2xl font-black font-mono ${item.accent}`}>${item.value}</div>
-                          {item.feeRate ? (
+                          {item.feeRateLabel ? (
                             <div className="mt-1 space-y-0.5">
                               <div className="text-[8px] font-black uppercase text-rose-300">
-                                Comisión {item.feeRate}%: -${Number(item.fee || 0).toFixed(2)}
+                                Comisión {item.feeRateLabel}%: -${Number(item.fee || 0).toFixed(2)}
                               </div>
                               <div className="text-[10px] font-black uppercase text-emerald-300">
                                 Neto: ${Number(item.net || 0).toFixed(2)}
@@ -5101,6 +5101,9 @@ export default function App() {
                         </div>
                       </div>
                     ))}
+                  </div>
+                  <div className="text-[9px] font-bold text-slate-500 uppercase tracking-wide">
+                    Comisiones Mercado Pago / Point y Handy: Débito 2,25% • Crédito 5,99%. No incluye retenciones ni impuestos ajenos al procesador.
                   </div>
                 </div>
 
