@@ -44,10 +44,33 @@ export function getSpecialCelebrationGreeting(dateInput?: Date | number): string
   return '¡GRACIAS POR ELEGIRNOS!';
 }
 
-export const printOrderTicket = (order: OrderData) => {
+export const printOrderTicket = (order: OrderData, options?: { auto?: boolean }) => {
   if (!order) return;
-  const printWindow = window.open('', '_blank');
-  if (!printWindow) return;
+
+  let printFrame: HTMLIFrameElement | null = null;
+  let printWindow: Window | null = null;
+
+  if (options?.auto && typeof document !== 'undefined') {
+    printFrame = document.createElement('iframe');
+    printFrame.setAttribute('aria-hidden', 'true');
+    printFrame.style.position = 'fixed';
+    printFrame.style.right = '0';
+    printFrame.style.bottom = '0';
+    printFrame.style.width = '1px';
+    printFrame.style.height = '1px';
+    printFrame.style.opacity = '0';
+    printFrame.style.pointerEvents = 'none';
+    printFrame.style.border = '0';
+    document.body.appendChild(printFrame);
+    printWindow = printFrame.contentWindow;
+  } else {
+    printWindow = window.open('', '_blank');
+  }
+
+  if (!printWindow) {
+    printFrame?.remove();
+    return;
+  }
 
   const celebrationGreeting = getSpecialCelebrationGreeting(order.createdAt);
 
@@ -268,6 +291,12 @@ export const printOrderTicket = (order: OrderData) => {
     </body></html>
   `);
   printWindow.document.close();
+
+  if (printFrame) {
+    setTimeout(() => {
+      try { printFrame?.remove(); } catch {}
+    }, 4000);
+  }
 };
 
 export interface CashClosureReportData {
