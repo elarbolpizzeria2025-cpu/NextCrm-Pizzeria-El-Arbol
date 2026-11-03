@@ -69,6 +69,10 @@ export interface OrderData {
   cashProvided?: number;
   cashReceived?: number;
   paymentAmount?: number;
+  processorFeeProvider?: string | null;
+  processorFeeRate?: number;
+  processorFeeAmount?: number;
+  processorNetAmount?: number;
   tip?: number;
   status: 'Preparando' | 'Pendiente' | 'Listo' | 'En Camino' | 'Finalizado' | 'Cancelado';
   createdAt: number;
