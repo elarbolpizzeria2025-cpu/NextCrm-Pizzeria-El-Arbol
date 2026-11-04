@@ -35,6 +35,12 @@ import { DeliveryRiderTab } from './components/DeliveryRiderTab';
 import { StaffPerformanceTab } from './components/StaffPerformanceTab';
 import { DEFAULT_DGI_CONFIG, createCfeDocumentFromOrder } from './utils/dgiCfe';
 import { ParsedVoiceOrder } from './utils/voiceOrderParser';
+import { NetworkPrinterSettings } from './components/NetworkPrinterSettings';
+import {
+  loadNetworkPrinterConfig,
+  printOrderToNetworkPrinter,
+  NetworkPrinterConfig
+} from './utils/networkPrinter';
 
 const NEXTCRM_EMBEDDED_DEMO = typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('nextcrmDemo') === '1';
 
@@ -175,6 +181,7 @@ export default function App() {
   const [register, setRegister] = useState<RegisterConfig>({ 
     isOpen: false, initialCash: 0, currentCash: 0, sessionId: null, isLoaded: false, currentStock: {}, initialStock: {} 
   });
+  const [networkPrinterConfig, setNetworkPrinterConfig] = useState<NetworkPrinterConfig>(() => loadNetworkPrinterConfig());
   const [stockItems, setStockItems] = useState<StockItem[]>([]);
   const [menuShortages, setMenuShortages] = useState<MenuShortage[]>([]);
   const [shortageModalOpen, setShortageModalOpen] = useState(false);
@@ -1786,11 +1793,39 @@ export default function App() {
           setOrders(prev => [localOrder, ...prev.filter(o => o.firestoreId !== createdRef.id)]);
 
           if (isMesa) {
-            printOrderTicket(localOrder, { auto: true });
+            let printMethod = 'browser';
+            let printError = '';
+            let networkPrinted = false;
+
+            if (
+              networkPrinterConfig.enabled &&
+              networkPrinterConfig.autoPrintMesa &&
+              networkPrinterConfig.printerIp.trim()
+            ) {
+              try {
+                await printOrderToNetworkPrinter(networkPrinterConfig, localOrder);
+                networkPrinted = true;
+                printMethod = 'wifi-un-tp95w';
+              } catch (e: any) {
+                printError = e?.message || 'Error de impresión WiFi';
+                console.warn('UN-TP95W no disponible; se usa impresión local de respaldo:', e);
+              }
+            }
+
+            if (!networkPrinted) {
+              printOrderTicket(localOrder, { auto: true });
+            }
+
             await writeOrderAudit('TICKET_IMPRESO_AUTOMATICO', localOrder, {
               type: localOrder.type,
               ticketCode: getTicketCode(localOrder),
               automatic: true,
+              printerModel: networkPrinterConfig.enabled ? networkPrinterConfig.model : 'Navegador',
+              printMethod,
+              printerIp: networkPrinted ? networkPrinterConfig.printerIp : null,
+              copies: networkPrinted ? networkPrinterConfig.copies : 2,
+              fallbackUsed: !networkPrinted && networkPrinterConfig.enabled,
+              printError,
               sessionId: register.sessionId || null
             }, false);
           }
@@ -5056,6 +5091,12 @@ export default function App() {
                     </button>
                   </div>
                 </div>
+
+                <NetworkPrinterSettings
+                  config={networkPrinterConfig}
+                  onChange={setNetworkPrinterConfig}
+                  showMessage={showMessage}
+                />
 
                 {/* Dinero del turno por medio de pago */}
                 <div className="space-y-3">
