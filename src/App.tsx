@@ -35,15 +35,6 @@ import { DeliveryRiderTab } from './components/DeliveryRiderTab';
 import { StaffPerformanceTab } from './components/StaffPerformanceTab';
 import { DEFAULT_DGI_CONFIG, createCfeDocumentFromOrder } from './utils/dgiCfe';
 import { ParsedVoiceOrder } from './utils/voiceOrderParser';
-import { NetworkPrinterSettings } from './components/NetworkPrinterSettings';
-import {
-  loadNetworkPrinterConfig,
-  printOrderToNetworkPrinter,
-  NetworkPrinterConfig,
-  loadLegacyPrinterConfig,
-  printOrderToLegacyPrinter,
-  LegacyPrinterConfig
-} from './utils/networkPrinter';
 
 const NEXTCRM_EMBEDDED_DEMO = typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('nextcrmDemo') === '1';
 
@@ -184,8 +175,6 @@ export default function App() {
   const [register, setRegister] = useState<RegisterConfig>({ 
     isOpen: false, initialCash: 0, currentCash: 0, sessionId: null, isLoaded: false, currentStock: {}, initialStock: {} 
   });
-  const [networkPrinterConfig, setNetworkPrinterConfig] = useState<NetworkPrinterConfig>(() => loadNetworkPrinterConfig());
-  const [legacyPrinterConfig, setLegacyPrinterConfig] = useState<LegacyPrinterConfig>(() => loadLegacyPrinterConfig());
   const [stockItems, setStockItems] = useState<StockItem[]>([]);
   const [menuShortages, setMenuShortages] = useState<MenuShortage[]>([]);
   const [shortageModalOpen, setShortageModalOpen] = useState(false);
@@ -632,40 +621,8 @@ export default function App() {
     };
   };
 
-  const handlePrintOrderTicket = async (order: OrderData): Promise<boolean> => {
-    if (
-      legacyPrinterConfig.enabled &&
-      legacyPrinterConfig.printerName.trim()
-    ) {
-      try {
-        await printOrderToLegacyPrinter(legacyPrinterConfig, order);
-        showMessage(`Ticket ${getTicketCode(order)} enviado a ${legacyPrinterConfig.printerName}`, 'success');
-        return true;
-      } catch (e: any) {
-        console.warn('Falló impresora anterior de Windows:', e);
-      }
-    }
-
-    if (
-      networkPrinterConfig.enabled &&
-      networkPrinterConfig.printerIp.trim()
-    ) {
-      try {
-        await printOrderToNetworkPrinter(networkPrinterConfig, order);
-        showMessage(`Ticket ${getTicketCode(order)} enviado a UN-TP95W`, 'success');
-        return true;
-      } catch (e: any) {
-        console.warn('Falló UN-TP95W:', e);
-      }
-    }
-
-    printOrderTicket(order);
-    showMessage('Se abrió la impresión del navegador como respaldo', 'success');
-    return true;
-  };
-
   const handleReprintOrderTicket = async (order: OrderData) => {
-    await handlePrintOrderTicket(order);
+    printOrderTicket(order);
     await writeOrderAudit('TICKET_REIMPRESO', order, {
       type: order.type,
       status: order.status,
@@ -1866,69 +1823,15 @@ export default function App() {
           setOrders(prev => [localOrder, ...prev.filter(o => o.firestoreId !== createdRef.id)]);
 
           if (isMesa) {
-            let printMethod = 'browser';
-            let printError = '';
-            let printed = false;
-            let printerLabel = 'Navegador';
-            let copies = 2;
-
-            if (
-              networkPrinterConfig.enabled &&
-              networkPrinterConfig.autoPrintMesa &&
-              networkPrinterConfig.printerIp.trim()
-            ) {
-              try {
-                await printOrderToNetworkPrinter(networkPrinterConfig, localOrder);
-                printed = true;
-                printMethod = 'wifi-un-tp95w';
-                printerLabel = networkPrinterConfig.model;
-                copies = networkPrinterConfig.copies;
-              } catch (e: any) {
-                printError = e?.message || 'Error de impresión WiFi';
-                console.warn('UN-TP95W no disponible; se prueba impresora anterior:', e);
-              }
-            }
-
-            if (
-              !printed &&
-              legacyPrinterConfig.enabled &&
-              legacyPrinterConfig.autoPrintMesa &&
-              legacyPrinterConfig.printerName.trim()
-            ) {
-              try {
-                await printOrderToLegacyPrinter(legacyPrinterConfig, localOrder);
-                printed = true;
-                printMethod = 'windows-legacy';
-                printerLabel = legacyPrinterConfig.printerName;
-                copies = legacyPrinterConfig.copies;
-              } catch (e: any) {
-                const legacyError = e?.message || 'Error de impresión en Windows';
-                printError = printError ? `${printError} | ${legacyError}` : legacyError;
-                console.warn('Impresora anterior no disponible; se usa navegador como último respaldo:', e);
-              }
-            }
-
-            if (!printed) {
-              printOrderTicket(localOrder, { auto: true });
-              printMethod = 'browser';
-              printerLabel = 'Navegador';
-            }
-
+            printOrderTicket(localOrder, { auto: true });
             await writeOrderAudit('TICKET_IMPRESO_AUTOMATICO', localOrder, {
               type: localOrder.type,
               ticketCode: getTicketCode(localOrder),
               automatic: true,
-              printerModel: printerLabel,
-              printMethod,
-              printerIp: printMethod === 'wifi-un-tp95w' ? networkPrinterConfig.printerIp : null,
-              windowsPrinter: printMethod === 'windows-legacy' ? legacyPrinterConfig.printerName : null,
-              copies,
-              fallbackUsed: printMethod !== 'wifi-un-tp95w' && networkPrinterConfig.enabled,
-              printError,
               sessionId: register.sessionId || null
             }, false);
           }
-        }
+        }        }
 
         // Si la caja está abierta, reflejar inmediatamente el cobro en efectivo.
         // Tarjetas y transferencias se calculan desde los pedidos pagados.
@@ -3774,7 +3677,6 @@ export default function App() {
             isSubmitting={isSubmitting}
             setToppingModal={setToppingModal}
             showMessage={showMessage}
-            onPrintTicket={handlePrintOrderTicket}
             onReprintTicket={handleReprintOrderTicket}
             menuShortages={menuShortages}
             th={th}
@@ -5237,13 +5139,7 @@ export default function App() {
                   </div>
                 </div>
 
-                <NetworkPrinterSettings
-                  config={networkPrinterConfig}
-                  onChange={setNetworkPrinterConfig}
-                  legacyConfig={legacyPrinterConfig}
-                  onLegacyChange={setLegacyPrinterConfig}
-                  showMessage={showMessage}
-                />
+
 
                 {/* Dinero del turno por medio de pago */}
                 <div className="space-y-3">
