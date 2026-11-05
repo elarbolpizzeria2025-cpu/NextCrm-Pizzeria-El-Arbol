@@ -208,13 +208,22 @@ export const NetworkPrinterSettings: React.FC<Props> = ({
               Instalá una sola vez el puente local en esta PC de caja y después volvé a tocar Detectar.
             </div>
           </div>
-          <a
-            href="/instalar-puente-impresion.cmd"
-            download
-            className="h-9 px-3 rounded-xl bg-violet-500 hover:bg-violet-400 text-slate-950 text-[9px] font-black uppercase flex items-center justify-center gap-1.5 shrink-0"
-          >
-            <Icon name="download" size={12}/> Instalar puente Windows
-          </a>
+          <div className="flex items-center gap-2 shrink-0">
+            <a
+              href="/reparar-puente-impresion.cmd"
+              download
+              className="h-9 px-3 rounded-xl bg-amber-400 hover:bg-amber-300 text-slate-950 text-[9px] font-black uppercase flex items-center justify-center gap-1.5"
+            >
+              <Icon name="sync" size={12}/> Reparar / reiniciar puente
+            </a>
+            <a
+              href="/instalar-puente-impresion.cmd"
+              download
+              className="h-9 px-3 rounded-xl bg-violet-500 hover:bg-violet-400 text-slate-950 text-[9px] font-black uppercase flex items-center justify-center gap-1.5"
+            >
+              <Icon name="download" size={12}/> Instalar puente Windows
+            </a>
+          </div>
         </div>
 
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
