@@ -892,14 +892,21 @@ export default function App() {
   }, [forceReconnect]);
 
   const getItemUnit = (item: StockItem): string => {
-    if (item.unit) return item.unit;
     const name = (item.name || '').toLowerCase();
     const cat = (item.category || '').toLowerCase();
+
+    // Fainá siempre se controla por porciones, incluso si un registro viejo
+    // quedó guardado erróneamente como "Unidades".
+    if (name.includes('fainá') || name.includes('faina') || cat.includes('fainá') || cat.includes('faina')) {
+      return 'Porciones';
+    }
+
+    if (item.unit) return item.unit;
+
     if (name.includes('pizza') || name.includes('figaza') || cat.includes('pizza') || cat.includes('figaza')) {
       if (name.includes('pizzeta') || cat.includes('pizzeta')) return 'Unidades';
       return 'Metros';
     }
-    if (name.includes('fainá') || name.includes('faina') || cat.includes('fainá') || cat.includes('faina')) return 'Porciones';
     return 'Unidades';
   };
 
@@ -909,6 +916,36 @@ export default function App() {
     if (unit === 'Porciones') return 'porciones';
     return 'u';
   };
+
+  // Normaliza los registros antiguos de Fainá para que Firestore también
+  // los guarde explícitamente como "Porciones".
+  useEffect(() => {
+    if (!db || stockItems.length === 0) return;
+
+    const pending = stockItems.filter(item => {
+      const name = (item.name || '').toLowerCase();
+      const cat = (item.category || '').toLowerCase();
+      const isFaina =
+        name.includes('fainá') ||
+        name.includes('faina') ||
+        cat.includes('fainá') ||
+        cat.includes('faina');
+      return isFaina && item.unit !== 'Porciones';
+    });
+
+    if (pending.length === 0) return;
+
+    Promise.all(
+      pending.map(item =>
+        updateDoc(
+          doc(db, 'artifacts', appId, 'public', 'data', 'stockItems', item.firestoreId),
+          { unit: 'Porciones' }
+        )
+      )
+    ).catch(error => {
+      console.error('No se pudo normalizar Fainá a porciones:', error);
+    });
+  }, [stockItems]);
 
   const STOCK_LOW_THRESHOLD = 10;
   const STOCK_ALERT_REPEAT_MS = 10 * 60 * 1000;
@@ -2092,10 +2129,18 @@ export default function App() {
   const handleCreateStockItem = async () => {
     if (!newStockItemForm.name.trim()) return showMessage("Ingrese nombre del artículo", "error");
     try {
+      const normalizedStockName = newStockItemForm.name.trim().toLowerCase();
+      const normalizedStockCategory = newStockItemForm.category.toLowerCase();
+      const isFainaStock =
+        normalizedStockName.includes('fainá') ||
+        normalizedStockName.includes('faina') ||
+        normalizedStockCategory.includes('fainá') ||
+        normalizedStockCategory.includes('faina');
+
       await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'stockItems'), {
         name: newStockItemForm.name.trim(),
         category: newStockItemForm.category,
-        unit: newStockItemForm.unit || 'Unidades'
+        unit: isFainaStock ? 'Porciones' : (newStockItemForm.unit || 'Unidades')
       });
       setNewStockItemForm({ name: '', category: 'Pizzas', unit: 'Metros' });
       setNewStockItemModal(false);
@@ -5171,7 +5216,7 @@ export default function App() {
                         <div className="flex justify-between border-b border-purple-500/10 pb-2"><span className="font-black text-xs uppercase text-slate-400">Comisiones MP / Handy:</span><span className="font-black text-lg text-rose-300">-${reportData.totalProcessorFees.toFixed(2)}</span></div>
                         <div className="flex justify-between border-b border-purple-500/10 pb-2"><span className="font-black text-xs uppercase text-slate-400">Neto estimado cobros:</span><span className="font-black text-lg text-emerald-300">${reportData.totalNetReceipts.toFixed(2)}</span></div>
                         <div className="flex justify-between border-b border-purple-500/10 pb-2"><span className="font-black text-xs uppercase text-slate-400">Metros de Pizza:</span><span className="font-black text-lg text-blue-400">{reportData.physicalTotals.metrosPizza} m</span></div>
-                        <div className="flex justify-between border-b border-purple-500/10 pb-2"><span className="font-black text-xs uppercase text-slate-400">Fainás Totales:</span><span className="font-black text-lg text-purple-300">{reportData.physicalTotals.fainas}</span></div>
+                        <div className="flex justify-between border-b border-purple-500/10 pb-2"><span className="font-black text-xs uppercase text-slate-400">Fainá (porciones):</span><span className="font-black text-lg text-purple-300">{reportData.physicalTotals.fainas} porciones</span></div>
                       </div>
                     </div>
                   </div>
