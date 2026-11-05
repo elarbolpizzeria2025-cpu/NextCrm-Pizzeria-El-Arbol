@@ -95,6 +95,14 @@ async function fetchWithTimeout(url: string, init: RequestInit, timeoutMs = 6000
   const timer = setTimeout(() => controller.abort(), timeoutMs);
   try {
     return await fetch(url, { ...init, signal: controller.signal });
+  } catch (error: any) {
+    if (error?.name === 'AbortError') {
+      throw new Error('El puente de impresión no respondió a tiempo. Verificá que esté iniciado en la PC de caja.');
+    }
+    if (url.includes('127.0.0.1') || url.includes('localhost')) {
+      throw new Error('No se pudo conectar con el puente local de impresión. Abrí este CRM desde la PC Windows de la pizzería y asegurate de que el puente esté iniciado en esa misma PC.');
+    }
+    throw error;
   } finally {
     clearTimeout(timer);
   }
