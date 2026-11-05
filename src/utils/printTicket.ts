@@ -487,7 +487,7 @@ export const printCashClosureTicket = (data: CashClosureReportData) => {
              <div class="section-title">CANTIDADES Y METROS</div>
              <div class="main-info">
                 <div class="highlight-metric"><span>🍕 METROS DE PIZZA:</span> <span>${data.physicalTotals?.metrosPizza || 0} m</span></div>
-                <div class="info-row"><span>FAINÁS TOTALES</span> <b>${data.physicalTotals?.fainas || 0} u</b></div>
+                <div class="info-row"><span>FAINÁ (PORCIONES)</span> <b>${data.physicalTotals?.fainas || 0} porciones</b></div>
                 <div class="info-row"><span>PIZZETAS TOTALES</span> <b>${data.physicalTotals?.pizzetas || 0} u</b></div>
                 <div class="info-row"><span>PORCIONES DE PIZZA</span> <b>${data.physicalTotals?.porcionesPizza || 0} u</b></div>
                 <div class="info-row"><span>SÁNDWICHES CALIENTES</span> <b>${data.physicalTotals?.sandwiches || 0} u</b></div>
@@ -717,7 +717,7 @@ export const printFullAccountingReport = (data: CashClosureReportData) => {
         <tbody>
           <tr>
             <td style="text-align:center; font-weight:900; font-size:17px; color:#1d4ed8; padding:12px;">${data.physicalTotals?.metrosPizza || 0} m</td>
-            <td style="text-align:center; font-weight:900; font-size:17px; color:#b45309; padding:12px;">${data.physicalTotals?.fainas || 0} u</td>
+            <td style="text-align:center; font-weight:900; font-size:17px; color:#b45309; padding:12px;">${data.physicalTotals?.fainas || 0} porciones</td>
             <td style="text-align:center; font-weight:900; font-size:17px; color:#15803d; padding:12px;">${data.physicalTotals?.pizzetas || 0} u</td>
             <td style="text-align:center; font-weight:900; font-size:17px; color:#7e22ce; padding:12px;">${data.physicalTotals?.porcionesPizza || 0} u</td>
             <td style="text-align:center; font-weight:900; font-size:17px; color:#be123c; padding:12px;">${data.physicalTotals?.sandwiches || 0} u</td>
