@@ -143,18 +143,20 @@ export const NetworkPrinterSettings: React.FC<Props> = ({
           <label className="space-y-1 xl:col-span-2">
             <span className="text-[9px] font-black uppercase text-slate-500">Impresora de Windows</span>
             <div className="flex gap-2">
-              <select
+              <input
                 value={legacyDraft.printerName}
                 onChange={e => setLegacyDraft(prev => ({ ...prev, printerName: e.target.value }))}
+                list="nextcrm-windows-printers"
+                placeholder="Ej.: IBM Generic Printer"
                 className="flex-1 min-w-0 bg-[#06020e] border border-purple-500/25 rounded-xl px-3 py-2.5 text-sm font-bold text-white outline-none focus:border-violet-400"
-              >
-                <option value="">{legacyDraft.printerName ? legacyDraft.printerName : 'Seleccionar impresora...'}</option>
+              />
+              <datalist id="nextcrm-windows-printers">
                 {printers.map(p => (
                   <option key={p.Name} value={p.Name}>
-                    {p.Name}{p.Default ? ' (Predeterminada)' : ''}{p.WorkOffline ? ' • Sin conexión' : ''}
+                    {p.Default ? 'Predeterminada' : ''}{p.WorkOffline ? ' • Sin conexión' : ''}
                   </option>
                 ))}
-              </select>
+              </datalist>
               <button
                 type="button"
                 onClick={refreshWindowsPrinters}
@@ -162,6 +164,16 @@ export const NetworkPrinterSettings: React.FC<Props> = ({
                 className="px-3 py-2 bg-[#160829] border border-violet-500/30 text-violet-300 rounded-xl text-[9px] font-black uppercase hover:bg-[#20113a] disabled:opacity-50"
               >
                 {loadingPrinters ? 'Buscando...' : 'Detectar'}
+              </button>
+            </div>
+            <div className="flex items-center justify-between gap-2">
+              <span className="text-[8px] font-bold text-slate-500">Si Detectar falla, escribí exactamente el nombre que muestra Windows.</span>
+              <button
+                type="button"
+                onClick={() => setLegacyDraft(prev => ({ ...prev, printerName: 'IBM Generic Printer' }))}
+                className="text-[8px] font-black uppercase text-violet-300 hover:text-violet-200"
+              >
+                Usar IBM Generic Printer
               </button>
             </div>
           </label>
