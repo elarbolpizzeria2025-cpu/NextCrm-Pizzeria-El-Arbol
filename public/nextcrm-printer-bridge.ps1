@@ -153,6 +153,59 @@ function Send-ToPrinter([string]$PrinterName, [byte[]]$Bytes) {
   if (-not $ok) { throw "Windows no pudo enviar el ticket a la impresora seleccionada." }
 }
 
+
+function Get-NextCrmPrinters {
+  $results = @()
+
+  try {
+    $items = @(Get-CimInstance Win32_Printer -ErrorAction Stop | Select-Object Name, Default, WorkOffline, PrinterStatus)
+    if ($items.Count -gt 0) { return $items }
+  } catch {}
+
+  try {
+    $items = @(Get-Printer -ErrorAction Stop | ForEach-Object {
+      [pscustomobject]@{
+        Name = $_.Name
+        Default = $false
+        WorkOffline = $false
+        PrinterStatus = [int]$_.PrinterStatus
+      }
+    })
+    if ($items.Count -gt 0) {
+      try {
+        $defaultName = (New-Object System.Drawing.Printing.PrinterSettings).PrinterName
+        foreach ($p in $items) {
+          if ($p.Name -eq $defaultName) { $p.Default = $true }
+        }
+      } catch {}
+      return $items
+    }
+  } catch {}
+
+  try {
+    Add-Type -AssemblyName System.Drawing -ErrorAction SilentlyContinue
+    $defaultName = ""
+    try { $defaultName = (New-Object System.Drawing.Printing.PrinterSettings).PrinterName } catch {}
+    $names = [System.Drawing.Printing.PrinterSettings]::InstalledPrinters
+    foreach ($name in $names) {
+      $results += [pscustomobject]@{
+        Name = [string]$name
+        Default = ([string]$name -eq $defaultName)
+        WorkOffline = $false
+        PrinterStatus = 0
+      }
+    }
+    if ($results.Count -gt 0) { return $results }
+  } catch {}
+
+  try {
+    $items = @(Get-WmiObject Win32_Printer -ErrorAction Stop | Select-Object Name, Default, WorkOffline, PrinterStatus)
+    if ($items.Count -gt 0) { return $items }
+  } catch {}
+
+  throw "Windows no devolvio ninguna impresora instalada. Verifique que la ticketera aparezca en Configuracion > Bluetooth y dispositivos > Impresoras y escaneres."
+}
+
 function Send-JsonResponse($Stream, [int]$StatusCode, [object]$Payload) {
   $json = $Payload | ConvertTo-Json -Depth 10 -Compress
   $body = [Text.Encoding]::UTF8.GetBytes($json)
@@ -247,8 +300,12 @@ while ($true) {
     }
 
     if ($request.Method -eq "GET" -and $request.Path -eq "/windows-printers") {
-      $items = @(Get-CimInstance Win32_Printer | Select-Object Name, Default, WorkOffline, PrinterStatus)
-      Send-JsonResponse $stream 200 @{ ok = $true; printers = $items }
+      try {
+        $items = @(Get-NextCrmPrinters)
+        Send-JsonResponse $stream 200 @{ ok = $true; printers = $items }
+      } catch {
+        Send-JsonResponse $stream 500 @{ ok = $false; error = $_.Exception.Message }
+      }
       continue
     }
 
