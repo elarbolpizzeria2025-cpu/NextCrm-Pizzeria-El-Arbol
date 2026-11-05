@@ -189,6 +189,22 @@ export const NetworkPrinterSettings: React.FC<Props> = ({
           </label>
         </div>
 
+        <div className="rounded-2xl border border-violet-500/20 bg-violet-950/20 p-3 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+          <div>
+            <div className="text-[10px] font-black uppercase text-violet-200">¿Dice “Failed to fetch”?</div>
+            <div className="text-[9px] font-bold text-slate-400 mt-1">
+              Instalá una sola vez el puente local en esta PC de caja y después volvé a tocar Detectar.
+            </div>
+          </div>
+          <a
+            href="/instalar-puente-impresion.cmd"
+            download
+            className="h-9 px-3 rounded-xl bg-violet-500 hover:bg-violet-400 text-slate-950 text-[9px] font-black uppercase flex items-center justify-center gap-1.5 shrink-0"
+          >
+            <Icon name="download" size={12}/> Instalar puente Windows
+          </a>
+        </div>
+
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
           <label className="flex items-center gap-2 text-[10px] font-black uppercase text-slate-300">
             <input
