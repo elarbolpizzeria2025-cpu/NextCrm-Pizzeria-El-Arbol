@@ -12,7 +12,24 @@ export interface NetworkPrinterConfig {
   autoPrintMesa: boolean;
 }
 
+export interface WindowsPrinterInfo {
+  Name: string;
+  Default?: boolean;
+  WorkOffline?: boolean;
+  PrinterStatus?: number;
+}
+
+export interface LegacyPrinterConfig {
+  enabled: boolean;
+  printerName: string;
+  bridgeUrl: string;
+  bridgeToken: string;
+  copies: number;
+  autoPrintMesa: boolean;
+}
+
 const STORAGE_KEY = 'nextcrm_network_printer_unnion_tp95w';
+const LEGACY_STORAGE_KEY = 'nextcrm_legacy_windows_printer';
 
 export const DEFAULT_NETWORK_PRINTER_CONFIG: NetworkPrinterConfig = {
   enabled: false,
@@ -22,6 +39,15 @@ export const DEFAULT_NETWORK_PRINTER_CONFIG: NetworkPrinterConfig = {
   bridgeUrl: 'http://127.0.0.1:18181',
   bridgeToken: '',
   paperWidth: 80,
+  copies: 2,
+  autoPrintMesa: true
+};
+
+export const DEFAULT_LEGACY_PRINTER_CONFIG: LegacyPrinterConfig = {
+  enabled: false,
+  printerName: '',
+  bridgeUrl: 'http://127.0.0.1:18181',
+  bridgeToken: '',
   copies: 2,
   autoPrintMesa: true
 };
@@ -42,7 +68,23 @@ export function saveNetworkPrinterConfig(config: NetworkPrinterConfig): void {
   localStorage.setItem(STORAGE_KEY, JSON.stringify({ ...config, model: 'UN-TP95W' }));
 }
 
-function headers(config: NetworkPrinterConfig) {
+export function loadLegacyPrinterConfig(): LegacyPrinterConfig {
+  if (typeof window === 'undefined') return DEFAULT_LEGACY_PRINTER_CONFIG;
+  try {
+    const raw = localStorage.getItem(LEGACY_STORAGE_KEY);
+    if (!raw) return DEFAULT_LEGACY_PRINTER_CONFIG;
+    return { ...DEFAULT_LEGACY_PRINTER_CONFIG, ...JSON.parse(raw) };
+  } catch {
+    return DEFAULT_LEGACY_PRINTER_CONFIG;
+  }
+}
+
+export function saveLegacyPrinterConfig(config: LegacyPrinterConfig): void {
+  if (typeof window === 'undefined') return;
+  localStorage.setItem(LEGACY_STORAGE_KEY, JSON.stringify(config));
+}
+
+function headers(config: { bridgeToken: string }) {
   const h: Record<string, string> = { 'Content-Type': 'application/json' };
   if (config.bridgeToken.trim()) h['X-Printer-Token'] = config.bridgeToken.trim();
   return h;
@@ -105,5 +147,48 @@ export async function printOrderToNetworkPrinter(config: NetworkPrinterConfig, o
   });
   const data = await response.json().catch(() => ({}));
   if (!response.ok || !data?.ok) throw new Error(data?.error || 'No se pudo enviar el ticket por WiFi');
+  return data;
+}
+
+
+export async function listWindowsPrinters(config: LegacyPrinterConfig): Promise<WindowsPrinterInfo[]> {
+  const base = config.bridgeUrl.replace(/\/$/, '');
+  const response = await fetchWithTimeout(base + '/windows-printers', {
+    method: 'GET',
+    headers: headers(config)
+  }, 5000);
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok || !data?.ok) throw new Error(data?.error || 'No se pudieron leer las impresoras de Windows');
+  return Array.isArray(data.printers) ? data.printers : [];
+}
+
+export async function testLegacyPrinter(config: LegacyPrinterConfig) {
+  if (!config.printerName.trim()) throw new Error('Seleccioná la impresora anterior de Windows');
+  const base = config.bridgeUrl.replace(/\/$/, '');
+  const response = await fetchWithTimeout(base + '/test-windows', {
+    method: 'POST',
+    headers: headers(config),
+    body: JSON.stringify({ printerName: config.printerName.trim() })
+  }, 15000);
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok || !data?.ok) throw new Error(data?.error || 'La impresora anterior no respondió');
+  return data;
+}
+
+export async function printOrderToLegacyPrinter(config: LegacyPrinterConfig, order: OrderData) {
+  if (!config.enabled) throw new Error('La impresora anterior está desactivada');
+  if (!config.printerName.trim()) throw new Error('Falta seleccionar la impresora anterior');
+  const base = config.bridgeUrl.replace(/\/$/, '');
+  const response = await fetchWithTimeout(base + '/print-windows', {
+    method: 'POST',
+    headers: headers(config),
+    body: JSON.stringify({
+      printerName: config.printerName.trim(),
+      copies: Math.min(4, Math.max(1, Number(config.copies || 2))),
+      order
+    })
+  }, 15000);
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok || !data?.ok) throw new Error(data?.error || 'No se pudo imprimir en la impresora anterior');
   return data;
 }
