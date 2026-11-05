@@ -632,8 +632,40 @@ export default function App() {
     };
   };
 
-  const handleReprintOrderTicket = async (order: OrderData) => {
+  const handlePrintOrderTicket = async (order: OrderData): Promise<boolean> => {
+    if (
+      legacyPrinterConfig.enabled &&
+      legacyPrinterConfig.printerName.trim()
+    ) {
+      try {
+        await printOrderToLegacyPrinter(legacyPrinterConfig, order);
+        showMessage(`Ticket ${getTicketCode(order)} enviado a ${legacyPrinterConfig.printerName}`, 'success');
+        return true;
+      } catch (e: any) {
+        console.warn('Falló impresora anterior de Windows:', e);
+      }
+    }
+
+    if (
+      networkPrinterConfig.enabled &&
+      networkPrinterConfig.printerIp.trim()
+    ) {
+      try {
+        await printOrderToNetworkPrinter(networkPrinterConfig, order);
+        showMessage(`Ticket ${getTicketCode(order)} enviado a UN-TP95W`, 'success');
+        return true;
+      } catch (e: any) {
+        console.warn('Falló UN-TP95W:', e);
+      }
+    }
+
     printOrderTicket(order);
+    showMessage('Se abrió la impresión del navegador como respaldo', 'success');
+    return true;
+  };
+
+  const handleReprintOrderTicket = async (order: OrderData) => {
+    await handlePrintOrderTicket(order);
     await writeOrderAudit('TICKET_REIMPRESO', order, {
       type: order.type,
       status: order.status,
@@ -3742,6 +3774,7 @@ export default function App() {
             isSubmitting={isSubmitting}
             setToppingModal={setToppingModal}
             showMessage={showMessage}
+            onPrintTicket={handlePrintOrderTicket}
             onReprintTicket={handleReprintOrderTicket}
             menuShortages={menuShortages}
             th={th}
