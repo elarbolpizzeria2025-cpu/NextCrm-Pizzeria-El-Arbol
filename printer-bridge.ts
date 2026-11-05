@@ -1,5 +1,12 @@
 import express from 'express';
 import net from 'net';
+import fs from 'fs';
+import os from 'os';
+import path from 'path';
+import { execFile } from 'child_process';
+import { promisify } from 'util';
+
+const execFileAsync = promisify(execFile);
 
 const app = express();
 const PORT = Number(process.env.PRINTER_BRIDGE_PORT || 18181);
@@ -181,14 +188,173 @@ function parsePrinterTarget(body: any) {
   return { printerIp, printerPort };
 }
 
+async function listWindowsPrinters() {
+  if (process.platform !== 'win32') return [];
+  const script = [
+    "$ErrorActionPreference='Stop'",
+    "$items = Get-CimInstance Win32_Printer | Select-Object Name,Default,WorkOffline,PrinterStatus",
+    "$items | ConvertTo-Json -Compress"
+  ].join('; ');
+  const { stdout } = await execFileAsync('powershell.exe', [
+    '-NoProfile',
+    '-NonInteractive',
+    '-ExecutionPolicy', 'Bypass',
+    '-Command', script
+  ], { windowsHide: true, timeout: 8000 });
+  if (!stdout.trim()) return [];
+  const parsed = JSON.parse(stdout.trim());
+  return Array.isArray(parsed) ? parsed : [parsed];
+}
+
+async function sendRawToWindowsPrinter(printerName: string, payload: Buffer) {
+  if (process.platform !== 'win32') throw new Error('La impresión por cola de Windows sólo está disponible en Windows');
+  if (!printerName.trim()) throw new Error('Falta seleccionar la impresora de Windows');
+
+  const tempFile = path.join(os.tmpdir(), `nextcrm-ticket-${Date.now()}-${Math.random().toString(36).slice(2)}.bin`);
+  fs.writeFileSync(tempFile, payload);
+
+  const psScript = String.raw`
+$ErrorActionPreference = 'Stop'
+$printerName = $args[0]
+$filePath = $args[1]
+
+Add-Type -TypeDefinition @'
+using System;
+using System.IO;
+using System.Runtime.InteropServices;
+
+public class NextCrmRawPrinter {
+  [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Ansi)]
+  public class DOCINFOA {
+    [MarshalAs(UnmanagedType.LPStr)] public string pDocName;
+    [MarshalAs(UnmanagedType.LPStr)] public string pOutputFile;
+    [MarshalAs(UnmanagedType.LPStr)] public string pDataType;
+  }
+
+  [DllImport("winspool.drv", SetLastError=true, CharSet=CharSet.Ansi)]
+  static extern bool OpenPrinter(string szPrinter, out IntPtr hPrinter, IntPtr pd);
+
+  [DllImport("winspool.drv", SetLastError=true)]
+  static extern bool ClosePrinter(IntPtr hPrinter);
+
+  [DllImport("winspool.drv", SetLastError=true, CharSet=CharSet.Ansi)]
+  static extern bool StartDocPrinter(IntPtr hPrinter, Int32 level, [In] DOCINFOA di);
+
+  [DllImport("winspool.drv", SetLastError=true)]
+  static extern bool EndDocPrinter(IntPtr hPrinter);
+
+  [DllImport("winspool.drv", SetLastError=true)]
+  static extern bool StartPagePrinter(IntPtr hPrinter);
+
+  [DllImport("winspool.drv", SetLastError=true)]
+  static extern bool EndPagePrinter(IntPtr hPrinter);
+
+  [DllImport("winspool.drv", SetLastError=true)]
+  static extern bool WritePrinter(IntPtr hPrinter, IntPtr pBytes, Int32 dwCount, out Int32 dwWritten);
+
+  public static bool SendFile(string printerName, string fileName) {
+    byte[] bytes = File.ReadAllBytes(fileName);
+    IntPtr hPrinter = IntPtr.Zero;
+    IntPtr unmanaged = IntPtr.Zero;
+    try {
+      if (!OpenPrinter(printerName, out hPrinter, IntPtr.Zero)) return false;
+      var di = new DOCINFOA();
+      di.pDocName = "NextCRM Ticket";
+      di.pDataType = "RAW";
+      if (!StartDocPrinter(hPrinter, 1, di)) return false;
+      if (!StartPagePrinter(hPrinter)) return false;
+      unmanaged = Marshal.AllocCoTaskMem(bytes.Length);
+      Marshal.Copy(bytes, 0, unmanaged, bytes.Length);
+      int written;
+      bool ok = WritePrinter(hPrinter, unmanaged, bytes.Length, out written);
+      EndPagePrinter(hPrinter);
+      EndDocPrinter(hPrinter);
+      return ok && written == bytes.Length;
+    } finally {
+      if (unmanaged != IntPtr.Zero) Marshal.FreeCoTaskMem(unmanaged);
+      if (hPrinter != IntPtr.Zero) ClosePrinter(hPrinter);
+    }
+  }
+}
+'@
+
+if (-not [NextCrmRawPrinter]::SendFile($printerName, $filePath)) {
+  throw "Windows no pudo enviar el ticket a la impresora seleccionada."
+}
+`;
+
+  try {
+    await execFileAsync('powershell.exe', [
+      '-NoProfile',
+      '-NonInteractive',
+      '-ExecutionPolicy', 'Bypass',
+      '-Command', psScript,
+      printerName,
+      tempFile
+    ], { windowsHide: true, timeout: 15000 });
+  } finally {
+    try { fs.unlinkSync(tempFile); } catch {}
+  }
+}
+
 app.get('/health', (_req, res) => {
   res.json({
     ok: true,
-    bridge: 'NextCRM Unnion WiFi Printer Bridge',
-    model: 'UN-TP95W',
+    bridge: 'NextCRM Printer Bridge',
+    model: 'UN-TP95W + Windows Legacy',
     protocol: 'ESC/POS',
+    platform: process.platform,
     port: PORT
   });
+});
+
+app.get('/windows-printers', async (_req, res) => {
+  try {
+    const printers = await listWindowsPrinters();
+    res.json({ ok: true, printers });
+  } catch (error: any) {
+    res.status(500).json({ ok: false, error: error?.message || 'No se pudieron leer las impresoras de Windows' });
+  }
+});
+
+app.post('/test-windows', async (req, res) => {
+  try {
+    const printerName = String(req.body?.printerName || '').trim();
+    if (!printerName) return res.status(400).json({ ok: false, error: 'Seleccioná una impresora de Windows' });
+    await sendRawToWindowsPrinter(printerName, buildTicket({
+      id: '#TEST-OLD',
+      type: 'Local',
+      reference: 'PRUEBA IMPRESORA ANTERIOR',
+      client: { name: 'PRUEBA NEXTCRM' },
+      time: new Date().toLocaleTimeString('es-UY', { hour: '2-digit', minute: '2-digit' }),
+      items: [{ name: 'PRUEBA DE IMPRESION', quantity: 1, finalPrice: 0 }],
+      total: 0,
+      paymentMethod: 'PRUEBA',
+      notes: 'Cola de impresion Windows OK'
+    }, 'PRUEBA IMPRESORA ANTERIOR'));
+    res.json({ ok: true, printerName });
+  } catch (error: any) {
+    res.status(502).json({ ok: false, error: error?.message || 'No se pudo imprimir en la impresora anterior' });
+  }
+});
+
+app.post('/print-windows', async (req, res) => {
+  try {
+    const printerName = String(req.body?.printerName || '').trim();
+    const order = req.body?.order;
+    if (!printerName) return res.status(400).json({ ok: false, error: 'Seleccioná una impresora de Windows' });
+    if (!order || !Array.isArray(order.items)) return res.status(400).json({ ok: false, error: 'Pedido inválido' });
+
+    const copies = Math.min(4, Math.max(1, Number(req.body?.copies || 2)));
+    const buffers: Buffer[] = [];
+    for (let i = 0; i < copies; i++) {
+      buffers.push(buildTicket(order, copies > 1 ? (i === 0 ? 'VIA COCINA' : 'VIA CONTROL') : 'COMANDA'));
+    }
+    await sendRawToWindowsPrinter(printerName, Buffer.concat(buffers));
+    res.json({ ok: true, printerName, copies, ticketId: order.id });
+  } catch (error: any) {
+    res.status(502).json({ ok: false, error: error?.message || 'No se pudo enviar el ticket a Windows' });
+  }
 });
 
 app.post('/test', async (req, res) => {
