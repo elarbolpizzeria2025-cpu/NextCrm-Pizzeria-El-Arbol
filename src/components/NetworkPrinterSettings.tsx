@@ -147,7 +147,7 @@ export const NetworkPrinterSettings: React.FC<Props> = ({
                 value={legacyDraft.printerName}
                 onChange={e => setLegacyDraft(prev => ({ ...prev, printerName: e.target.value }))}
                 list="nextcrm-windows-printers"
-                placeholder="Ej.: IBM Generic Printer"
+                placeholder="Ej.: XP-80C"
                 className="flex-1 min-w-0 bg-[#06020e] border border-purple-500/25 rounded-xl px-3 py-2.5 text-sm font-bold text-white outline-none focus:border-violet-400"
               />
               <datalist id="nextcrm-windows-printers">
@@ -170,10 +170,10 @@ export const NetworkPrinterSettings: React.FC<Props> = ({
               <span className="text-[8px] font-bold text-slate-500">Si Detectar falla, escribí exactamente el nombre que muestra Windows.</span>
               <button
                 type="button"
-                onClick={() => setLegacyDraft(prev => ({ ...prev, printerName: 'IBM Generic Printer' }))}
+                onClick={() => setLegacyDraft(prev => ({ ...prev, printerName: 'XP-80C' }))}
                 className="text-[8px] font-black uppercase text-violet-300 hover:text-violet-200"
               >
-                Usar IBM Generic Printer
+                Usar XP-80C
               </button>
             </div>
           </label>
