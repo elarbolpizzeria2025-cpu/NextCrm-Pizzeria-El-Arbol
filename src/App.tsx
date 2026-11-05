@@ -1919,15 +1919,52 @@ export default function App() {
     const processor = getPaymentProcessorNet(paymentMethodToUse, finalTotal);
     
     const newCurrentStock = { ...(register.currentStock || {}) };
+
+    const getGeneralFainaStock = () => {
+      // El stock físico se carga una sola vez como "Fainá".
+      // Fainá Común y Fainá de la Casa JPS/JPM consumen de este mismo total.
+      const exactGeneral = stockItems.find(s => {
+        const name = (s.name || '').trim().toLowerCase();
+        return name === 'fainá' || name === 'faina' || name === 'fainá total' || name === 'faina total';
+      });
+      if (exactGeneral) return exactGeneral;
+
+      return stockItems.find(s => {
+        const name = (s.name || '').toLowerCase();
+        const category = (s.category || '').toLowerCase();
+        const isFaina = name.includes('fainá') || name.includes('faina') || category.includes('fainá') || category.includes('faina');
+        const isVariant = name.includes('común') || name.includes('comun') || name.includes('casa') || name.includes('muzzarella') || name.includes('ddl');
+        return isFaina && !isVariant;
+      });
+    };
+
     order.items.forEach(it => {
         const itemName = it.name.toLowerCase();
         const qty = it.quantity || 1;
         
         if (itemName.includes('1 metro muzzarella + 2 fainás') || (itemName.includes('metro') && itemName.includes('fainá'))) {
             let pizzaStock = stockItems.find(s => s.name.toLowerCase().includes('pizza') && !s.name.toLowerCase().includes('pizzeta'));
-            let fainaStock = stockItems.find(s => s.name.toLowerCase().includes('fainá') || s.name.toLowerCase().includes('faina'));
+            const fainaStock = getGeneralFainaStock();
             if (pizzaStock) newCurrentStock[pizzaStock.firestoreId] = Math.round(((newCurrentStock[pizzaStock.firestoreId] || 0) - (1 * qty)) * 100) / 100;
-            if (fainaStock) newCurrentStock[fainaStock.firestoreId] = Math.round(((newCurrentStock[fainaStock.firestoreId] || 0) - (2 * qty)) * 100) / 100;
+            if (fainaStock) newCurrentStock[fainaStock.firestoreId] = Math.max(0, Math.round(((newCurrentStock[fainaStock.firestoreId] || 0) - (2 * qty)) * 100) / 100);
+        } else if (
+            itemName.includes('fain') &&
+            (
+              itemName.includes('común') ||
+              itemName.includes('comun') ||
+              (
+                itemName.includes('casa') &&
+                (itemName.includes('jps') || itemName.includes('jpm'))
+              )
+            )
+        ) {
+            const fainaStock = getGeneralFainaStock();
+            if (fainaStock) {
+              newCurrentStock[fainaStock.firestoreId] = Math.max(
+                0,
+                Math.round(((newCurrentStock[fainaStock.firestoreId] || 0) - qty) * 100) / 100
+              );
+            }
         } else if (itemName.includes('figaza')) {
             let figazaStock = stockItems.find(s => s.name.toLowerCase().includes('figaza'));
             if (figazaStock) {
