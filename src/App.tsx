@@ -1831,7 +1831,7 @@ export default function App() {
               sessionId: register.sessionId || null
             }, false);
           }
-        }        }
+        }
 
         // Si la caja está abierta, reflejar inmediatamente el cobro en efectivo.
         // Tarjetas y transferencias se calculan desde los pedidos pagados.
