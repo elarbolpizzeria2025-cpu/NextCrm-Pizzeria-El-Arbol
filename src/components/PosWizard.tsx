@@ -46,7 +46,6 @@ interface PosWizardProps {
   isSubmitting: boolean;
   setToppingModal: (modal: { isOpen: boolean; item: any; selectedToppings: any[]; quantity: number; editingCartId?: string }) => void;
   showMessage: (msg: string, type?: 'success' | 'error') => void;
-  onPrintTicket?: (order: OrderData) => Promise<boolean> | boolean;
   onReprintTicket?: (order: OrderData) => void;
   menuShortages?: MenuShortage[];
   orders?: OrderData[];
@@ -130,7 +129,6 @@ export const PosWizard: React.FC<PosWizardProps> = ({
   isSubmitting,
   setToppingModal,
   showMessage,
-  onPrintTicket,
   onReprintTicket,
   menuShortages = [],
   orders = [],
@@ -418,20 +416,19 @@ export const PosWizard: React.FC<PosWizardProps> = ({
   };
 
   // Trigger ticket printing
-  const handlePrintTicket = async (): Promise<boolean> => {
+  const handlePrintTicket = (): boolean => {
     if (cart.length === 0) {
       showMessage("Cargue al menos un producto a la comanda antes de imprimir", "error");
       return false;
     }
     const orderData = buildCurrentOrderForPrint();
     if (editingOrder && onReprintTicket) {
-      await onReprintTicket(orderData);
-    } else if (onPrintTicket) {
-      await onPrintTicket(orderData);
+      onReprintTicket(orderData);
     } else {
       printOrderTicket(orderData);
     }
     setTicketPrinted(true);
+    showMessage("Imprimiendo comanda térmica...");
     return true;
   };
 
