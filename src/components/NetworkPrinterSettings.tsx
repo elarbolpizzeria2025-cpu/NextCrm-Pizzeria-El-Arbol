@@ -58,6 +58,7 @@ export const NetworkPrinterSettings: React.FC<Props> = ({ config, onChange, show
           <div className="text-[9px] font-black uppercase tracking-[0.18em] text-cyan-300">Ticketera Wi‑Fi</div>
           <h3 className="text-lg font-black uppercase text-white">Unnion UN-TP95W</h3>
           <p className="text-[10px] font-bold text-slate-500">ESC/POS • 80 mm • Wi‑Fi • corte automático</p>
+          <p className="text-[9px] font-black text-amber-300 mt-1">IP de configuración Wi‑Fi: 10.10.100.254 (no es la IP LAN para imprimir)</p>
         </div>
         <label className="flex items-center gap-2 text-[10px] font-black uppercase text-slate-300">
           <input
@@ -76,7 +77,7 @@ export const NetworkPrinterSettings: React.FC<Props> = ({ config, onChange, show
           <input
             value={draft.printerIp}
             onChange={e => setDraft(prev => ({ ...prev, printerIp: e.target.value }))}
-            placeholder="192.168.1.80"
+            placeholder="Ej.: 192.168.1.201"
             className="w-full bg-[#06020e] border border-purple-500/25 rounded-xl px-3 py-2.5 text-sm font-mono text-white outline-none focus:border-cyan-400"
           />
         </label>
