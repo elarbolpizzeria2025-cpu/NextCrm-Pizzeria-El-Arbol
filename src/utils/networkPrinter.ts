@@ -67,7 +67,10 @@ export async function checkPrinterBridge(config: NetworkPrinterConfig) {
 }
 
 export async function testNetworkPrinter(config: NetworkPrinterConfig) {
-  if (!config.printerIp.trim()) throw new Error('Ingresá la IP de la UN-TP95W');
+  if (!config.printerIp.trim()) throw new Error('Ingresá la IP LAN de la UN-TP95W');
+  if (config.printerIp.trim() === '10.10.100.254') {
+    throw new Error('10.10.100.254 es la IP de configuración Wi‑Fi de la ticketera. Para imprimir, usá la IP LAN/STA que recibe en el Wi‑Fi del local.');
+  }
   const base = config.bridgeUrl.replace(/\/$/, '');
   const response = await fetchWithTimeout(base + '/test', {
     method: 'POST',
@@ -84,7 +87,10 @@ export async function testNetworkPrinter(config: NetworkPrinterConfig) {
 
 export async function printOrderToNetworkPrinter(config: NetworkPrinterConfig, order: OrderData) {
   if (!config.enabled) throw new Error('La impresora WiFi está desactivada');
-  if (!config.printerIp.trim()) throw new Error('Falta la IP de la UN-TP95W');
+  if (!config.printerIp.trim()) throw new Error('Falta la IP LAN de la UN-TP95W');
+  if (config.printerIp.trim() === '10.10.100.254') {
+    throw new Error('10.10.100.254 es la IP de configuración, no la IP de impresión LAN/STA.');
+  }
   const base = config.bridgeUrl.replace(/\/$/, '');
   const response = await fetchWithTimeout(base + '/print', {
     method: 'POST',
