@@ -3859,8 +3859,8 @@ export default function App() {
 
         {/* GESTIÓN: pantalla por módulos con botones grandes */}
         {activeTab === 'management' && (
-          <div className="h-full overflow-hidden bg-[#040108] p-3 sm:p-5">
-            <div className="w-full max-w-[1200px] h-full mx-auto flex flex-col justify-center">
+          <div className="h-full min-h-0 overflow-y-auto md:overflow-hidden overscroll-contain touch-pan-y no-scrollbar bg-[#040108] p-3 sm:p-5">
+            <div className="w-full max-w-[1200px] min-h-full md:h-full mx-auto flex flex-col justify-start md:justify-center pb-6 md:pb-0">
               <div className="text-center mb-3">
                 <div className="text-[10px] font-black uppercase tracking-[0.22em] text-purple-400">Administración</div>
                 <h1 className="text-2xl sm:text-3xl font-black uppercase text-white">Gestión</h1>
@@ -3886,7 +3886,7 @@ export default function App() {
                     key={item.id}
                     type="button"
                     onClick={() => setActiveTab(item.id)}
-                    className="group aspect-[1.18/1] min-h-0 rounded-[22px] border border-purple-500/25 bg-gradient-to-br from-[#16092b] via-[#0e061b] to-[#080311] hover:border-purple-300/70 hover:from-[#231044] hover:to-[#0d051b] transition-all shadow-lg hover:shadow-purple-950/50 cursor-pointer p-2.5 flex flex-col items-center justify-center text-center relative overflow-hidden"
+                    className="group min-h-[118px] sm:min-h-0 sm:aspect-[1.18/1] rounded-[22px] border border-purple-500/25 bg-gradient-to-br from-[#16092b] via-[#0e061b] to-[#080311] hover:border-purple-300/70 hover:from-[#231044] hover:to-[#0d051b] transition-all shadow-lg hover:shadow-purple-950/50 cursor-pointer p-2.5 flex flex-col items-center justify-center text-center relative overflow-hidden"
                   >
                     <div className="absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-purple-600 via-fuchsia-500 to-indigo-600 opacity-80"/>
                     <div className="w-12 h-12 sm:w-14 sm:h-14 rounded-[18px] bg-purple-600/20 border border-purple-400/30 text-purple-200 flex items-center justify-center mb-2.5 group-hover:scale-105 transition-all">
