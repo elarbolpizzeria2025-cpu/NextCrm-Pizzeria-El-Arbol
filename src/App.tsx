@@ -39,7 +39,10 @@ import { NetworkPrinterSettings } from './components/NetworkPrinterSettings';
 import {
   loadNetworkPrinterConfig,
   printOrderToNetworkPrinter,
-  NetworkPrinterConfig
+  NetworkPrinterConfig,
+  loadLegacyPrinterConfig,
+  printOrderToLegacyPrinter,
+  LegacyPrinterConfig
 } from './utils/networkPrinter';
 
 const NEXTCRM_EMBEDDED_DEMO = typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('nextcrmDemo') === '1';
@@ -182,6 +185,7 @@ export default function App() {
     isOpen: false, initialCash: 0, currentCash: 0, sessionId: null, isLoaded: false, currentStock: {}, initialStock: {} 
   });
   const [networkPrinterConfig, setNetworkPrinterConfig] = useState<NetworkPrinterConfig>(() => loadNetworkPrinterConfig());
+  const [legacyPrinterConfig, setLegacyPrinterConfig] = useState<LegacyPrinterConfig>(() => loadLegacyPrinterConfig());
   const [stockItems, setStockItems] = useState<StockItem[]>([]);
   const [menuShortages, setMenuShortages] = useState<MenuShortage[]>([]);
   const [shortageModalOpen, setShortageModalOpen] = useState(false);
@@ -1832,7 +1836,9 @@ export default function App() {
           if (isMesa) {
             let printMethod = 'browser';
             let printError = '';
-            let networkPrinted = false;
+            let printed = false;
+            let printerLabel = 'Navegador';
+            let copies = 2;
 
             if (
               networkPrinterConfig.enabled &&
@@ -1841,27 +1847,51 @@ export default function App() {
             ) {
               try {
                 await printOrderToNetworkPrinter(networkPrinterConfig, localOrder);
-                networkPrinted = true;
+                printed = true;
                 printMethod = 'wifi-un-tp95w';
+                printerLabel = networkPrinterConfig.model;
+                copies = networkPrinterConfig.copies;
               } catch (e: any) {
                 printError = e?.message || 'Error de impresión WiFi';
-                console.warn('UN-TP95W no disponible; se usa impresión local de respaldo:', e);
+                console.warn('UN-TP95W no disponible; se prueba impresora anterior:', e);
               }
             }
 
-            if (!networkPrinted) {
+            if (
+              !printed &&
+              legacyPrinterConfig.enabled &&
+              legacyPrinterConfig.autoPrintMesa &&
+              legacyPrinterConfig.printerName.trim()
+            ) {
+              try {
+                await printOrderToLegacyPrinter(legacyPrinterConfig, localOrder);
+                printed = true;
+                printMethod = 'windows-legacy';
+                printerLabel = legacyPrinterConfig.printerName;
+                copies = legacyPrinterConfig.copies;
+              } catch (e: any) {
+                const legacyError = e?.message || 'Error de impresión en Windows';
+                printError = printError ? `${printError} | ${legacyError}` : legacyError;
+                console.warn('Impresora anterior no disponible; se usa navegador como último respaldo:', e);
+              }
+            }
+
+            if (!printed) {
               printOrderTicket(localOrder, { auto: true });
+              printMethod = 'browser';
+              printerLabel = 'Navegador';
             }
 
             await writeOrderAudit('TICKET_IMPRESO_AUTOMATICO', localOrder, {
               type: localOrder.type,
               ticketCode: getTicketCode(localOrder),
               automatic: true,
-              printerModel: networkPrinterConfig.enabled ? networkPrinterConfig.model : 'Navegador',
+              printerModel: printerLabel,
               printMethod,
-              printerIp: networkPrinted ? networkPrinterConfig.printerIp : null,
-              copies: networkPrinted ? networkPrinterConfig.copies : 2,
-              fallbackUsed: !networkPrinted && networkPrinterConfig.enabled,
+              printerIp: printMethod === 'wifi-un-tp95w' ? networkPrinterConfig.printerIp : null,
+              windowsPrinter: printMethod === 'windows-legacy' ? legacyPrinterConfig.printerName : null,
+              copies,
+              fallbackUsed: printMethod !== 'wifi-un-tp95w' && networkPrinterConfig.enabled,
               printError,
               sessionId: register.sessionId || null
             }, false);
@@ -5177,6 +5207,8 @@ export default function App() {
                 <NetworkPrinterSettings
                   config={networkPrinterConfig}
                   onChange={setNetworkPrinterConfig}
+                  legacyConfig={legacyPrinterConfig}
+                  onLegacyChange={setLegacyPrinterConfig}
                   showMessage={showMessage}
                 />
 
