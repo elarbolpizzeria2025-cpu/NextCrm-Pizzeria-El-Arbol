@@ -546,7 +546,7 @@ export const PosWizard: React.FC<PosWizardProps> = ({
           key={item.id}
           type="button"
           onClick={handleItemClick}
-          className={`group relative min-h-[108px] h-[118px] rounded-[18px] border p-2 transition-all cursor-pointer flex flex-col justify-between text-left overflow-hidden shadow-md ${
+          className={`group relative min-h-[104px] h-[110px] sm:h-[118px] rounded-[18px] border p-2 transition-all cursor-pointer flex flex-col justify-between text-left overflow-hidden shadow-md ${
             qtyInCart > 0
               ? 'border-purple-300 bg-gradient-to-br from-[#1a0b36] via-[#130726] to-[#0b0517] shadow-purple-950/40 ring-2 ring-purple-400/40'
               : 'border-purple-500/20 bg-gradient-to-br from-[#120722] via-[#0d061a] to-[#090313] hover:border-purple-400/60 hover:shadow-purple-950/30'
@@ -691,14 +691,14 @@ export const PosWizard: React.FC<PosWizardProps> = ({
   };
 
   return (
-    <div className="h-full w-full bg-[#040108] text-slate-100 select-none overflow-hidden relative min-h-0">
+    <div className="mobile-pos-root h-full w-full bg-[#040108] text-slate-100 select-none overflow-hidden relative min-h-0">
       {/* ================================================================ */}
       {/* PEDIDOS: PANTALLA PRINCIPAL DE MENÚ                              */}
       {/* La navegación superior general vive en App.tsx y no se modifica. */}
       {/* ================================================================ */}
       <div className="pizzeria-pos-inner h-full w-full flex flex-col bg-[#05020c] overflow-hidden">
         {/* Barra propia de Pedidos: herramientas a la derecha y acceso a Cobrar */}
-        <div className="px-3 sm:px-4 py-1.5 bg-[#080314] border-b border-purple-500/20 flex items-center justify-end gap-1.5 shrink-0 shadow-md">
+        <div className="mobile-pos-toolbar px-2.5 sm:px-4 py-1 bg-[#080314] border-b border-purple-500/20 flex items-center justify-end gap-1.5 shrink-0 shadow-md">
           <div className="hidden md:flex items-center gap-1.5 shrink-0 ml-auto">
             <button
               type="button"
@@ -793,7 +793,7 @@ export const PosWizard: React.FC<PosWizardProps> = ({
                       key={cat}
                       type="button"
                       onClick={() => setActiveCategory(cat)}
-                      className="group min-h-[112px] sm:aspect-[1.18/1] sm:min-h-0 rounded-[20px] sm:rounded-[22px] border border-purple-500/25 bg-gradient-to-br from-[#16092b] via-[#0e061b] to-[#080311] hover:border-purple-300/70 hover:from-[#231044] hover:to-[#0d051b] transition-all shadow-lg hover:shadow-purple-950/50 cursor-pointer p-2.5 flex flex-col items-center justify-center text-center relative overflow-hidden"
+                      className="group min-h-[100px] sm:aspect-[1.18/1] sm:min-h-0 rounded-[20px] sm:rounded-[22px] border border-purple-500/25 bg-gradient-to-br from-[#16092b] via-[#0e061b] to-[#080311] hover:border-purple-300/70 hover:from-[#231044] hover:to-[#0d051b] transition-all shadow-lg hover:shadow-purple-950/50 cursor-pointer p-2.5 flex flex-col items-center justify-center text-center relative overflow-hidden"
                     >
                       <div className="absolute inset-x-0 top-0 h-1.5 bg-gradient-to-r from-purple-600 via-fuchsia-500 to-indigo-600 opacity-80" />
                       <div className="w-12 h-12 sm:w-14 sm:h-14 rounded-[18px] bg-purple-600/20 border border-purple-400/30 text-purple-200 flex items-center justify-center mb-2.5 group-hover:scale-105 group-hover:bg-purple-600/30 transition-all">
@@ -865,11 +865,11 @@ export const PosWizard: React.FC<PosWizardProps> = ({
       {/* Se abre solo al tocar el botón superior derecho.                  */}
       {/* ================================================================ */}
       <div
-        className={`absolute inset-0 z-50 bg-[#040108] flex flex-col transition-transform duration-300 ${
+        className={`mobile-checkout absolute inset-0 z-50 bg-[#040108] flex flex-col transition-transform duration-300 ${
           showMobileComanda ? 'translate-x-0' : 'translate-x-full pointer-events-none'
         }`}
       >
-        <div className="px-3 sm:px-5 py-3 bg-[#090317] border-b border-purple-500/25 flex items-center justify-between gap-3 shrink-0 shadow-lg">
+        <div className="px-2.5 sm:px-5 py-2 sm:py-3 bg-[#090317] border-b border-purple-500/25 flex items-center justify-between gap-2 sm:gap-3 shrink-0 shadow-lg">
           <button
             type="button"
             onClick={() => setShowMobileComanda(false)}
@@ -900,7 +900,7 @@ export const PosWizard: React.FC<PosWizardProps> = ({
                   <span className="text-[10px] font-black uppercase px-2.5 py-1 rounded-xl bg-purple-950 text-purple-200 border border-purple-500/30">{orderType}</span>
                 </div>
 
-                <div className="grid grid-cols-3 gap-2 sm:gap-3">
+                <div className="grid grid-cols-3 gap-1.5 sm:gap-3">
                   {ORDER_TYPES.map(t => {
                     const selected = orderType.toLowerCase() === t.id.toLowerCase();
                     return (
