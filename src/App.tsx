@@ -2956,9 +2956,9 @@ export default function App() {
   const normalOrders = normalAndDelayed.filter(o => !delayedOrders.includes(o));
 
   return (
-    <div className="pizzeria-shell fixed inset-0 flex flex-col bg-[#040108] font-sans text-slate-100 overflow-hidden">
+    <div className="pizzeria-shell fixed inset-0 min-h-[100dvh] flex flex-col bg-[#040108] font-sans text-slate-100 overflow-hidden">
       {uiMessage && (
-        <div className={`fixed top-4 left-1/2 -translate-x-1/2 z-[1000] px-8 py-3 text-white rounded-full font-black text-xs uppercase shadow-2xl animate-in slide-in-from-top-4 ${uiMessage.type === 'error' ? 'bg-red-600' : 'bg-slate-900 border border-purple-500/40 text-purple-300'}`}>
+        <div className={`fixed top-[max(1rem,env(safe-area-inset-top))] left-1/2 -translate-x-1/2 z-[1000] max-w-[calc(100vw-1rem)] px-4 sm:px-8 py-3 text-center text-white rounded-2xl sm:rounded-full font-black text-[10px] sm:text-xs uppercase shadow-2xl animate-in slide-in-from-top-4 ${uiMessage.type === 'error' ? 'bg-red-600' : 'bg-slate-900 border border-purple-500/40 text-purple-300'}`}>
           {uiMessage.text}
         </div>
       )}
@@ -3272,7 +3272,7 @@ export default function App() {
       )}
 
       {/* Header - Deluxe Lila, White & Black Edition with RBAC Role Indicator */}
-      <header className="pizzeria-header min-h-14 md:h-14 bg-[#040108] border-b border-purple-500/20 text-white flex flex-wrap md:flex-nowrap items-center px-2 sm:px-3 py-1.5 md:py-0 shrink-0 shadow-lg z-50 gap-2 md:gap-3">
+      <header className="pizzeria-header min-h-14 md:h-14 bg-[#040108] border-b border-purple-500/20 text-white flex flex-wrap md:flex-nowrap items-center px-2 sm:px-3 py-1.5 md:py-0 shrink-0 shadow-lg z-50 gap-1.5 sm:gap-2 md:gap-3">
         <div className="w-auto md:w-[170px] flex items-center gap-1.5 shrink-0 pr-1 md:pr-3 border-r-0 md:border-r border-purple-500/20">
           <div className="w-7 h-7 rounded-lg border border-purple-500/50 bg-[#0d061c] flex items-center justify-center font-black text-xs text-purple-300 shadow-xs">
             N
@@ -3319,7 +3319,7 @@ export default function App() {
                     </span>
                   )}
                   <Icon name={tab.icon} size={15}/>
-                  <span className="whitespace-nowrap truncate">{tab.label}</span>
+                  <span className="mobile-nav-label whitespace-nowrap truncate">{tab.label}</span>
                 </button>
               );
             })}
@@ -3328,7 +3328,7 @@ export default function App() {
 
         <div className="contents md:flex md:items-center md:justify-end md:gap-1.5 md:shrink-0 md:min-w-0">
         {/* Buscador global: productos y pedidos, visible en todos los módulos */}
-        <div className="order-4 md:order-none relative w-full md:w-[240px] xl:w-[280px] 2xl:w-[320px] shrink-0">
+        <div className="mobile-header-search order-4 md:order-none relative w-full md:w-[240px] xl:w-[280px] 2xl:w-[320px] shrink-0">
           <Icon name="search" size={10} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-purple-400 pointer-events-none"/>
           <input
             type="text"
@@ -3635,7 +3635,7 @@ export default function App() {
       )}
 
       {/* Main Container */}
-      <main className="pizzeria-workspace flex-1 overflow-hidden relative bg-[#040108]">
+      <main className="pizzeria-workspace flex-1 min-h-0 overflow-hidden relative bg-[#040108]">
         {/* POS Tab */}
         {activeTab === 'pos' && (
           <PosWizard
@@ -3748,9 +3748,9 @@ export default function App() {
           ];
 
           return (
-            <div className="h-full overflow-hidden bg-[#040108] p-3 sm:p-4">
-              <div className="w-full h-full max-w-[1800px] mx-auto flex flex-col gap-3 min-h-0">
-                <div className="flex items-center justify-between gap-4 shrink-0">
+            <div className="mobile-page-scroll h-full overflow-y-auto lg:overflow-hidden bg-[#040108] p-2 sm:p-4">
+              <div className="w-full h-auto lg:h-full max-w-[1800px] mx-auto flex flex-col gap-3 min-h-0 pb-2 lg:pb-0">
+                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 sm:gap-4 shrink-0">
                   <div>
                     <div className="text-[9px] font-black uppercase tracking-[0.2em] text-purple-400">Salida de Cocina</div>
                     <h1 className="text-xl sm:text-2xl font-black uppercase text-white">Pedidos Prontos</h1>
@@ -3771,9 +3771,9 @@ export default function App() {
                   </div>
                 </div>
 
-                <div className="grid grid-cols-1 lg:grid-cols-3 gap-3 flex-1 min-h-0">
+                <div className="grid grid-cols-1 lg:grid-cols-3 gap-3 flex-none lg:flex-1 min-h-0">
                   {readySections.map(section => (
-                    <section key={section.id} className="min-h-0 rounded-[24px] border border-purple-500/20 bg-[#080312] flex flex-col overflow-hidden">
+                    <section key={section.id} className="min-h-[220px] lg:min-h-0 rounded-[20px] sm:rounded-[24px] border border-purple-500/20 bg-[#080312] flex flex-col overflow-hidden">
                       <div className="h-12 px-3 flex items-center justify-between border-b border-purple-500/20 bg-[#0d061a] shrink-0">
                         <div className="flex items-center gap-2">
                           <div className="w-8 h-8 rounded-xl bg-purple-600/20 border border-purple-500/30 flex items-center justify-center text-purple-300">
