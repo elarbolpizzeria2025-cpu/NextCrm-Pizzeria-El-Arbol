@@ -446,7 +446,7 @@ export const KdsMonitor: React.FC<KdsMonitorProps> = ({
   // Render a Column Container
   const renderColumn = (title: string, count: number, orderList: OrderData[], columnKey: string, iconName: string) => {
     return (
-      <div className="flex flex-col bg-[#060b11] rounded-2xl sm:rounded-3xl border border-slate-800/90 overflow-hidden shadow-2xl flex-1 min-w-0 sm:min-w-[270px] max-w-full min-h-[180px] h-auto xl:h-full max-h-[70dvh] xl:max-h-none">
+      <div className="flex flex-col bg-[#060b11] rounded-2xl sm:rounded-3xl border border-slate-800/90 overflow-hidden shadow-2xl flex-1 min-w-0 sm:min-w-[270px] max-w-full min-h-[180px] h-auto xl:h-full max-h-[58dvh] sm:max-h-[70dvh] xl:max-h-none">
         {/* Column Header */}
         <div className="px-4 py-3 border-b border-slate-800 flex items-center justify-between bg-[#0a111a] shrink-0">
           <div className="flex items-center gap-2">
@@ -481,7 +481,7 @@ export const KdsMonitor: React.FC<KdsMonitorProps> = ({
     <div
       ref={containerRef}
       className={`flex flex-col bg-[#03060a] text-slate-100 overflow-hidden select-none ${
-        isFullscreen || isStandalone ? 'fixed inset-0 z-50 p-2 sm:p-4' : 'h-[calc(100dvh-3.5rem)] min-h-0 p-2 sm:p-4'
+        isFullscreen || isStandalone ? 'fixed inset-0 z-50 p-2 sm:p-4' : 'h-full min-h-0 p-2 sm:p-4'
       }`}
     >
       {/* Top Banner Alert if any Delayed Orders */}
@@ -666,7 +666,7 @@ export const KdsMonitor: React.FC<KdsMonitorProps> = ({
             )}
           </div>
         ) : (
-          <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3 sm:gap-3.5 h-full min-h-0 overflow-hidden">
+          <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3 sm:gap-3.5 h-auto sm:h-full min-h-0 overflow-y-auto sm:overflow-hidden custom-dark-scrollbar pb-2 sm:pb-0">
             {/* Column 1: Retiro en Local */}
             {renderColumn(
               'RETIRO EN LOCAL',
