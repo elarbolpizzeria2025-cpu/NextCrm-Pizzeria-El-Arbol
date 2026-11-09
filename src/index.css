@@ -31,20 +31,88 @@ select {
 }
 
 @media (max-width: 767px) {
+  html,
+  body,
+  #root {
+    min-height: 100dvh;
+  }
+
+  body {
+    -webkit-text-size-adjust: 100%;
+    text-size-adjust: 100%;
+  }
+
   input,
   textarea,
   select {
     font-size: 16px;
   }
 
-  button {
+  button,
+  [role="button"] {
     min-width: 0;
+    min-height: 44px;
+  }
+
+  .pizzeria-shell {
+    padding-left: env(safe-area-inset-left);
+    padding-right: env(safe-area-inset-right);
+  }
+
+  .pizzeria-header {
+    padding-top: max(0.375rem, env(safe-area-inset-top)) !important;
+    padding-left: max(0.5rem, env(safe-area-inset-left)) !important;
+    padding-right: max(0.5rem, env(safe-area-inset-right)) !important;
+  }
+
+  .pizzeria-workspace {
+    min-height: 0;
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+
+  .mobile-pos-root,
+  .mobile-checkout,
+  .mobile-page-scroll {
+    -webkit-overflow-scrolling: touch;
+    overscroll-behavior-y: contain;
+  }
+
+  .mobile-pos-toolbar {
+    min-height: 46px;
+  }
+
+  .mobile-checkout {
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+
+  .mobile-nav-label {
+    max-width: 7.5rem;
   }
 
   .fixed.inset-0.flex.items-center.justify-center > div:not(.overflow-hidden) {
-    max-height: calc(100dvh - 1rem);
+    max-height: calc(100dvh - max(1rem, env(safe-area-inset-top)) - max(1rem, env(safe-area-inset-bottom)));
     overflow-y: auto;
     -webkit-overflow-scrolling: touch;
+  }
+}
+
+@media (max-width: 389px) {
+  .pizzeria-header {
+    gap: 0.35rem !important;
+  }
+
+  .mobile-nav-label {
+    display: none;
+  }
+
+  .mobile-header-search input {
+    height: 2.25rem;
+  }
+}
+
+@media (min-width: 390px) and (max-width: 767px) {
+  .mobile-nav-label {
+    font-size: 8px;
   }
 }
 
