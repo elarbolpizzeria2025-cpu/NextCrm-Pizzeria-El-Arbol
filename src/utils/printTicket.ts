@@ -285,7 +285,7 @@ export const printOrderTicket = (order: OrderData, options?: { auto?: boolean })
     </style></head>
     <body>
       ${options?.auto
-        ? generateTicketHTML("VÍA COCINA")
+        ? generateTicketHTML("VÍA COMERCIO")
         : `${generateTicketHTML("VÍA CLIENTE")}<div class="page-break"></div>${generateTicketHTML("VÍA COMERCIO")}`
       }
       <script>window.onload = function() { setTimeout(() => { window.print(); setTimeout(window.close, 500); }, 500); }</script>
