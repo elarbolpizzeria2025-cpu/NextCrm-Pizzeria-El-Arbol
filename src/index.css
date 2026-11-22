@@ -198,6 +198,36 @@ select {
 
 
 /* =========================================================
+   Pizzería: tipografía uniforme en todas las pantallas.
+   Texto operativo = 14px. Se conservan títulos mayores.
+   ========================================================= */
+.pizzeria-shell {
+  font-size: 14px;
+}
+
+.pizzeria-shell [class~="text-[7px]"],
+.pizzeria-shell [class~="text-[8px]"],
+.pizzeria-shell [class~="text-[9px]"],
+.pizzeria-shell [class~="text-[9.5px]"],
+.pizzeria-shell [class~="text-[10px]"],
+.pizzeria-shell [class~="text-[11px]"],
+.pizzeria-shell [class~="text-[11.5px]"],
+.pizzeria-shell [class~="text-[12px]"],
+.pizzeria-shell [class~="text-[13px]"],
+.pizzeria-shell .text-xs,
+.pizzeria-shell .text-sm {
+  font-size: 14px !important;
+  line-height: 1.25 !important;
+}
+
+.pizzeria-shell button,
+.pizzeria-shell input,
+.pizzeria-shell textarea,
+.pizzeria-shell select {
+  font-size: 14px;
+}
+
+/* =========================================================
    Pizzería: fondo unificado lila, violeta y rosa.
    No alterar fondos de tarjetas, estados, botones o cuadrados.
    ========================================================= */
