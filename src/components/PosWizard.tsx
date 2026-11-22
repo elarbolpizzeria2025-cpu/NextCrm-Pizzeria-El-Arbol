@@ -546,7 +546,7 @@ export const PosWizard: React.FC<PosWizardProps> = ({
           key={item.id}
           type="button"
           onClick={handleItemClick}
-          className={`group relative min-h-[104px] h-[110px] sm:h-[118px] rounded-[18px] border p-2 transition-all cursor-pointer flex flex-col justify-between text-left overflow-hidden shadow-md ${
+          className={`group relative min-h-[176px] h-[176px] sm:h-[184px] rounded-[18px] border p-2.5 transition-all cursor-pointer flex flex-col justify-between text-left overflow-hidden shadow-md ${
             qtyInCart > 0
               ? 'border-purple-300 bg-gradient-to-br from-[#1a0b36] via-[#130726] to-[#0b0517] shadow-purple-950/40 ring-2 ring-purple-400/40'
               : 'border-purple-500/20 bg-gradient-to-br from-[#120722] via-[#0d061a] to-[#090313] hover:border-purple-400/60 hover:shadow-purple-950/30'
@@ -586,7 +586,7 @@ export const PosWizard: React.FC<PosWizardProps> = ({
             </div>
           )}
 
-          <div className="flex-1 flex flex-col items-center justify-center text-center px-1">
+          <div className="flex-1 min-h-0 flex flex-col items-center justify-center text-center px-1 py-2">
             <h4 className="font-semibold text-[10px] sm:text-[11px] xl:text-[11.5px] text-slate-100 tracking-normal leading-[1.2] line-clamp-2">
               {item.name}
             </h4>
@@ -597,12 +597,12 @@ export const PosWizard: React.FC<PosWizardProps> = ({
             )}
           </div>
 
-          <div className="pt-1.5 mt-1.5 border-t border-purple-500/15 flex items-center justify-between gap-1.5">
+          <div className="pt-2 mt-1.5 border-t border-purple-500/15 flex items-center justify-between gap-2 shrink-0">
             <div>
               <div className="text-[7px] font-black uppercase text-slate-400 tracking-wider">Precio</div>
               <div className="text-base font-black text-emerald-300 font-mono leading-none">${item.price}</div>
             </div>
-            <div className={`min-w-[60px] h-8 rounded-xl px-2 flex items-center justify-center gap-1 text-[8px] font-black uppercase border transition-all ${
+            <div className={`min-w-[92px] h-10 rounded-xl px-3 flex items-center justify-center gap-1.5 text-[8px] font-black uppercase border transition-all ${
               requiresToppings
                 ? 'bg-amber-950/80 text-amber-200 border-amber-500/30'
                 : 'bg-purple-600 text-white border-purple-300 group-hover:bg-purple-500'
@@ -620,7 +620,7 @@ export const PosWizard: React.FC<PosWizardProps> = ({
         key={item.id}
         type="button"
         onClick={handleItemClick}
-        className={`group relative min-h-[118px] h-[132px] rounded-[20px] border p-2.5 transition-all cursor-pointer flex flex-col justify-between text-left overflow-hidden shadow-md ${
+        className={`group relative min-h-[184px] h-[192px] rounded-[20px] border p-3 transition-all cursor-pointer flex flex-col justify-between text-left overflow-hidden shadow-md ${
           qtyInCart > 0
             ? 'border-purple-300 bg-gradient-to-br from-[#1a0b36] via-[#130726] to-[#0b0517] shadow-purple-950/40 ring-2 ring-purple-400/40'
             : 'border-purple-500/20 bg-gradient-to-br from-[#120722] via-[#0d061a] to-[#090313] hover:border-purple-400/60 hover:shadow-purple-950/30'
@@ -671,13 +671,13 @@ export const PosWizard: React.FC<PosWizardProps> = ({
           </div>
         </div>
 
-        <div className="pt-1.5 mt-1.5 border-t border-purple-500/15 flex items-center justify-between gap-1.5">
+        <div className="pt-2 mt-1.5 border-t border-purple-500/15 flex items-center justify-between gap-2 shrink-0">
           <div>
             <div className="text-[7px] font-black uppercase text-slate-400 tracking-wider">Precio</div>
             <div className="text-lg font-black text-emerald-300 font-mono leading-none">${item.price}</div>
           </div>
 
-          <div className={`h-8 px-2.5 rounded-xl flex items-center justify-center gap-1 text-[8px] font-black uppercase border transition-all ${
+          <div className={`h-10 px-3 rounded-xl flex items-center justify-center gap-1.5 text-[8px] font-black uppercase border transition-all ${
             requiresToppings
               ? 'bg-amber-950/80 text-amber-200 border-amber-500/30'
               : 'bg-purple-600 text-white border-purple-300 group-hover:bg-purple-500'
