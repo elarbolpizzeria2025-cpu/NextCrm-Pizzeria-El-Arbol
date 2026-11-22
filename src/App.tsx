@@ -145,23 +145,71 @@ const normalizePrintedMenuName = (value: string = '') =>
 const applyPrintedMenuPrice = (item: MenuItem): MenuItem => {
   const n = normalizePrintedMenuName(item.name || '');
 
-  const rules: Array<{ tests: string[]; price: number }> = [
-    { tests: ['mila en dos panes completa', 'milanesa en dos panes completa'], price: 690 },
-    { tests: ['mila clasica', 'milanesa clasica'], price: 320 },
-    { tests: ['mila completa en 1 pan', 'milanesa completa en 1 pan', 'milanesa completa'], price: 450 },
-    { tests: ['mila el arbol', 'milanesa el arbol', 'milanesa del arbol', 'milanesa de arbol'], price: 550 },
-    { tests: ['mila napolitana', 'milanesa napolitana', 'napolitana con fritas'], price: 450 },
-    { tests: ['chivito al pan', 'chivito completo'], price: 480 },
-    { tests: ['chivito de la casa', 'chivito el arbol', 'chivito del arbol'], price: 550 },
-    { tests: ['nuggets con fritas', 'nuggets fritas', 'nuggets fritas'], price: 320 },
-    { tests: ['nuggets rellenas con cheddar', 'nuggets rellenos con cheddar', 'nuggets rellenas cheddar'], price: 380 },
-    { tests: ['papas fritas chica', 'papas fritas chicas'], price: 180 },
-    { tests: ['papas fritas grande', 'papas fritas grandes'], price: 230 },
-    { tests: ['papas fritas con cheddar y bacon', 'papas fritas cheddar y bacon'], price: 350 }
+  const rules: Array<{ tests: string[]; name: string; price: number }> = [
+    {
+      tests: ['mila en dos panes completa', 'milanesa en dos panes completa'],
+      name: 'Mila en dos panes completa c/fritas',
+      price: 690
+    },
+    {
+      tests: ['mila clasica', 'milanesa clasica'],
+      name: 'Mila clásica c/fritas',
+      price: 320
+    },
+    {
+      tests: ['mila completa en 1 pan', 'milanesa completa en 1 pan', 'milanesa completa'],
+      name: 'Mila completa en 1 pan',
+      price: 450
+    },
+    {
+      tests: ['mila el arbol', 'milanesa el arbol', 'milanesa del arbol', 'milanesa de arbol'],
+      name: 'Mila "El Árbol"',
+      price: 550
+    },
+    {
+      tests: ['mila napolitana', 'milanesa napolitana', 'napolitana con fritas'],
+      name: 'Mila Napolitana',
+      price: 450
+    },
+    {
+      tests: ['chivito al pan', 'chivito completo'],
+      name: 'Chivito al pan c/fritas',
+      price: 480
+    },
+    {
+      tests: ['chivito de la casa', 'chivito el arbol', 'chivito del arbol'],
+      name: 'Chivito de la casa c/fritas',
+      price: 550
+    },
+    {
+      tests: ['nuggets con fritas', 'nuggets fritas', 'nuggets fritas'],
+      name: 'Nuggets con fritas (10 unidades)',
+      price: 320
+    },
+    {
+      tests: ['nuggets rellenas con cheddar', 'nuggets rellenos con cheddar', 'nuggets rellenas cheddar'],
+      name: 'Nuggets rellenas con cheddar c/fritas (10 unidades)',
+      price: 380
+    },
+    {
+      tests: ['papas fritas chica', 'papas fritas chicas'],
+      name: 'Papas Fritas chica',
+      price: 180
+    },
+    {
+      tests: ['papas fritas grande', 'papas fritas grandes'],
+      name: 'Papas Fritas grande',
+      price: 230
+    },
+    {
+      tests: ['papas fritas con cheddar y bacon', 'papas fritas cheddar y bacon'],
+      name: 'Papas Fritas con cheddar y bacon',
+      price: 350
+    }
   ];
 
   const rule = rules.find(r => r.tests.some(test => n.includes(test)));
-  return rule ? { ...item, price: rule.price } : item;
+  return rule ? { ...item, name: rule.name, price: rule.price } : item;
 };
 
 const canonicalMenuCategory = (value: string = ''): string => {
