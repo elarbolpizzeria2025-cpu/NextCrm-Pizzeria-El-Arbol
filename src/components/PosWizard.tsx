@@ -807,7 +807,7 @@ export const PosWizard: React.FC<PosWizardProps> = ({
               </div>
             </div>
           ) : (
-            <div className="max-w-[1600px] mx-auto space-y-4">
+            <div className="max-w-[1600px] mx-auto space-y-4 flex flex-col items-center">
               <div className="sticky top-0 z-10 -mx-1 px-1 py-1 bg-[#040108]/95 backdrop-blur min-h-[48px] grid grid-cols-[auto_1fr] sm:grid-cols-[auto_1fr_auto] items-center gap-2 sm:gap-4">
                 <button
                   type="button"
@@ -851,7 +851,7 @@ export const PosWizard: React.FC<PosWizardProps> = ({
                   <button type="button" onClick={() => { setProductSearch(''); setActiveCategory('TODOS'); }} className="mt-3 text-xs font-black uppercase text-purple-300 hover:text-white cursor-pointer">Volver a categorías</button>
                 </div>
               ) : (
-                <div className="w-full grid grid-cols-2 sm:grid-cols-[repeat(auto-fit,minmax(185px,1fr))] gap-2">
+                <div className="w-full grid grid-cols-2 sm:grid-cols-[repeat(auto-fit,minmax(185px,220px))] justify-center gap-2">
                   {filteredProducts.map(renderProductCard)}
                 </div>
               )}
