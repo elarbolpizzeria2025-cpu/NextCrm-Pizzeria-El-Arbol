@@ -3351,8 +3351,8 @@ export default function App() {
       )}
 
       {/* Header - Deluxe Lila, White & Black Edition with RBAC Role Indicator */}
-      <header className="pizzeria-header min-h-14 md:h-14 bg-[#040108] border-b border-purple-500/20 text-white flex flex-wrap md:flex-nowrap items-center px-2 sm:px-3 py-1.5 md:py-0 shrink-0 shadow-lg z-50 gap-1.5 sm:gap-2 md:gap-3">
-        <div className="w-auto md:w-[120px] xl:w-[140px] 2xl:w-[170px] flex items-center gap-1.5 shrink-0 pr-1 md:pr-2 2xl:pr-3 border-r-0 md:border-r border-purple-500/20">
+      <header className="pizzeria-header min-h-14 md:min-h-[96px] bg-[#040108] border-b border-purple-500/20 text-white flex flex-wrap md:grid md:grid-cols-[auto_minmax(0,1fr)] md:grid-rows-[44px_44px] items-center px-2 sm:px-3 py-1.5 md:py-1 shrink-0 shadow-lg z-50 gap-1.5 sm:gap-2 md:gap-x-3 md:gap-y-1">
+        <div className="w-auto md:w-[170px] flex items-center gap-1.5 shrink-0 pr-1 md:pr-3 border-r-0 md:border-r border-purple-500/20 md:col-start-1 md:row-start-1">
           <div className="w-7 h-7 rounded-lg border border-purple-500/50 bg-[#0d061c] flex items-center justify-center font-black text-xs text-purple-300 shadow-xs">
             N
           </div>
@@ -3363,8 +3363,8 @@ export default function App() {
         </div>
 
         {/* Navegación principal por módulos: centrada respecto de toda la pantalla */}
-        <div className="order-3 md:order-none w-full md:w-auto flex-1 min-w-0 flex items-center justify-center overflow-x-auto no-scrollbar">
-          <nav className="flex w-full md:w-auto items-center justify-center gap-1 md:gap-1.5">
+        <div className="order-3 md:order-none w-full md:w-full flex-1 min-w-0 flex items-center justify-center overflow-hidden md:col-span-2 md:row-start-2">
+          <nav className="grid grid-cols-4 w-full max-w-[760px] items-center justify-center gap-1.5">
             {[
               {id: 'pos', label: 'Toma de Pedido', icon: 'point_of_sale', roles: ['admin', 'cajero', 'mozo']},
               {id: 'kitchen', label: 'KDS', icon: 'tv', count: badges.kitchen, roles: ['admin', 'cajero', 'mozo']},
@@ -3386,7 +3386,7 @@ export default function App() {
                     }
                     setActiveTab(tab.id);
                   }}
-                  className={`relative flex-1 md:flex-none min-w-0 px-1.5 md:px-2 2xl:px-3.5 h-10 rounded-xl flex items-center justify-center gap-1 md:gap-1.5 font-black text-[8.5px] sm:text-[10px] md:text-[10.5px] uppercase transition-all cursor-pointer whitespace-nowrap ${
+                  className={`relative min-w-0 px-2.5 h-10 rounded-xl flex items-center justify-center gap-1.5 font-black text-[10.5px] uppercase transition-all cursor-pointer whitespace-nowrap ${
                     isActive
                       ? 'bg-[#180930] text-purple-100 border border-purple-400 shadow-md shadow-purple-950/40 ring-1 ring-purple-400/30'
                       : 'text-slate-300 hover:text-white bg-[#090313] hover:bg-purple-950/60 border border-purple-500/15'
@@ -3398,16 +3398,16 @@ export default function App() {
                     </span>
                   )}
                   <Icon name={tab.icon} size={15}/>
-                  <span className="mobile-nav-label whitespace-nowrap truncate">{tab.label}</span>
+                  <span className="whitespace-nowrap">{tab.label}</span>
                 </button>
               );
             })}
           </nav>
         </div>
 
-        <div className="contents md:flex md:items-center md:justify-end md:gap-1.5 md:shrink-0 md:min-w-0">
+        <div className="contents md:flex md:items-center md:justify-end md:gap-1.5 md:min-w-0 md:w-full md:col-start-2 md:row-start-1">
         {/* Buscador global: productos y pedidos, visible en todos los módulos */}
-        <div className="mobile-header-search order-4 md:order-none relative w-full md:w-[170px] xl:w-[190px] 2xl:w-[280px] shrink-0">
+        <div className="mobile-header-search order-4 md:order-none relative w-full md:w-[260px] xl:w-[320px] shrink-0">
           <Icon name="search" size={10} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-purple-400 pointer-events-none"/>
           <input
             type="text"
@@ -3543,7 +3543,7 @@ export default function App() {
             title="Marcar ingredientes faltantes y alertar/bloquear productos afectados"
           >
             <Icon name="warning" size={13}/>
-            <span className="hidden 2xl:inline">Faltantes</span>
+            <span className="hidden xl:inline">Faltantes</span>
             {menuShortages.filter(r => r.active).length > 0 && (
               <span className="min-w-[18px] h-[18px] px-1 rounded-full bg-amber-400 text-black text-[8px] flex items-center justify-center">
                 {menuShortages.filter(r => r.active).length}
@@ -3560,7 +3560,7 @@ export default function App() {
             title="Stock bajo: abrir advertencia"
           >
             <Icon name="inventory_2" size={13}/>
-            <span className="hidden 2xl:inline">Stock bajo</span>
+            <span className="hidden xl:inline">Stock bajo</span>
             <span className="min-w-[18px] h-[18px] px-1 rounded-full bg-red-500 text-white text-[8px] flex items-center justify-center animate-pulse">
               {lowStockAlerts.length}
             </span>
@@ -3568,7 +3568,7 @@ export default function App() {
         )}
 
         {/* Fecha y hora en vivo */}
-        <div className="hidden 2xl:flex items-center gap-2 shrink-0 px-3 h-10 rounded-xl bg-[#090313] border border-purple-500/25">
+        <div className="hidden xl:flex items-center gap-2 shrink-0 px-2.5 h-10 rounded-xl bg-[#090313] border border-purple-500/25">
           <Icon name="schedule" size={16} className="text-purple-300"/>
           <div className="leading-none min-w-[74px]">
             <div className="text-[12px] font-black text-white tracking-wide">{formattedTime}</div>
@@ -3597,13 +3597,13 @@ export default function App() {
             </button>
           )}
           {/* Active User Role Badge */}
-          <div className="w-9 2xl:w-auto flex items-center justify-center 2xl:justify-start gap-1 px-0 2xl:px-2.5 h-9 rounded-lg bg-[#0c061a] border border-purple-500/30 text-[8px] md:text-[8.5px] font-black uppercase text-purple-200">
+          <div className="w-auto flex items-center justify-center gap-1 px-2 h-9 rounded-lg bg-[#0c061a] border border-purple-500/30 text-[8.5px] font-black uppercase text-purple-200">
             <span className={`w-2 h-2 rounded-full ${
               currentUser.role === 'admin' ? 'bg-purple-400' :
               currentUser.role === 'cajero' ? 'bg-cyan-400' :
               currentUser.role === 'delivery' ? 'bg-amber-400' : 'bg-indigo-400'
             } animate-pulse`}></span>
-            <span className="hidden 2xl:inline">{
+            <span className="hidden xl:inline">{
               currentUser.role === 'admin' ? 'Dueño' :
               currentUser.role === 'cajero' ? 'Cajera' :
               currentUser.role === 'delivery' ? 'Delivery' : 'Mozo'
@@ -3615,7 +3615,7 @@ export default function App() {
               className={`w-2.5 h-2.5 rounded-full transition-colors ${register.isOpen ? 'bg-emerald-400 shadow-sm shadow-emerald-400/50 animate-pulse' : 'bg-amber-500'}`} 
               title={register.isOpen ? 'Caja Abierta' : 'Caja Cerrada'} 
             />
-            <span className="text-[8px] font-black uppercase tracking-wider text-slate-300 hidden 2xl:inline">
+            <span className="text-[8px] font-black uppercase tracking-wider text-slate-300 hidden xl:inline">
               {register.isOpen ? 'Caja Abierta' : 'Caja Cerrada'}
             </span>
           </div>
@@ -3634,7 +3634,7 @@ export default function App() {
               title="Cerrar sesión NEXT CRM"
             >
               <Icon name="logout" size={15} />
-              <span className="hidden 2xl:inline">Salir</span>
+              <span className="hidden xl:inline">Salir</span>
             </button>
           )}
         </div>
