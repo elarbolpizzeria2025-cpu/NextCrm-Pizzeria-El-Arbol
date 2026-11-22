@@ -144,8 +144,6 @@ export const PosWizard: React.FC<PosWizardProps> = ({
   const [showMobileComanda, setShowMobileComanda] = useState(false);
   const [showMapModal, setShowMapModal] = useState(false);
   const [editingCartItemId, setEditingCartItemId] = useState<string | null>(null);
-  const [menuPage, setMenuPage] = useState(0);
-  const [categoryPage, setCategoryPage] = useState(0);
   
   // Mandatory print flag: obligar a imprimir antes de pasar a KDS
   const [ticketPrinted, setTicketPrinted] = useState(false);
@@ -320,12 +318,7 @@ export const PosWizard: React.FC<PosWizardProps> = ({
 
   useEffect(() => {
     setSubMenuSearch('');
-    setMenuPage(0);
   }, [activeCategory]);
-
-  useEffect(() => {
-    setMenuPage(0);
-  }, [subMenuSearch, productSearch]);
 
   // Búsqueda global + búsqueda rápida dentro del submenú activo.
   const filteredProducts = useMemo(() => {
@@ -525,22 +518,11 @@ export const PosWizard: React.FC<PosWizardProps> = ({
     return ['TODOS', ...Array.from(new Set(merged))];
   }, [menu]);
 
-  const visibleProductPageSize = isDesktop ? 12 : 6;
-  const visibleCategoryPageSize = isDesktop ? 12 : 6;
-  const totalProductPages = Math.max(1, Math.ceil(filteredProducts.length / visibleProductPageSize));
-  const pagedProducts = filteredProducts.slice(menuPage * visibleProductPageSize, (menuPage + 1) * visibleProductPageSize);
-
-  const visibleCategories = categoryKeys.filter(cat => cat !== 'TODOS').filter(cat => {
-    const count = (menu[cat] || []).length;
-    return count > 0 || ['fritas', 'milanesas'].includes(cat.toLowerCase());
-  });
-  const totalCategoryPages = Math.max(1, Math.ceil(visibleCategories.length / visibleCategoryPageSize));
-  const pagedCategories = visibleCategories.slice(categoryPage * visibleCategoryPageSize, (categoryPage + 1) * visibleCategoryPageSize);
-
-  // Tarjeta cuadrada de submenú: nombre centrado, precio y acción visibles.
+  // Render individual product card (supports compact POS density or detailed cards)
   const renderProductCard = (item: MenuItem) => {
     const qtyInCart = cartItemQuantities[item.id] || 0;
     const requiresToppings = item.hasToppings || item.isMeter;
+    const isCompact = menuDensity === 'compact';
     const shortageMatches = getMenuShortagesForItem(item);
     const blockingShortage = shortageMatches.find(r => r.mode === 'block');
     const warningShortage = shortageMatches.find(r => r.mode === 'warn');
@@ -550,6 +532,7 @@ export const PosWizard: React.FC<PosWizardProps> = ({
         showMessage(`NO DISPONIBLE: falta ${blockingShortage.keyword}`, 'error');
         return;
       }
+
       if (requiresToppings) {
         setToppingModal({ isOpen: true, item, selectedToppings: [], quantity: 1 });
       } else {
@@ -557,56 +540,150 @@ export const PosWizard: React.FC<PosWizardProps> = ({
       }
     };
 
-    const categoryLabel = activeCategory === 'TODOS'
-      ? 'PRODUCTO'
-      : String(CATEGORY_META[String(activeCategory).toLowerCase()]?.label || activeCategory).toUpperCase();
+    if (isCompact) {
+      return (
+        <button
+          key={item.id}
+          type="button"
+          onClick={handleItemClick}
+          className={`group relative min-h-[104px] h-[110px] sm:h-[118px] rounded-[18px] border p-2 transition-all cursor-pointer flex flex-col justify-between text-left overflow-hidden shadow-md ${
+            qtyInCart > 0
+              ? 'border-purple-300 bg-gradient-to-br from-[#1a0b36] via-[#130726] to-[#0b0517] shadow-purple-950/40 ring-2 ring-purple-400/40'
+              : 'border-purple-500/20 bg-gradient-to-br from-[#120722] via-[#0d061a] to-[#090313] hover:border-purple-400/60 hover:shadow-purple-950/30'
+          }`}
+        >
+          <div className={`absolute inset-x-0 top-0 h-1 ${qtyInCart > 0 ? 'bg-gradient-to-r from-purple-300 via-fuchsia-400 to-purple-500' : 'bg-gradient-to-r from-purple-700/70 via-indigo-600/70 to-purple-700/70'}`}></div>
+
+          {qtyInCart > 0 && (
+            <span className="absolute top-1.5 right-1.5 min-w-[24px] h-6 px-1 rounded-lg bg-gradient-to-r from-purple-500 to-fuchsia-600 text-white text-[9px] font-black flex items-center justify-center shadow-lg">
+              x{qtyInCart}
+            </span>
+          )}
+
+          <div className="flex items-start justify-between gap-2 pr-8">
+            <div className="flex flex-wrap gap-1">
+              {item.isMeter && (
+                <span className="text-[8px] font-black uppercase px-1.5 py-0.5 rounded-lg bg-indigo-950 text-indigo-200 border border-indigo-400/30">
+                  Metro
+                </span>
+              )}
+              {item.isPortion && (
+                <span className="text-[8px] font-black uppercase px-1.5 py-0.5 rounded-lg bg-blue-950 text-blue-200 border border-blue-400/30">
+                  Porción
+                </span>
+              )}
+              {requiresToppings && (
+                <span className="text-[8px] font-black uppercase px-1.5 py-0.5 rounded-lg bg-amber-950 text-amber-200 border border-amber-400/30">
+                  Gustos
+                </span>
+              )}
+            </div>
+          </div>
+
+          {(blockingShortage || warningShortage) && (
+            <div className={`absolute left-2 top-2 z-10 px-1.5 h-5 rounded-md flex items-center text-[7px] font-bold ${blockingShortage ? 'bg-red-600 text-white' : 'bg-amber-400 text-black'}`}>
+              {blockingShortage ? 'NO DISP.' : `FALTA ${warningShortage?.keyword}`}
+            </div>
+          )}
+
+          <div className="flex-1 flex flex-col items-center justify-center text-center px-1">
+            <h4 className="font-semibold text-[10px] sm:text-[11px] xl:text-[11.5px] text-slate-100 tracking-normal leading-[1.2] line-clamp-2">
+              {item.name}
+            </h4>
+            {item.desc && (
+              <p className="text-[8px] text-slate-400 font-normal leading-[1.25] line-clamp-1 mt-0.5">
+                {item.desc}
+              </p>
+            )}
+          </div>
+
+          <div className="pt-1.5 mt-1.5 border-t border-purple-500/15 flex items-center justify-between gap-1.5">
+            <div>
+              <div className="text-[7px] font-black uppercase text-slate-400 tracking-wider">Precio</div>
+              <div className="text-base font-black text-emerald-300 font-mono leading-none">${item.price}</div>
+            </div>
+            <div className={`min-w-[60px] h-8 rounded-xl px-2 flex items-center justify-center gap-1 text-[8px] font-black uppercase border transition-all ${
+              requiresToppings
+                ? 'bg-amber-950/80 text-amber-200 border-amber-500/30'
+                : 'bg-purple-600 text-white border-purple-300 group-hover:bg-purple-500'
+            }`}>
+              <Icon name={requiresToppings ? 'tune' : 'add'} size={14} />
+              <span>{requiresToppings ? 'Elegir' : 'Agregar'}</span>
+            </div>
+          </div>
+        </button>
+      );
+    }
 
     return (
       <button
         key={item.id}
         type="button"
         onClick={handleItemClick}
-        className={`group relative aspect-square min-h-0 rounded-[20px] border p-2.5 transition-all cursor-pointer flex flex-col text-center overflow-hidden shadow-md ${
+        className={`group relative min-h-[118px] h-[132px] rounded-[20px] border p-2.5 transition-all cursor-pointer flex flex-col justify-between text-left overflow-hidden shadow-md ${
           qtyInCart > 0
-            ? 'border-purple-300 bg-gradient-to-br from-[#1a0b36] via-[#130726] to-[#0b0517] ring-2 ring-purple-400/40'
-            : 'border-purple-500/25 bg-gradient-to-br from-[#120722] via-[#0d061a] to-[#090313] hover:border-purple-400/60'
+            ? 'border-purple-300 bg-gradient-to-br from-[#1a0b36] via-[#130726] to-[#0b0517] shadow-purple-950/40 ring-2 ring-purple-400/40'
+            : 'border-purple-500/20 bg-gradient-to-br from-[#120722] via-[#0d061a] to-[#090313] hover:border-purple-400/60 hover:shadow-purple-950/30'
         }`}
       >
-        <div className="flex items-start justify-between gap-2 min-h-[24px]">
-          <span className="px-2 py-1 rounded-full border border-purple-400/30 bg-purple-950/80 text-[8px] sm:text-[9px] font-black uppercase tracking-wide text-purple-200">
-            {categoryLabel}
+        <div className={`absolute inset-x-0 top-0 h-1.5 ${qtyInCart > 0 ? 'bg-gradient-to-r from-purple-300 via-fuchsia-400 to-purple-500' : 'bg-gradient-to-r from-purple-700/70 via-indigo-600/70 to-purple-700/70'}`}></div>
+
+        {qtyInCart > 0 && (
+          <span className="absolute top-1.5 right-1.5 min-w-[24px] h-6 px-1 rounded-lg bg-gradient-to-r from-purple-500 to-fuchsia-600 text-white text-[9px] font-black flex items-center justify-center shadow-lg">
+            x{qtyInCart}
           </span>
-          {qtyInCart > 0 && (
-            <span className="min-w-[24px] h-6 px-1 rounded-lg bg-purple-600 text-white text-[9px] font-black flex items-center justify-center">x{qtyInCart}</span>
-          )}
-        </div>
+        )}
 
         {(blockingShortage || warningShortage) && (
-          <div className={`absolute left-2 right-2 top-9 z-10 px-1.5 h-5 rounded-md flex items-center justify-center text-[7px] font-black ${
-            blockingShortage ? 'bg-red-600 text-white' : 'bg-amber-400 text-black'
-          }`}>
+          <div className={`absolute left-2.5 top-2 z-10 px-1.5 h-5 rounded-md flex items-center text-[7px] font-bold ${blockingShortage ? 'bg-red-600 text-white' : 'bg-amber-400 text-black'}`}>
             {blockingShortage ? 'NO DISPONIBLE' : `FALTA ${warningShortage?.keyword}`}
           </div>
         )}
 
-        <div className="flex-1 flex items-center justify-center px-1.5">
-          <h4 className="font-black text-[15px] sm:text-[17px] xl:text-[18px] text-white tracking-tight leading-[1.08] line-clamp-3">
-            {item.name}
-          </h4>
+        <div className="pr-8 space-y-1">
+          <div className="flex flex-wrap gap-1">
+            {item.isMeter && (
+              <span className="text-[9px] font-black uppercase px-2 py-0.5 rounded-lg bg-indigo-950 text-indigo-200 border border-indigo-400/30">
+                Metro
+              </span>
+            )}
+            {item.isPortion && (
+              <span className="text-[9px] font-black uppercase px-2 py-0.5 rounded-lg bg-blue-950 text-blue-200 border border-blue-400/30">
+                Porción
+              </span>
+            )}
+            {requiresToppings && (
+              <span className="text-[9px] font-black uppercase px-2 py-0.5 rounded-lg bg-amber-950 text-amber-200 border border-amber-400/30">
+                Personalizable
+              </span>
+            )}
+          </div>
+
+          <div>
+            <h4 className="font-semibold text-[11px] sm:text-[12px] text-slate-100 tracking-normal leading-[1.2] line-clamp-2">
+              {item.name}
+            </h4>
+            {item.desc && (
+              <p className="text-[8px] text-slate-400 font-normal leading-[1.25] line-clamp-1 mt-0.5">
+                {item.desc}
+              </p>
+            )}
+          </div>
         </div>
 
-        <div className="border-t border-purple-500/20 pt-2 flex items-end justify-between gap-2">
-          <div className="text-left">
-            <div className="text-[7px] sm:text-[8px] font-black uppercase text-slate-400 tracking-wider">Precio</div>
-            <div className="text-xl sm:text-2xl font-black text-emerald-300 font-mono leading-none">${item.price}</div>
+        <div className="pt-1.5 mt-1.5 border-t border-purple-500/15 flex items-center justify-between gap-1.5">
+          <div>
+            <div className="text-[7px] font-black uppercase text-slate-400 tracking-wider">Precio</div>
+            <div className="text-lg font-black text-emerald-300 font-mono leading-none">${item.price}</div>
           </div>
-          <div className={`h-9 px-2.5 rounded-xl flex items-center justify-center gap-1 text-[8px] sm:text-[9px] font-black uppercase border ${
+
+          <div className={`h-8 px-2.5 rounded-xl flex items-center justify-center gap-1 text-[8px] font-black uppercase border transition-all ${
             requiresToppings
               ? 'bg-amber-950/80 text-amber-200 border-amber-500/30'
               : 'bg-purple-600 text-white border-purple-300 group-hover:bg-purple-500'
           }`}>
-            <Icon name={requiresToppings ? 'tune' : 'add'} size={14} />
-            <span>{requiresToppings ? 'Elegir' : 'Agregar'}</span>
+            <Icon name={requiresToppings ? 'tune' : 'add'} size={15} />
+            <span>{requiresToppings ? 'Configurar' : 'Agregar'}</span>
           </div>
         </div>
       </button>
@@ -688,9 +765,13 @@ export const PosWizard: React.FC<PosWizardProps> = ({
         )}
 
         {/* Contenido principal del menú */}
-        <div className="flex-1 min-h-0 overflow-hidden p-2 sm:p-3 lg:p-4">
+        <div className={`flex-1 min-h-0 custom-dark-scrollbar ${
+          activeCategory === 'TODOS' && !productSearch.trim()
+            ? 'overflow-y-auto lg:overflow-hidden p-2 sm:p-3 lg:p-4'
+            : 'overflow-y-auto p-3 sm:p-4 lg:p-5'
+        }`}>
           {activeCategory === 'TODOS' && !productSearch.trim() ? (
-            <div className="max-w-[1200px] h-full mx-auto flex flex-col justify-center py-1">
+            <div className="max-w-[1200px] h-auto lg:h-full mx-auto flex flex-col justify-start lg:justify-center py-2 lg:py-0">
               <div className="mb-3 relative flex items-center justify-center min-h-[48px]">
                 <div className="text-center px-0 sm:px-24">
                   <h2 className="text-xl sm:text-2xl font-black uppercase tracking-tight text-white">Elegí una categoría</h2>
@@ -701,8 +782,8 @@ export const PosWizard: React.FC<PosWizardProps> = ({
                 </span>
               </div>
 
-              <div className="grid grid-cols-3 sm:grid-cols-4 xl:grid-cols-6 gap-2 sm:gap-3 flex-1 min-h-0 content-center">
-                {pagedCategories.map(cat => {
+              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 xl:grid-cols-6 2xl:grid-cols-6 gap-2.5 sm:gap-3">
+                {categoryKeys.filter(cat => cat !== 'TODOS').map(cat => {
                   const count = (menu[cat] || []).length;
                   const isRequiredEmptyCategory = ['fritas', 'milanesas'].includes(cat.toLowerCase());
                   if (count === 0 && !isRequiredEmptyCategory) return null;
@@ -724,18 +805,9 @@ export const PosWizard: React.FC<PosWizardProps> = ({
                   );
                 })}
               </div>
-              {totalCategoryPages > 1 && (
-                <div className="mt-2 h-10 flex items-center justify-center gap-3 shrink-0">
-                  <button type="button" onClick={() => setCategoryPage(p => Math.max(0, p - 1))} disabled={categoryPage === 0}
-                    className="h-9 px-4 rounded-xl border border-purple-500/30 bg-[#120824] text-purple-200 disabled:opacity-30 font-black text-[10px] uppercase">‹ Anterior</button>
-                  <span className="text-[10px] font-black text-slate-400">{categoryPage + 1} / {totalCategoryPages}</span>
-                  <button type="button" onClick={() => setCategoryPage(p => Math.min(totalCategoryPages - 1, p + 1))} disabled={categoryPage >= totalCategoryPages - 1}
-                    className="h-9 px-4 rounded-xl border border-purple-500/30 bg-[#120824] text-purple-200 disabled:opacity-30 font-black text-[10px] uppercase">Siguiente ›</button>
-                </div>
-              )}
             </div>
           ) : (
-            <div className="max-w-[1600px] h-full mx-auto flex flex-col gap-2 overflow-hidden">
+            <div className="max-w-[1600px] mx-auto space-y-4">
               <div className="sticky top-0 z-10 -mx-1 px-1 py-1 bg-[#040108]/95 backdrop-blur min-h-[48px] grid grid-cols-[auto_1fr] sm:grid-cols-[auto_1fr_auto] items-center gap-2 sm:gap-4">
                 <button
                   type="button"
@@ -779,20 +851,9 @@ export const PosWizard: React.FC<PosWizardProps> = ({
                   <button type="button" onClick={() => { setProductSearch(''); setActiveCategory('TODOS'); }} className="mt-3 text-xs font-black uppercase text-purple-300 hover:text-white cursor-pointer">Volver a categorías</button>
                 </div>
               ) : (
-                <>
-                  <div className="w-full flex-1 min-h-0 grid grid-cols-3 sm:grid-cols-4 xl:grid-cols-6 gap-2 sm:gap-3 content-center overflow-hidden">
-                    {pagedProducts.map(renderProductCard)}
-                  </div>
-                  {totalProductPages > 1 && (
-                    <div className="h-10 flex items-center justify-center gap-3 shrink-0">
-                      <button type="button" onClick={() => setMenuPage(p => Math.max(0, p - 1))} disabled={menuPage === 0}
-                        className="h-9 px-4 rounded-xl border border-purple-500/30 bg-[#120824] text-purple-200 disabled:opacity-30 font-black text-[10px] uppercase">‹ Anterior</button>
-                      <span className="text-[10px] font-black text-slate-400">{menuPage + 1} / {totalProductPages}</span>
-                      <button type="button" onClick={() => setMenuPage(p => Math.min(totalProductPages - 1, p + 1))} disabled={menuPage >= totalProductPages - 1}
-                        className="h-9 px-4 rounded-xl border border-purple-500/30 bg-[#120824] text-purple-200 disabled:opacity-30 font-black text-[10px] uppercase">Siguiente ›</button>
-                    </div>
-                  )}
-                </>
+                <div className="w-full grid grid-cols-2 sm:grid-cols-[repeat(auto-fit,minmax(185px,1fr))] gap-2">
+                  {filteredProducts.map(renderProductCard)}
+                </div>
               )}
             </div>
           )}
@@ -826,8 +887,8 @@ export const PosWizard: React.FC<PosWizardProps> = ({
           </div>
         </div>
 
-        <div className="flex-1 min-h-0 overflow-hidden p-2 sm:p-3">
-          <div className="w-full h-full grid grid-cols-[minmax(0,1.6fr)_minmax(280px,0.85fr)] gap-2.5 min-h-0 overflow-hidden">
+        <div className="flex-1 min-h-0 overflow-y-auto lg:overflow-hidden p-2 sm:p-3 custom-dark-scrollbar">
+          <div className="w-full h-auto lg:h-full grid grid-cols-1 lg:grid-cols-[minmax(0,1.65fr)_minmax(400px,0.75fr)] gap-3 min-h-0">
             {/* Columna izquierda: destino, cliente, productos y notas */}
             <div className="flex flex-col gap-3 min-h-0">
               <section className="bg-[#0c0519] border border-purple-500/25 rounded-[22px] p-3 space-y-2 shrink-0">
