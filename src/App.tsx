@@ -133,31 +133,6 @@ export const detectRoleFromIdentity = (input: string): { role: UserRole; display
   };
 };
 
-const normalizeMenuName = (value: string = '') =>
-  value.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase()
-    .replace(/[“”"'´`]/g, '').replace(/[^a-z0-9]+/g, ' ').trim();
-
-const PRINTED_MENU_PRICE_RULES: Array<{ match: string[]; price: number }> = [
-  { match: ['mila clasica', 'milanesa clasica'], price: 320 },
-  { match: ['mila en dos panes completa', 'milanesa en dos panes completa'], price: 690 },
-  { match: ['mila completa en 1 pan', 'milanesa completa en 1 pan'], price: 450 },
-  { match: ['mila el arbol', 'milanesa el arbol'], price: 550 },
-  { match: ['mila napolitana', 'milanesa napolitana'], price: 450 },
-  { match: ['chivito al pan'], price: 480 },
-  { match: ['chivito de la casa'], price: 550 },
-  { match: ['nuggets con fritas'], price: 320 },
-  { match: ['nuggets rellenas con cheddar', 'nuggets rellenos con cheddar'], price: 380 },
-  { match: ['papas fritas chica', 'papas fritas chicas'], price: 180 },
-  { match: ['papas fritas grande', 'papas fritas grandes'], price: 230 },
-  { match: ['papas fritas con cheddar y bacon', 'papas fritas cheddar y bacon'], price: 350 }
-];
-
-const applyPrintedMenuPrices = (item: MenuItem): MenuItem => {
-  const normalized = normalizeMenuName(item.name || '');
-  const rule = PRINTED_MENU_PRICE_RULES.find(r => r.match.some(term => normalized.includes(term)));
-  return rule ? { ...item, price: rule.price } : item;
-};
-
 const canonicalMenuCategory = (value: string = ''): string => {
   const clean = value
     .normalize('NFD')
@@ -851,7 +826,7 @@ export default function App() {
             const nameNorm = (it.name || '').trim().toLowerCase();
             if (!nameNorm || seen.has(nameNorm)) return;
             seen.add(nameNorm);
-            cleaned[canonicalCat].push(applyPrintedMenuPrices(it));
+            cleaned[canonicalCat].push(it);
           });
         });
 
