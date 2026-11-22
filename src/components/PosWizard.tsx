@@ -339,18 +339,6 @@ export const PosWizard: React.FC<PosWizardProps> = ({
     });
   }, [activeCategory, allMenuItems, menu, productSearch, subMenuSearch]);
 
-  const visibleProductPageSize = isDesktop ? 12 : 6;
-  const visibleCategoryPageSize = isDesktop ? 12 : 6;
-  const totalProductPages = Math.max(1, Math.ceil(filteredProducts.length / visibleProductPageSize));
-  const pagedProducts = filteredProducts.slice(menuPage * visibleProductPageSize, (menuPage + 1) * visibleProductPageSize);
-
-  const visibleCategories = categoryKeys.filter(cat => cat !== 'TODOS').filter(cat => {
-    const count = (menu[cat] || []).length;
-    return count > 0 || ['fritas', 'milanesas'].includes(cat.toLowerCase());
-  });
-  const totalCategoryPages = Math.max(1, Math.ceil(visibleCategories.length / visibleCategoryPageSize));
-  const pagedCategories = visibleCategories.slice(categoryPage * visibleCategoryPageSize, (categoryPage + 1) * visibleCategoryPageSize);
-
   const handleAddNoteChip = (chip: string) => {
     setOrderNotes(prev => {
       const current = prev.trim();
@@ -536,6 +524,18 @@ export const PosWizard: React.FC<PosWizardProps> = ({
     ];
     return ['TODOS', ...Array.from(new Set(merged))];
   }, [menu]);
+
+  const visibleProductPageSize = isDesktop ? 12 : 6;
+  const visibleCategoryPageSize = isDesktop ? 12 : 6;
+  const totalProductPages = Math.max(1, Math.ceil(filteredProducts.length / visibleProductPageSize));
+  const pagedProducts = filteredProducts.slice(menuPage * visibleProductPageSize, (menuPage + 1) * visibleProductPageSize);
+
+  const visibleCategories = categoryKeys.filter(cat => cat !== 'TODOS').filter(cat => {
+    const count = (menu[cat] || []).length;
+    return count > 0 || ['fritas', 'milanesas'].includes(cat.toLowerCase());
+  });
+  const totalCategoryPages = Math.max(1, Math.ceil(visibleCategories.length / visibleCategoryPageSize));
+  const pagedCategories = visibleCategories.slice(categoryPage * visibleCategoryPageSize, (categoryPage + 1) * visibleCategoryPageSize);
 
   // Tarjeta cuadrada de submenú: nombre centrado, precio y acción visibles.
   const renderProductCard = (item: MenuItem) => {
