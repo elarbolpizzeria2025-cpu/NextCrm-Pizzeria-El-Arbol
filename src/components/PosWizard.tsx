@@ -851,7 +851,7 @@ export const PosWizard: React.FC<PosWizardProps> = ({
                   <button type="button" onClick={() => { setProductSearch(''); setActiveCategory('TODOS'); }} className="mt-3 text-xs font-black uppercase text-purple-300 hover:text-white cursor-pointer">Volver a categorías</button>
                 </div>
               ) : (
-                <div className="w-full grid grid-cols-2 sm:grid-cols-[repeat(auto-fit,minmax(185px,220px))] justify-center gap-4 sm:gap-5">
+                <div className="w-full grid grid-cols-2 sm:grid-cols-[repeat(auto-fit,minmax(185px,220px))] justify-center gap-x-5 gap-y-5 sm:gap-x-6 sm:gap-y-6 px-2 sm:px-3 py-2">
                   {filteredProducts.map(renderProductCard)}
                 </div>
               )}
