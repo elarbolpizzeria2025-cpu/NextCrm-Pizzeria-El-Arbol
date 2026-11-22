@@ -133,6 +133,37 @@ export const detectRoleFromIdentity = (input: string): { role: UserRole; display
   };
 };
 
+const normalizePrintedMenuName = (value: string = '') =>
+  value
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .replace(/[“”"'´`]/g, '')
+    .replace(/[^a-z0-9]+/g, ' ')
+    .trim();
+
+const applyPrintedMenuPrice = (item: MenuItem): MenuItem => {
+  const n = normalizePrintedMenuName(item.name || '');
+
+  const rules: Array<{ tests: string[]; price: number }> = [
+    { tests: ['mila en dos panes completa', 'milanesa en dos panes completa'], price: 690 },
+    { tests: ['mila clasica', 'milanesa clasica'], price: 320 },
+    { tests: ['mila completa en 1 pan', 'milanesa completa en 1 pan', 'milanesa completa'], price: 450 },
+    { tests: ['mila el arbol', 'milanesa el arbol', 'milanesa del arbol', 'milanesa de arbol'], price: 550 },
+    { tests: ['mila napolitana', 'milanesa napolitana', 'napolitana con fritas'], price: 450 },
+    { tests: ['chivito al pan', 'chivito completo'], price: 480 },
+    { tests: ['chivito de la casa', 'chivito el arbol', 'chivito del arbol'], price: 550 },
+    { tests: ['nuggets con fritas', 'nuggets fritas', 'nuggets fritas'], price: 320 },
+    { tests: ['nuggets rellenas con cheddar', 'nuggets rellenos con cheddar', 'nuggets rellenas cheddar'], price: 380 },
+    { tests: ['papas fritas chica', 'papas fritas chicas'], price: 180 },
+    { tests: ['papas fritas grande', 'papas fritas grandes'], price: 230 },
+    { tests: ['papas fritas con cheddar y bacon', 'papas fritas cheddar y bacon'], price: 350 }
+  ];
+
+  const rule = rules.find(r => r.tests.some(test => n.includes(test)));
+  return rule ? { ...item, price: rule.price } : item;
+};
+
 const canonicalMenuCategory = (value: string = ''): string => {
   const clean = value
     .normalize('NFD')
@@ -826,7 +857,7 @@ export default function App() {
             const nameNorm = (it.name || '').trim().toLowerCase();
             if (!nameNorm || seen.has(nameNorm)) return;
             seen.add(nameNorm);
-            cleaned[canonicalCat].push(it);
+            cleaned[canonicalCat].push(applyPrintedMenuPrice(it));
           });
         });
 
