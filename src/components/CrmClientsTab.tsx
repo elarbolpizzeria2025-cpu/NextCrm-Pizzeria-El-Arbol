@@ -130,6 +130,19 @@ export const CrmClientsTab: React.FC<CrmClientsTabProps> = ({
 }) => {
   const [filterType, setFilterType] = useState<'ALL' | 'DELIVERY' | 'PHONE'>('ALL');
   const [isImportModalOpen, setIsImportModalOpen] = useState(false);
+  const [greetingClient, setGreetingClient] = useState<ClientData | null>(null);
+  const [greetingDraft, setGreetingDraft] = useState('');
+  const prepareGreeting = (client: ClientData, occasion: 'Navidad' | 'Fin de año' | 'Cumpleaños') => {
+    const name = String(client.name || '').trim().split(/\s+/)[0] || '';
+    const hello = name ? '¡Hola, '+name+'!' : '¡Hola!';
+    const message = occasion === 'Navidad'
+      ? '🎄❤️ '+hello+'\n\nQueríamos desearte una hermosa Navidad y agradecerte por acompañarnos.\n\nEsperamos que disfrutes estas fiestas junto a tus seres queridos, con mucha alegría y lindos momentos. ✨\n\n🎅🏻 ¡Un abrazo y muy felices fiestas! 🎁'
+      : occasion === 'Fin de año'
+      ? '✨❤️ '+hello+'\n\nGracias por compartir tantos momentos con nosotros. Te deseamos un hermoso año nuevo, lleno de salud, alegría y buenos encuentros.\n\n¡Un abrazo y feliz año! 🥂'
+      : '🎂❤️ '+hello+'\n\n¡Muy feliz cumpleaños! Que tengas un día hermoso y disfrutes mucho.\n\n¡Un abrazo! ✨';
+    setGreetingClient(client);
+    setGreetingDraft(message+'\n\n🍕 El Árbol Pizzería');
+  };
 
   const handleInternalImportClients = async (importedClients: Partial<ClientData>[], replaceExisting: boolean) => {
     if (onImportClients) {
@@ -350,6 +363,24 @@ export const CrmClientsTab: React.FC<CrmClientsTabProps> = ({
   return (
     <div className="p-3.5 sm:p-5 md:p-6 lg:px-7 lg:py-6 h-full overflow-y-auto bg-[#050508] text-slate-100 no-scrollbar space-y-6">
       <div className="w-full max-w-none mx-auto space-y-6">
+        <section className="rounded-xl border border-purple-500/20 bg-[#0b0617] p-4 space-y-2">
+          <h2 className="font-bold text-white">🎄 Fidelización de clientes</h2>
+          <p className="text-xs text-slate-300">24/12 Navidad · 31/12 Fin de año · Cumpleaños. Elegí un cliente y prepará un saludo cercano, sin publicidad ni envío automático.</p>
+          {greetingClient && <div className="space-y-2">
+            <p className="text-sm font-bold text-purple-200">Mensaje para {greetingClient.name}</p>
+            <textarea aria-label="Mensaje personalizado" rows={8} className="w-full rounded-lg bg-[#170a2c] border border-purple-500/30 p-3 text-sm text-white" value={greetingDraft} onChange={e=>setGreetingDraft(e.target.value)}/>
+            <div className="flex flex-wrap gap-2">
+              <button type="button" disabled={!greetingDraft.trim()} className="rounded-lg bg-purple-800 px-3 py-2 text-xs font-bold text-white" onClick={()=>{void navigator.clipboard.writeText(greetingDraft).then(()=>showMessage('Mensaje copiado')).catch(()=>showMessage('No se pudo copiar; seleccioná el texto.', 'error'));}}>Copiar mensaje</button>
+              {greetingClient.phone && greetingDraft.trim() && <button type="button" className="rounded-lg bg-green-800 px-3 py-2 text-xs font-bold text-white" onClick={()=>{
+                const digits=String(greetingClient.phone).replace(/\D/g,'').replace(/^00/,'');
+                const phone=digits.startsWith('09')&&digits.length===9?'598'+digits.slice(1):digits;
+                if(!/^598\d{8}$/.test(phone)){showMessage('Verificá el teléfono antes de abrir WhatsApp.', 'error');return;}
+                window.open('https://wa.me/'+phone+'?text='+encodeURIComponent(greetingDraft),'_blank','noopener,noreferrer');
+              }}>Abrir WhatsApp</button>}
+              <button type="button" className="rounded-lg border border-purple-500/30 px-3 py-2 text-xs" onClick={()=>{setGreetingClient(null);setGreetingDraft('');}}>Cerrar</button>
+            </div>
+          </div>}
+        </section>
         {/* Header and Actions */}
         <div className="w-full flex items-center gap-5 border-b border-purple-500/20 pb-4">
           <div className="shrink-0 min-w-[390px]">
@@ -588,6 +619,9 @@ export const CrmClientsTab: React.FC<CrmClientsTabProps> = ({
                       )}
                     </div>
 
+                    <div className="flex flex-wrap gap-1.5">
+                      {(['Navidad','Fin de año','Cumpleaños'] as const).map(occasion=><button key={occasion} type="button" className="rounded-lg bg-[#170a2c] border border-purple-500/30 px-2 py-1.5 text-xs text-purple-200" onClick={()=>{prepareGreeting(c,occasion);window.requestAnimationFrame(()=>document.querySelector('[aria-label="Mensaje personalizado"]')?.scrollIntoView({block:'center',behavior:'smooth'}));}}>{occasion==='Navidad'?'🎄 ':occasion==='Fin de año'?'✨ ':'🎂 '}{occasion}</button>)}
+                    </div>
                     {/* Stats */}
                     <div className="pt-2 border-t border-purple-500/15 grid grid-cols-2 gap-2 text-[10px]">
                       <div>
